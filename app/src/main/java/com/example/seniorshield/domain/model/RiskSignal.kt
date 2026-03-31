@@ -1,0 +1,11 @@
+package com.example.seniorshield.domain.model
+
+enum class RiskSignal {
+    UNKNOWN_CALLER,
+    LONG_CALL_DURATION,
+    UNVERIFIED_CALLER,
+    REMOTE_CONTROL_APP_OPENED,
+    BANKING_APP_OPENED_AFTER_REMOTE_APP,
+    HIGH_RISK_DEVICE_ENVIRONMENT,
+    SUSPICIOUS_APP_INSTALLED,
+}

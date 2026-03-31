@@ -1,0 +1,69 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- 통화 상태 감지 (RealCallRiskMonitor) -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+
+    <!-- 앱 사용 기록 조회 (RealAppUsageRiskMonitor) — 시스템 설정에서 허용 필요 -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- 위험 경고 알림 (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- 백그라운드 지속 실행 (MonitoringForegroundService) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!-- 다른 앱 위에 팝업 표시 (RiskOverlayManager) — Settings에서 수동 허용 필요 -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- 위험 팝업 "지금 전화 끊기" 버튼 (API 28+) -->
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
+
+    <!-- 연락처 조회 (CallerContactChecker) — 저장된 번호 여부 확인 -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!-- 수신 번호 캡처 (API 29+, BroadcastReceiver EXTRA_INCOMING_NUMBER) -->
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+
+    <!-- 보호자 SMS 전송 (GuardianSmsManager) -->
+    <uses-permission android:name="android.permission.SEND_SMS" />
+
+    <!-- 루팅 앱 패키지 존재 확인 (RealDeviceEnvironmentRiskMonitor, API 30+) -->
+    <queries>
+        <package android:name="com.topjohnwu.magisk" />
+        <package android:name="eu.chainfire.supersu" />
+        <package android:name="com.koushikdutta.superuser" />
+        <package android:name="com.noshufou.android.su" />
+        <package android:name="com.thirdparty.superuser" />
+        <package android:name="me.phh.superuser" />
+    </queries>
+
+    <application
+        android:name=".SeniorShieldApp"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="SeniorShield"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.SeniorShield">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- 백그라운드 모니터링 서비스 -->
+        <service
+            android:name=".monitoring.service.MonitoringForegroundService"
+            android:foregroundServiceType="specialUse"
+            android:exported="false" />
+
+    </application>
+</manifest>
