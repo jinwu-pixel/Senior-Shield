@@ -69,6 +69,9 @@ class RealCallRiskMonitor @Inject constructor(
 
     @Volatile private var lastSuspiciousCallEndedAt: Long? = null
 
+    /** 최근 30분 이내 미확인/미검증 수신 호출 타임스탬프 버퍼 */
+    private val recentUnknownCalls = mutableListOf<Long>()
+
     override fun observeCallContext(): Flow<CallContext?> =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) observeCallContextApi31()
         else observeCallContextLegacy()
@@ -94,19 +97,30 @@ class RealCallRiskMonitor @Inject constructor(
                                 emit(emptyList())
                             }
                         } else {
-                            // ── 수신 통화: 기존 로직 ──
-                            if (ctx.isUnknownCaller == true) {
-                                emit(listOf(RiskSignal.UNKNOWN_CALLER))
-                            } else {
-                                emit(emptyList())
+                            // ── 수신 통화: 기존 로직 + 반복 호출 감지 ──
+                            // 미확인/미검증 수신 시 반복 호출 버퍼에 기록
+                            if (ctx.isUnknownCaller == true || ctx.isVerifiedCaller == false) {
+                                recordUnknownCall()
                             }
+                            val repeated = isRepeatedUnknownCaller()
+                            // 즉시 신호: UNKNOWN_CALLER + REPEATED_UNKNOWN_CALLER
+                            val immediateSignals = buildList {
+                                if (ctx.isUnknownCaller == true) add(RiskSignal.UNKNOWN_CALLER)
+                                if (repeated) add(RiskSignal.REPEATED_UNKNOWN_CALLER)
+                            }
+                            emit(immediateSignals.ifEmpty { emptyList() })
+
                             val testMode = settingsRepository.observeTestModeEnabled().first()
                             val thresholdMs = if (testMode) TEST_LONG_CALL_THRESHOLD_MS else LONG_CALL_THRESHOLD_MS
-                            Log.d(TAG, "통화 임계 대기: ${thresholdMs / 1000}초 (테스트모드=$testMode)")
+                            Log.d(TAG, "통화 임계 대기: ${thresholdMs / 1000}초 (테스트모드=$testMode, repeated=$repeated)")
                             delay(thresholdMs)
                             val signals = buildList {
                                 if (ctx.isUnknownCaller == true) add(RiskSignal.UNKNOWN_CALLER)
                                 add(RiskSignal.LONG_CALL_DURATION)
+                                if (repeated) {
+                                    add(RiskSignal.REPEATED_UNKNOWN_CALLER)
+                                    add(RiskSignal.REPEATED_CALL_THEN_LONG_TALK)
+                                }
                             }
                             Log.d(TAG, "통화 임계 시간 경과 — signals: $signals")
                             emit(signals)
@@ -404,6 +418,22 @@ class RealCallRiskMonitor @Inject constructor(
         else -> CallState.IDLE
     }
 
+    /** 30분 초과 항목을 정리하고 반복 호출 여부를 반환한다. */
+    private fun isRepeatedUnknownCaller(): Boolean {
+        val cutoff = System.currentTimeMillis() - REPEATED_CALL_WINDOW_MS
+        recentUnknownCalls.removeAll { it < cutoff }
+        return recentUnknownCalls.size >= 2
+    }
+
+    /** 미확인/미검증 수신 호출을 버퍼에 기록한다. */
+    private fun recordUnknownCall() {
+        val now = System.currentTimeMillis()
+        val cutoff = now - REPEATED_CALL_WINDOW_MS
+        recentUnknownCalls.removeAll { it < cutoff }
+        recentUnknownCalls.add(now)
+        Log.d(TAG, "미확인 호출 기록: count=${recentUnknownCalls.size}")
+    }
+
     /** 텔레뱅킹 윈도우: 세션 활성 + 의심 통화 종료 후 5분 이내. */
     private fun isTelebankingWindow(): Boolean {
         val lastSuspicious = lastSuspiciousCallEndedAt ?: return false
@@ -441,6 +471,7 @@ class RealCallRiskMonitor @Inject constructor(
         private const val TEST_LONG_CALL_THRESHOLD_MS = 10_000L  // 테스트 모드: 10초
         private const val TELEBANKING_WINDOW_MS = 5 * 60 * 1000L // 텔레뱅킹 감지 윈도우: 5분
         private const val OUTGOING_CALL_LOG_DELAY_MS = 1500L     // CallLog 기록 대기
+        private const val REPEATED_CALL_WINDOW_MS = 30 * 60 * 1000L // 반복 호출 판단 윈도우: 30분
     }
 }
 
