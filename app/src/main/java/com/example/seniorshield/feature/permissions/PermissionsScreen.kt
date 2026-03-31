@@ -93,7 +93,6 @@ private fun PermissionsContent(
         }
         add(Manifest.permission.READ_CONTACTS)
         add(Manifest.permission.READ_CALL_LOG)
-        add(Manifest.permission.SEND_SMS)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             add(Manifest.permission.POST_NOTIFICATIONS)
         }

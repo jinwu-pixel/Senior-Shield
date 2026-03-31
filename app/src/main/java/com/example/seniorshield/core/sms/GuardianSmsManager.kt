@@ -1,3 +1,13 @@
+/*
+ * GuardianSmsManager — 비활성화됨 (2026-03-31, P0 SMS 정책 정리)
+ *
+ * 이 파일은 가족판(Family Edition) 복원을 위해 코드를 그대로 보존한다.
+ * 공개판(self-protection only)에서는 SEND_SMS 권한 및 자동 SMS 발송이 금지된다.
+ * 복원 시: GuardianSmsManager 주석 해제 + AndroidManifest SEND_SMS 권한 추가 +
+ *          DefaultRiskDetectionCoordinator smsManager 파라미터 복원 필요.
+ */
+
+/*
 package com.example.seniorshield.core.sms
 
 import android.Manifest
@@ -83,3 +93,4 @@ class GuardianSmsManager @Inject constructor(
                 "보호자 앱에서 확인해 주세요."
     }
 }
+*/

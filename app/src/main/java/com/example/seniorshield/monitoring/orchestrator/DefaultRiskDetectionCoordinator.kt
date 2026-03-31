@@ -4,7 +4,6 @@ import android.util.Log
 import com.example.seniorshield.core.notification.RiskNotificationManager
 import com.example.seniorshield.core.overlay.BankingCooldownManager
 import com.example.seniorshield.core.overlay.RiskOverlayManager
-import com.example.seniorshield.core.sms.GuardianSmsManager
 import com.example.seniorshield.domain.model.RiskLevel
 import com.example.seniorshield.domain.model.RiskSignal
 import com.example.seniorshield.domain.repository.RiskEventSink
@@ -52,7 +51,6 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
     private val overlayManager: RiskOverlayManager,
     private val cooldownManager: BankingCooldownManager,
     private val sessionTracker: RiskSessionTracker,
-    private val smsManager: GuardianSmsManager,
     private val ioDispatcher: CoroutineDispatcher,
 ) : RiskDetectionCoordinator {
 
@@ -107,9 +105,6 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                             }
                             if (hasActiveThreat && !bankingForeground && !cooldownManager.isShowing()) {
                                 overlayManager.show(event)
-                            }
-                            if (hasActiveThreat) {
-                                smsManager.notifyGuardiansIfEnabled(event)
                             }
                         }
                     }

@@ -57,13 +57,11 @@ fun NavGraphBuilder.settingsScreen(
         val debugVm: DebugViewModel = hiltViewModel()
         val session by debugVm.session.collectAsStateWithLifecycle()
         val score by debugVm.score.collectAsStateWithLifecycle()
-        val smsAlertEnabled by debugVm.smsAlertEnabled.collectAsStateWithLifecycle()
         val testModeEnabled by debugVm.testModeEnabled.collectAsStateWithLifecycle()
 
         SettingsContent(
             session = session,
             score = score,
-            smsAlertEnabled = smsAlertEnabled,
             testModeEnabled = testModeEnabled,
             onNavigatePolicy = onNavigatePolicy,
             onNavigateGuardian = onNavigateGuardian,
@@ -71,7 +69,6 @@ fun NavGraphBuilder.settingsScreen(
             onResetAll = debugVm::resetAll,
             onShowTestOverlay = debugVm::showTestOverlay,
             onShowTestCooldown = debugVm::showTestCooldown,
-            onSmsAlertToggle = debugVm::setSmsAlertEnabled,
             onTestModeToggle = debugVm::setTestModeEnabled,
         )
     }
@@ -81,7 +78,6 @@ fun NavGraphBuilder.settingsScreen(
 private fun SettingsContent(
     session: RiskSession?,
     score: RiskScore?,
-    smsAlertEnabled: Boolean,
     testModeEnabled: Boolean,
     onNavigatePolicy: () -> Unit,
     onNavigateGuardian: () -> Unit,
@@ -89,7 +85,6 @@ private fun SettingsContent(
     onResetAll: () -> Unit,
     onShowTestOverlay: () -> Unit,
     onShowTestCooldown: () -> Unit,
-    onSmsAlertToggle: (Boolean) -> Unit,
     onTestModeToggle: (Boolean) -> Unit,
 ) {
     SeniorShieldScaffold(title = "앱 설정", onBackClick = onBack) { padding ->
@@ -100,7 +95,6 @@ private fun SettingsContent(
                 .verticalScroll(rememberScrollState()),
         ) {
             SettingsListItem(text = "보호자 연락처 관리", onClick = onNavigateGuardian)
-            SmsAlertToggleItem(enabled = smsAlertEnabled, onToggle = onSmsAlertToggle)
             SettingsListItem(text = "서비스 원칙 및 개인정보 처리방침", onClick = onNavigatePolicy)
 
             if (BuildConfig.DEBUG) {
@@ -290,26 +284,6 @@ private fun TestModeToggleItem(enabled: Boolean, onToggle: (Boolean) -> Unit) {
     )
 }
 
-@Composable
-private fun SmsAlertToggleItem(enabled: Boolean, onToggle: (Boolean) -> Unit) {
-    ListItem(
-        headlineContent = {
-            Text("위험 감지 시 보호자 문자 전송", style = MaterialTheme.typography.bodyLarge)
-        },
-        supportingContent = {
-            Text(
-                "HIGH 이상 위험 감지 시 등록된 보호자에게 자동으로 SMS를 보냅니다.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        },
-        trailingContent = {
-            Switch(checked = enabled, onCheckedChange = onToggle)
-        },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-    )
-}
-
 // ── 공통 컴포넌트 ─────────────────────────────────────────────────────────────
 
 @Composable
@@ -329,7 +303,6 @@ private fun SettingsScreenPreview() {
         SettingsContent(
             session = null,
             score = null,
-            smsAlertEnabled = false,
             testModeEnabled = false,
             onNavigatePolicy = {},
             onNavigateGuardian = {},
@@ -337,7 +310,6 @@ private fun SettingsScreenPreview() {
             onResetAll = {},
             onShowTestOverlay = {},
             onShowTestCooldown = {},
-            onSmsAlertToggle = {},
             onTestModeToggle = {},
         )
     }

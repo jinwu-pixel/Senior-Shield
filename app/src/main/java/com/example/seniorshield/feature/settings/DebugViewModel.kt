@@ -34,10 +34,6 @@ class DebugViewModel @Inject constructor(
     /** 현재 활성 세션. null = 탐지 신호 없음. */
     val session: StateFlow<RiskSession?> = sessionTracker.sessionState
 
-    /** 위험 감지 시 보호자 SMS 전송 활성화 여부. */
-    val smsAlertEnabled: StateFlow<Boolean> = settingsRepository.observeSmsAlertEnabled()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
-
     /** 테스트 모드 — ON: 장시간 통화 임계값 10초 / OFF: 180초(3분). */
     val testModeEnabled: StateFlow<Boolean> = settingsRepository.observeTestModeEnabled()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
@@ -70,10 +66,6 @@ class DebugViewModel @Inject constructor(
     /** 뱅킹 쿨다운 인터럽터를 5초 미리보기로 띄운다. */
     fun showTestCooldown() {
         cooldownManager.triggerPreview(countdownSec = 5)
-    }
-
-    fun setSmsAlertEnabled(enabled: Boolean) {
-        viewModelScope.launch { settingsRepository.setSmsAlertEnabled(enabled) }
     }
 
     fun setTestModeEnabled(enabled: Boolean) {

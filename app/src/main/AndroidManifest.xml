@@ -28,9 +28,6 @@
     <!-- 수신 번호 캡처 (API 29+, BroadcastReceiver EXTRA_INCOMING_NUMBER) -->
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
 
-    <!-- 보호자 SMS 전송 (GuardianSmsManager) -->
-    <uses-permission android:name="android.permission.SEND_SMS" />
-
     <!-- 루팅 앱 패키지 존재 확인 (RealDeviceEnvironmentRiskMonitor, API 30+) -->
     <queries>
         <package android:name="com.topjohnwu.magisk" />

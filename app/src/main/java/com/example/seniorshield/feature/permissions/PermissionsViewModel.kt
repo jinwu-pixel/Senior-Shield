@@ -68,11 +68,6 @@ class PermissionsViewModel @Inject constructor(
             description = "최신 Android에서 수신 번호를 파악해 연락처 대조를 하기 위해 필요합니다.",
             granted = isGranted(Manifest.permission.READ_CALL_LOG),
         ),
-        PermissionStatus(
-            name = "문자 메시지 전송",
-            description = "위험 감지 시 등록된 보호자에게 자동으로 SMS를 보내기 위해 필요합니다.",
-            granted = isGranted(Manifest.permission.SEND_SMS),
-        ),
     )
 
     private fun isGranted(permission: String): Boolean =
