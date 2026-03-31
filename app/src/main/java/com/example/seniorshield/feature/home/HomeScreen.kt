@@ -3,6 +3,7 @@ package com.example.seniorshield.feature.home
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -48,6 +49,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
+import com.example.seniorshield.core.designsystem.component.dpadFocusHighlight
 import com.example.seniorshield.core.designsystem.component.PrimaryButton
 import com.example.seniorshield.core.designsystem.component.SecondaryButton
 import com.example.seniorshield.core.designsystem.component.SeniorShieldScaffold
@@ -122,7 +124,12 @@ private fun HomeContent(
             }
 
             item {
-                Column(Modifier.padding(horizontal = 24.dp)) {
+                Column(
+                    Modifier
+                        .padding(horizontal = 24.dp)
+                        .dpadFocusHighlight(shape = RoundedCornerShape(12.dp))
+                        .focusable(),
+                ) {
                     StatusCard(
                         title = uiState.currentRiskTitle,
                         body = uiState.currentRiskBody,

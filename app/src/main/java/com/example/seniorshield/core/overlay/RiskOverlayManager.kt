@@ -56,17 +56,18 @@ class RiskOverlayManager @Inject constructor(
                 Log.d(TAG, "팝업 이미 표시 중 — 생략")
                 return@post
             }
-            val view = buildView(event)
+            val (view, primaryButton) = buildView(event)
             val params = WindowManager.LayoutParams(
                 MATCH_PARENT,
                 MATCH_PARENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
                 PixelFormat.OPAQUE,
             )
             try {
                 windowManager.addView(view, params)
                 overlayView = view
+                primaryButton.requestFocus()
                 Log.d(TAG, "전체화면 팝업 표시: level=${event.level}, title=${event.title}")
             } catch (e: Exception) {
                 Log.e(TAG, "팝업 addView 실패: ${e.message}")
@@ -90,7 +91,12 @@ class RiskOverlayManager @Inject constructor(
 
     // ── 레이아웃 ─────────────────────────────────────────────────
 
-    private fun buildView(event: RiskEvent): LinearLayout {
+    private data class OverlayViews(
+        val root: LinearLayout,
+        val primaryButton: Button,
+    )
+
+    private fun buildView(event: RiskEvent): OverlayViews {
         val bgColor = when (event.level) {
             RiskLevel.CRITICAL -> Color.parseColor("#B71C1C")
             RiskLevel.HIGH     -> Color.parseColor("#BF360C")
@@ -173,14 +179,17 @@ class RiskOverlayManager @Inject constructor(
         }
 
         // 주 버튼: 지금 전화 끊기
-        buttonArea.addView(Button(context).apply {
+        val cornerPx = dp(8).toFloat()
+        val primaryBtn = Button(context).apply {
             text = "지금 전화 끊기"
             textSize = 18f
             setTextColor(bgColor)
             setTypeface(null, Typeface.BOLD)
+            isFocusable = true
+            isFocusableInTouchMode = true
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(8).toFloat()
+                cornerRadius = cornerPx
                 setColor(Color.WHITE)
             }
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(60))
@@ -188,16 +197,27 @@ class RiskOverlayManager @Inject constructor(
                 callEndHelper.endCurrentCall()
                 dismiss()
             }
-        })
+            setOnFocusChangeListener { _, hasFocus ->
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = cornerPx
+                    setColor(Color.WHITE)
+                    if (hasFocus) setStroke(dp(4), Color.YELLOW)
+                }
+            }
+        }
+        buttonArea.addView(primaryBtn)
 
         // 보조 버튼: 앱 열어서 확인하기
         buttonArea.addView(Button(context).apply {
             text = "앱 열어서 확인하기"
             textSize = 16f
             setTextColor(Color.WHITE)
+            isFocusable = true
+            isFocusableInTouchMode = true
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(8).toFloat()
+                cornerRadius = cornerPx
                 setColor(Color.TRANSPARENT)
                 setStroke(dp(2), Color.WHITE)
             }
@@ -212,11 +232,19 @@ class RiskOverlayManager @Inject constructor(
                 )
                 dismiss()
             }
+            setOnFocusChangeListener { _, hasFocus ->
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = cornerPx
+                    setColor(Color.TRANSPARENT)
+                    setStroke(dp(if (hasFocus) 4 else 2), if (hasFocus) Color.YELLOW else Color.WHITE)
+                }
+            }
         })
 
         root.addView(contentArea)
         root.addView(buttonArea)
-        return root
+        return OverlayViews(root, primaryBtn)
     }
 
     private fun dp(value: Int): Int =

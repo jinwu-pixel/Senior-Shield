@@ -2,6 +2,7 @@ package com.example.seniorshield.core.designsystem.component
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -27,7 +28,10 @@ fun SeniorShieldScaffold(
                 title = { Text(text = title) },
                 navigationIcon = {
                     if (onBackClick != null) {
-                        IconButton(onClick = onBackClick) {
+                        IconButton(
+                            onClick = onBackClick,
+                            modifier = Modifier.dpadFocusHighlight(shape = CircleShape),
+                        ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "뒤로가기",

@@ -83,16 +83,17 @@ class BankingCooldownManager @Inject constructor(
     }
 
     private fun startCooldown(countdownSec: Int, level: RiskLevel) {
-        val (root, countdownText, bottomText) = buildView(countdownSec, level)
+        val (root, countdownText, bottomText, endCallButton) = buildView(countdownSec, level)
         val params = WindowManager.LayoutParams(
             MATCH_PARENT, MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
             PixelFormat.OPAQUE,
         )
         try {
             windowManager.addView(root, params)
             overlayView = root
+            endCallButton.requestFocus()
             Log.d(TAG, "쿨다운 시작: ${countdownSec}초")
         } catch (e: Exception) {
             Log.e(TAG, "쿨다운 addView 실패: ${e.message}")
@@ -131,6 +132,7 @@ class BankingCooldownManager @Inject constructor(
         val root: LinearLayout,
         val countdownText: TextView,
         val bottomText: TextView,
+        val endCallButton: Button,
     )
 
     private fun buildView(countdownSec: Int, level: RiskLevel): CooldownViews {
@@ -225,14 +227,17 @@ class BankingCooldownManager @Inject constructor(
             setPadding(dp(24), dp(16), dp(24), dp(48))
         }
 
-        buttonArea.addView(Button(context).apply {
+        val cornerPx = dp(8).toFloat()
+        val endCallBtn = Button(context).apply {
             text = "지금 전화 끊기"
             textSize = 18f
             setTextColor(bg)
             setTypeface(null, Typeface.BOLD)
+            isFocusable = true
+            isFocusableInTouchMode = true
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(8).toFloat()
+                cornerRadius = cornerPx
                 setColor(Color.WHITE)
             }
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(60))
@@ -240,11 +245,20 @@ class BankingCooldownManager @Inject constructor(
                 callEndHelper.endCurrentCall()
                 dismiss()
             }
-        })
+            setOnFocusChangeListener { _, hasFocus ->
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = cornerPx
+                    setColor(Color.WHITE)
+                    if (hasFocus) setStroke(dp(4), Color.YELLOW)
+                }
+            }
+        }
+        buttonArea.addView(endCallBtn)
 
         root.addView(buttonArea)
 
-        return CooldownViews(root, countdownText, bottomText)
+        return CooldownViews(root, countdownText, bottomText, endCallBtn)
     }
 
     private fun dp(value: Int): Int =
