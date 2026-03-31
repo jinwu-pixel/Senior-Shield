@@ -20,6 +20,6 @@ data class RiskSession(
     val accumulatedSignals: Set<RiskSignal> = emptySet(),
     val lastSignalAt: Long,
     val notifiedLevel: RiskLevel? = null,
-    /** true면 이 세션에서 뱅킹 쿨다운 인터럽터를 이미 발동한 것이므로 재발동하지 않는다. */
-    val bankingInterrupterShown: Boolean = false,
+    /** 이미 팝업을 표시한 능동적 위협 신호. 새 위협이 추가되면 재알림한다. */
+    val notifiedActiveThreats: Set<RiskSignal> = emptySet(),
 )

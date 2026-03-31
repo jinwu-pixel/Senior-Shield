@@ -73,9 +73,9 @@ class RiskSessionTracker @Inject constructor() {
         Log.d(TAG, "notifiedLevel updated → $level")
     }
 
-    fun markInterrupterShown() {
-        session = session?.copy(bankingInterrupterShown = true)
-        Log.d(TAG, "bankingInterrupterShown = true")
+    fun markActiveThreatsNotified(threats: Set<RiskSignal>) {
+        session = session?.copy(notifiedActiveThreats = threats)
+        Log.d(TAG, "notifiedActiveThreats updated → $threats")
     }
 
     /** 세션을 강제로 초기화한다. 테스트·디버그 전용. */

@@ -215,7 +215,7 @@ private fun SessionStateCard(session: RiskSession?, score: RiskScore?) {
             }
             SessionRow("점수", "${score?.total ?: 0}점 / ${score?.level?.name ?: "—"}", labelColor = levelColor)
             SessionRow("마지막 알림", session.notifiedLevel?.name ?: "없음")
-            SessionRow("인터럽터", if (session.bankingInterrupterShown) "발동됨" else "미발동")
+            SessionRow("능동적 위협 알림", if (session.notifiedActiveThreats.isEmpty()) "없음" else session.notifiedActiveThreats.joinToString { it.name })
             SessionRow("세션 시작", formatTime(session.startedAt))
             SessionRow(
                 "누적 신호",
