@@ -8,4 +8,5 @@ data class CallContext(
     val durationSec: Long,          // RINGING→IDLE(부재중/거절)이면 0
     val isUnknownCaller: Boolean?,  // true=미확인, false=확인됨, null=판단 불가
     val isVerifiedCaller: Boolean?, // true=검증됨, false=미검증, null=판단 불가
+    val isOutgoing: Boolean = false, // true=발신, false=수신/불명
 )

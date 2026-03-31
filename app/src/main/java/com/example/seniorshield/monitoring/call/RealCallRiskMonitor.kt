@@ -63,7 +63,11 @@ class RealCallRiskMonitor @Inject constructor(
     private val mapper: CallSignalMapper,
     private val contactChecker: CallerContactChecker,
     private val settingsRepository: SettingsRepository,
+    private val bankArsRegistry: BankArsRegistry,
+    private val sessionTracker: com.example.seniorshield.monitoring.session.RiskSessionTracker,
 ) : CallRiskMonitor {
+
+    @Volatile private var lastSuspiciousCallEndedAt: Long? = null
 
     override fun observeCallContext(): Flow<CallContext?> =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) observeCallContextApi31()
@@ -73,31 +77,49 @@ class RealCallRiskMonitor @Inject constructor(
         observeCallContext()
             .flatMapLatest { ctx ->
                 when {
-                    ctx == null -> flowOf(emptyList())
+                    ctx == null -> flowOf(emptyList<RiskSignal>())
 
                     // OFFHOOK: 즉시 신호 방출 후 임계 시간 경과 시 LONG_CALL_DURATION 추가
                     // flatMapLatest가 IDLE 전환 시 이 flow를 즉시 취소하므로
                     // 짧은 통화에서는 LONG_CALL_DURATION이 발생하지 않는다.
-                    ctx.state == CallState.OFFHOOK -> flow {
-                        if (ctx.isUnknownCaller == true) {
-                            emit(listOf(RiskSignal.UNKNOWN_CALLER))
+                    ctx.state == CallState.OFFHOOK -> flow<List<RiskSignal>> {
+                        if (ctx.isOutgoing) {
+                            // ── 발신 감지: 텔레뱅킹 판별 ──
+                            delay(OUTGOING_CALL_LOG_DELAY_MS)
+                            val dialedNumber = queryLatestOutgoingNumber()
+                            if (dialedNumber != null && bankArsRegistry.matches(dialedNumber) && isTelebankingWindow()) {
+                                Log.d(TAG, "텔레뱅킹 감지: number=$dialedNumber")
+                                emit(listOf(RiskSignal.TELEBANKING_AFTER_SUSPICIOUS))
+                            } else {
+                                emit(emptyList())
+                            }
                         } else {
-                            emit(emptyList())
+                            // ── 수신 통화: 기존 로직 ──
+                            if (ctx.isUnknownCaller == true) {
+                                emit(listOf(RiskSignal.UNKNOWN_CALLER))
+                            } else {
+                                emit(emptyList())
+                            }
+                            val testMode = settingsRepository.observeTestModeEnabled().first()
+                            val thresholdMs = if (testMode) TEST_LONG_CALL_THRESHOLD_MS else LONG_CALL_THRESHOLD_MS
+                            Log.d(TAG, "통화 임계 대기: ${thresholdMs / 1000}초 (테스트모드=$testMode)")
+                            delay(thresholdMs)
+                            val signals = buildList {
+                                if (ctx.isUnknownCaller == true) add(RiskSignal.UNKNOWN_CALLER)
+                                add(RiskSignal.LONG_CALL_DURATION)
+                            }
+                            Log.d(TAG, "통화 임계 시간 경과 — signals: $signals")
+                            emit(signals)
                         }
-                        val testMode = settingsRepository.observeTestModeEnabled().first()
-                        val thresholdMs = if (testMode) TEST_LONG_CALL_THRESHOLD_MS else LONG_CALL_THRESHOLD_MS
-                        Log.d(TAG, "통화 임계 대기: ${thresholdMs / 1000}초 (테스트모드=$testMode)")
-                        delay(thresholdMs)
-                        val signals = buildList {
-                            if (ctx.isUnknownCaller == true) add(RiskSignal.UNKNOWN_CALLER)
-                            add(RiskSignal.LONG_CALL_DURATION)
-                        }
-                        Log.d(TAG, "통화 임계 시간 경과 — signals: $signals")
-                        emit(signals)
                     }
 
                     // IDLE: 통화 종료 — 신호 세트 방출 후 즉시 리셋
-                    ctx.state == CallState.IDLE && ctx.endedAtMillis != null -> flow {
+                    ctx.state == CallState.IDLE && ctx.endedAtMillis != null -> flow<List<RiskSignal>> {
+                        // 의심 통화 종료 시각 기록 (텔레뱅킹 5분 윈도우용)
+                        if (ctx.isUnknownCaller == true || ctx.isVerifiedCaller == false) {
+                            lastSuspiciousCallEndedAt = ctx.endedAtMillis
+                            Log.d(TAG, "의심 통화 종료 기록: ${ctx.endedAtMillis}")
+                        }
                         val testMode = settingsRepository.observeTestModeEnabled().first()
                         val thresholdSec = if (testMode) CallSignalMapper.TEST_LONG_CALL_THRESHOLD_SEC
                                            else CallSignalMapper.LONG_CALL_THRESHOLD_SEC
@@ -109,7 +131,7 @@ class RealCallRiskMonitor @Inject constructor(
                         emit(emptyList()) // combine 캐시 리셋
                     }
 
-                    else -> flowOf(emptyList())
+                    else -> flowOf(emptyList<RiskSignal>())
                 }
             }
             .distinctUntilChanged()
@@ -319,7 +341,8 @@ class RealCallRiskMonitor @Inject constructor(
         CallState.OFFHOOK -> {
             val now = System.currentTimeMillis()
             onOffhookUpdated(now)
-            Log.d(TAG, "call connected, startedAtMillis=$now, isUnknownCaller=$isUnknownCaller, isVerifiedCaller=$isVerifiedCaller")
+            val outgoing = previous == CallState.IDLE
+            Log.d(TAG, "call connected, startedAtMillis=$now, isOutgoing=$outgoing, isUnknownCaller=$isUnknownCaller, isVerifiedCaller=$isVerifiedCaller")
             CallContext(
                 state = CallState.OFFHOOK,
                 phoneNumber = phoneNumber,
@@ -328,6 +351,7 @@ class RealCallRiskMonitor @Inject constructor(
                 durationSec = 0L,
                 isUnknownCaller = isUnknownCaller,
                 isVerifiedCaller = isVerifiedCaller,
+                isOutgoing = outgoing,
             )
         }
 
@@ -380,10 +404,43 @@ class RealCallRiskMonitor @Inject constructor(
         else -> CallState.IDLE
     }
 
+    /** 텔레뱅킹 윈도우: 세션 활성 + 의심 통화 종료 후 5분 이내. */
+    private fun isTelebankingWindow(): Boolean {
+        val lastSuspicious = lastSuspiciousCallEndedAt ?: return false
+        val sessionActive = sessionTracker.sessionState.value != null
+        return sessionActive && (System.currentTimeMillis() - lastSuspicious <= TELEBANKING_WINDOW_MS)
+    }
+
+    /** CallLog에서 최근 발신 번호를 조회한다. READ_CALL_LOG 권한 필요. */
+    private fun queryLatestOutgoingNumber(): String? {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALL_LOG)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.w(TAG, "READ_CALL_LOG 권한 없음 — 발신 번호 조회 불가")
+            return null
+        }
+        return try {
+            context.contentResolver.query(
+                android.provider.CallLog.Calls.CONTENT_URI,
+                arrayOf(android.provider.CallLog.Calls.NUMBER),
+                "${android.provider.CallLog.Calls.TYPE} = ?",
+                arrayOf(android.provider.CallLog.Calls.OUTGOING_TYPE.toString()),
+                "${android.provider.CallLog.Calls.DATE} DESC",
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0) else null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "CallLog 조회 실패: ${e.message}")
+            null
+        }
+    }
+
     companion object {
         private const val TAG = "SeniorShield-CallMonitor"
         private const val LONG_CALL_THRESHOLD_MS = 180_000L      // 프로덕션: 3분
         private const val TEST_LONG_CALL_THRESHOLD_MS = 10_000L  // 테스트 모드: 10초
+        private const val TELEBANKING_WINDOW_MS = 5 * 60 * 1000L // 텔레뱅킹 감지 윈도우: 5분
+        private const val OUTGOING_CALL_LOG_DELAY_MS = 1500L     // CallLog 기록 대기
     }
 }
 
