@@ -32,8 +32,10 @@ fun PrimaryButton(
 ) {
     Button(
         onClick = onClick,
-        modifier = modifier.then(buttonModifier),
-        shape = MaterialTheme.shapes.medium
+        modifier = modifier
+            .dpadFocusHighlight(shape = MaterialTheme.shapes.medium)
+            .then(buttonModifier),
+        shape = MaterialTheme.shapes.medium,
     ) {
         Text(text = text, style = MaterialTheme.typography.labelLarge)
     }
@@ -50,8 +52,10 @@ fun SecondaryButton(
 ) {
     OutlinedButton(
         onClick = onClick,
-        modifier = modifier.then(buttonModifier),
-        shape = MaterialTheme.shapes.medium
+        modifier = modifier
+            .dpadFocusHighlight(shape = MaterialTheme.shapes.medium)
+            .then(buttonModifier),
+        shape = MaterialTheme.shapes.medium,
     ) {
         Text(text = text, style = MaterialTheme.typography.labelLarge)
     }
@@ -68,7 +72,9 @@ fun BasicTextButton(
 ) {
     TextButton(
         onClick = onClick,
-        modifier = modifier.height(48.dp)
+        modifier = modifier
+            .dpadFocusHighlight(shape = MaterialTheme.shapes.medium)
+            .height(48.dp),
     ) {
         Text(text, style = MaterialTheme.typography.labelLarge)
     }

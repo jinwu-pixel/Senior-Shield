@@ -2,6 +2,7 @@ package com.example.seniorshield.feature.home
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -30,9 +31,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -131,7 +136,8 @@ private fun HomeContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 24.dp)
-                        .padding(horizontal = 24.dp),
+                        .padding(horizontal = 24.dp)
+                        .focusGroup(),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     if (hasActiveRisk) {
@@ -161,9 +167,11 @@ private fun HomeContent(
             }
 
             item {
-                SettingsListItem(text = "권한 설정 및 안내", onClick = onNavigatePermissions)
-                SettingsListItem(text = "서비스 원칙 및 정책", onClick = onNavigatePolicy)
-                SettingsListItem(text = "앱 설정", onClick = onNavigateSettings)
+                Column(modifier = Modifier.focusGroup()) {
+                    SettingsListItem(text = "권한 설정 및 안내", onClick = onNavigatePermissions)
+                    SettingsListItem(text = "서비스 원칙 및 정책", onClick = onNavigatePolicy)
+                    SettingsListItem(text = "앱 설정", onClick = onNavigateSettings)
+                }
             }
         }
     }
@@ -248,6 +256,12 @@ private fun SettingsListItem(
     text: String,
     onClick: () -> Unit,
 ) {
+    var hasFocus by remember { mutableStateOf(false) }
+    val containerColor = if (hasFocus) {
+        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+    } else {
+        Color.Transparent
+    }
     ListItem(
         headlineContent = { Text(text, style = MaterialTheme.typography.bodyLarge) },
         trailingContent = {
@@ -256,8 +270,10 @@ private fun SettingsListItem(
                 contentDescription = null,
             )
         },
-        modifier = Modifier.clickable(onClick = onClick),
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        modifier = Modifier
+            .onFocusChanged { hasFocus = it.hasFocus }
+            .clickable(onClick = onClick),
+        colors = ListItemDefaults.colors(containerColor = containerColor),
     )
 }
 

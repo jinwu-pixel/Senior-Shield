@@ -34,6 +34,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import com.example.seniorshield.core.designsystem.component.SeniorShieldScaffold
+import com.example.seniorshield.core.designsystem.component.dpadFocusHighlight
 import com.example.seniorshield.core.navigation.SeniorShieldDestination
 
 fun NavGraphBuilder.simulationListScreen(
@@ -98,7 +99,9 @@ fun NavGraphBuilder.simulationPlayScreen(onBack: () -> Unit) {
 private fun ScenarioCard(scenario: FraudScenario, onClick: () -> Unit) {
     Card(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .dpadFocusHighlight(shape = RoundedCornerShape(12.dp)),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         shape = RoundedCornerShape(12.dp),
     ) {
@@ -199,7 +202,9 @@ private fun StepContent(
 
         Card(
             onClick = { if (!hasAnswered) onSelectChoice(index) },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .dpadFocusHighlight(shape = RoundedCornerShape(12.dp)),
             colors = CardDefaults.cardColors(containerColor = containerColor),
             shape = RoundedCornerShape(12.dp),
         ) {
