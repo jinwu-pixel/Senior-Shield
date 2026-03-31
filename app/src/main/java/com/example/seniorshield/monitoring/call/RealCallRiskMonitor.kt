@@ -138,6 +138,7 @@ class RealCallRiskMonitor @Inject constructor(
         var offhookAtMillis: Long? = null
         var capturedPhoneNumber: String? = null
         var isUnknownCaller: Boolean? = null
+        var isVerifiedCaller: Boolean? = null
         trySend(null)
 
         // BroadcastReceiver로 수신 번호를 캡처한다.
@@ -151,8 +152,10 @@ class RealCallRiskMonitor @Inject constructor(
                     val number = intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER)
                         ?.takeIf { it.isNotBlank() }
                     capturedPhoneNumber = number
-                    isUnknownCaller = contactChecker.isUnknownNumber(number)
-                    Log.d(TAG, "incoming number via broadcast, isUnknown=$isUnknownCaller")
+                    val callerResult = contactChecker.checkCaller(number)
+                    isUnknownCaller = callerResult.toIsUnknownCaller()
+                    isVerifiedCaller = callerResult.toIsVerifiedCaller()
+                    Log.d(TAG, "incoming number via broadcast, isUnknown=$isUnknownCaller, isVerified=$isVerifiedCaller")
 
                     // API 31+ 타이밍 경쟁 해소: TelephonyCallback이 번호 없이
                     // RINGING을 먼저 전달한 경우, 번호 확보 시점에 RINGING 컨텍스트를
@@ -167,7 +170,7 @@ class RealCallRiskMonitor @Inject constructor(
                             endedAtMillis = null,
                             durationSec = 0L,
                             isUnknownCaller = isUnknownCaller,
-                            isVerifiedCaller = null,
+                            isVerifiedCaller = isVerifiedCaller,
                         )
                         trySend(updatedCtx)
                         Log.d(TAG, "re-emitted RINGING context with resolved number")
@@ -189,12 +192,13 @@ class RealCallRiskMonitor @Inject constructor(
                 Log.d(TAG, "state transition (API31+): prev=$previousState new=$newState")
                 val ctx = buildContext(
                     previousState, newState, offhookAtMillis,
-                    capturedPhoneNumber, isUnknownCaller,
+                    capturedPhoneNumber, isUnknownCaller, isVerifiedCaller,
                 ) { offhookAtMillis = it }
                 previousState = newState
                 if (newState == CallState.IDLE) {
                     capturedPhoneNumber = null
                     isUnknownCaller = null
+                    isVerifiedCaller = null
                 }
                 if (ctx != null) trySend(ctx)
             }
@@ -244,6 +248,7 @@ class RealCallRiskMonitor @Inject constructor(
         var offhookAtMillis: Long? = null
         var capturedPhoneNumber: String? = null
         var isUnknownCaller: Boolean? = null
+        var isVerifiedCaller: Boolean? = null
         trySend(null)
 
         val listener = object : PhoneStateListener() {
@@ -256,13 +261,15 @@ class RealCallRiskMonitor @Inject constructor(
                 if (newState == CallState.RINGING) {
                     val number = phoneNumber?.takeIf { it.isNotBlank() }
                     capturedPhoneNumber = number
-                    isUnknownCaller = contactChecker.isUnknownNumber(number)
-                    Log.d(TAG, "incoming number (legacy), isUnknown=$isUnknownCaller")
+                    val callerResult = contactChecker.checkCaller(number)
+                    isUnknownCaller = callerResult.toIsUnknownCaller()
+                    isVerifiedCaller = callerResult.toIsVerifiedCaller()
+                    Log.d(TAG, "incoming number (legacy), isUnknown=$isUnknownCaller, isVerified=$isVerifiedCaller")
                 }
 
                 val ctx = buildContext(
                     previousState, newState, offhookAtMillis,
-                    capturedPhoneNumber, isUnknownCaller,
+                    capturedPhoneNumber, isUnknownCaller, isVerifiedCaller,
                 ) { offhookAtMillis = it }
                 previousState = newState
 
@@ -270,6 +277,7 @@ class RealCallRiskMonitor @Inject constructor(
                 if (newState == CallState.IDLE) {
                     capturedPhoneNumber = null
                     isUnknownCaller = null
+                    isVerifiedCaller = null
                 }
 
                 if (ctx != null) trySend(ctx)
@@ -295,6 +303,7 @@ class RealCallRiskMonitor @Inject constructor(
         offhookAtMillis: Long?,
         phoneNumber: String?,
         isUnknownCaller: Boolean?,
+        isVerifiedCaller: Boolean?,
         onOffhookUpdated: (Long?) -> Unit,
     ): CallContext? = when (next) {
         CallState.RINGING -> CallContext(
@@ -304,13 +313,13 @@ class RealCallRiskMonitor @Inject constructor(
             endedAtMillis = null,
             durationSec = 0L,
             isUnknownCaller = isUnknownCaller,
-            isVerifiedCaller = null,
+            isVerifiedCaller = isVerifiedCaller,
         )
 
         CallState.OFFHOOK -> {
             val now = System.currentTimeMillis()
             onOffhookUpdated(now)
-            Log.d(TAG, "call connected, startedAtMillis=$now, isUnknownCaller=$isUnknownCaller")
+            Log.d(TAG, "call connected, startedAtMillis=$now, isUnknownCaller=$isUnknownCaller, isVerifiedCaller=$isVerifiedCaller")
             CallContext(
                 state = CallState.OFFHOOK,
                 phoneNumber = phoneNumber,
@@ -318,7 +327,7 @@ class RealCallRiskMonitor @Inject constructor(
                 endedAtMillis = null,
                 durationSec = 0L,
                 isUnknownCaller = isUnknownCaller,
-                isVerifiedCaller = null,
+                isVerifiedCaller = isVerifiedCaller,
             )
         }
 
@@ -327,7 +336,7 @@ class RealCallRiskMonitor @Inject constructor(
             when (previous) {
                 CallState.OFFHOOK -> {
                     val duration = offhookAtMillis?.let { (now - it) / 1000L } ?: 0L
-                    Log.d(TAG, "call ended (OFFHOOK→IDLE), durationSec=$duration, isUnknownCaller=$isUnknownCaller")
+                    Log.d(TAG, "call ended (OFFHOOK→IDLE), durationSec=$duration, isUnknownCaller=$isUnknownCaller, isVerifiedCaller=$isVerifiedCaller")
                     onOffhookUpdated(null)
                     CallContext(
                         state = CallState.IDLE,
@@ -336,7 +345,7 @@ class RealCallRiskMonitor @Inject constructor(
                         endedAtMillis = now,
                         durationSec = duration,
                         isUnknownCaller = isUnknownCaller,
-                        isVerifiedCaller = null,
+                        isVerifiedCaller = isVerifiedCaller,
                     )
                 }
                 CallState.RINGING -> {
@@ -349,7 +358,7 @@ class RealCallRiskMonitor @Inject constructor(
                         endedAtMillis = now,
                         durationSec = 0L,
                         isUnknownCaller = isUnknownCaller,
-                        isVerifiedCaller = null,
+                        isVerifiedCaller = isVerifiedCaller,
                     )
                 }
                 CallState.IDLE -> null
@@ -376,4 +385,30 @@ class RealCallRiskMonitor @Inject constructor(
         private const val LONG_CALL_THRESHOLD_MS = 180_000L      // 프로덕션: 3분
         private const val TEST_LONG_CALL_THRESHOLD_MS = 10_000L  // 테스트 모드: 10초
     }
+}
+
+// ── CallerCheckResult 매핑 헬퍼 ─────────────────────────────────────────────
+
+/**
+ * UNKNOWN_CALLER 신호 판정용.
+ * NOT_IN_CONTACTS → true (미저장), 그 외 → false/null
+ */
+private fun CallerCheckResult.toIsUnknownCaller(): Boolean? = when (this) {
+    CallerCheckResult.NOT_IN_CONTACTS -> true
+    CallerCheckResult.NEW_CONTACT -> false
+    CallerCheckResult.VERIFIED_CONTACT -> false
+    CallerCheckResult.UNAVAILABLE -> null
+}
+
+/**
+ * UNVERIFIED_CALLER 신호 판정용.
+ * NEW_CONTACT → false (미검증), VERIFIED_CONTACT → true (검증됨),
+ * NOT_IN_CONTACTS → null (unknown이므로 verified 판단 불필요),
+ * UNAVAILABLE → null
+ */
+private fun CallerCheckResult.toIsVerifiedCaller(): Boolean? = when (this) {
+    CallerCheckResult.NOT_IN_CONTACTS -> null
+    CallerCheckResult.NEW_CONTACT -> false
+    CallerCheckResult.VERIFIED_CONTACT -> true
+    CallerCheckResult.UNAVAILABLE -> null
 }

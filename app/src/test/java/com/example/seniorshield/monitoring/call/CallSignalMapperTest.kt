@@ -91,4 +91,18 @@ class CallSignalMapperTest {
         val ctx = idleContext(durationSec = 60L, isVerifiedCaller = null)
         assertFalse(RiskSignal.UNVERIFIED_CALLER in mapper.map(ctx))
     }
+
+    @Test
+    fun `isVerifiedCaller true - UNVERIFIED_CALLER 미발생`() {
+        val ctx = idleContext(durationSec = 60L, isVerifiedCaller = true)
+        assertFalse(RiskSignal.UNVERIFIED_CALLER in mapper.map(ctx))
+    }
+
+    @Test
+    fun `isVerifiedCaller false isUnknownCaller false - UNVERIFIED_CALLER만 발생`() {
+        val ctx = idleContext(durationSec = 60L, isUnknownCaller = false, isVerifiedCaller = false)
+        val signals = mapper.map(ctx)
+        assertTrue(RiskSignal.UNVERIFIED_CALLER in signals)
+        assertFalse(RiskSignal.UNKNOWN_CALLER in signals)
+    }
 }
