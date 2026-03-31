@@ -1,5 +1,6 @@
 package com.example.seniorshield.feature.simulation
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -131,10 +133,27 @@ private fun StepContent(
     val step = uiState.scenario.steps[uiState.currentStepIndex]
 
     // 진행률
-    Text(
-        text = "${uiState.currentStepIndex + 1} / ${uiState.scenario.steps.size}",
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    val progress = (uiState.currentStepIndex + 1).toFloat() / uiState.scenario.steps.size
+    val animatedProgress by animateFloatAsState(targetValue = progress, label = "progress")
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "${uiState.currentStepIndex + 1} / ${uiState.scenario.steps.size} 단계",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    LinearProgressIndicator(
+        progress = { animatedProgress },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(8.dp)
+            .clip(RoundedCornerShape(4.dp)),
+        trackColor = MaterialTheme.colorScheme.surfaceVariant,
     )
 
     // 사기꾼 메시지
@@ -282,9 +301,8 @@ private fun CompletionContent(uiState: SimulationUiState, onBack: () -> Unit) {
             )
             tips.forEach { tip ->
                 Row(Modifier.padding(vertical = 2.dp)) {
-                    Text("  ", style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        text = tip,
+                        text = "\u2022  $tip",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                     )

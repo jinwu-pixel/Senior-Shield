@@ -56,12 +56,36 @@ val AppTypography = Typography(
         lineHeight = 24.sp, // 줄 간격 확보
         letterSpacing = 0.25.sp
     ),
+    // 소제목 — 카드/배너 내 라벨 (17sp)
+    titleSmall = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 17.sp,
+        lineHeight = 24.sp,
+        letterSpacing = 0.1.sp
+    ),
+    // 보조 본문 — 배너 설명 등 (15sp → 16sp로 상향)
+    bodySmall = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Normal,
+        fontSize = 16.sp,
+        lineHeight = 22.sp,
+        letterSpacing = 0.25.sp
+    ),
     // 버튼, 라벨 등에 사용
     labelLarge = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Medium,
         fontSize = 18.sp,
         lineHeight = 24.sp,
+        letterSpacing = 0.1.sp
+    ),
+    // 소형 라벨 — 배너 내 버튼 텍스트 등 (16sp)
+    labelMedium = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Medium,
+        fontSize = 16.sp,
+        lineHeight = 22.sp,
         letterSpacing = 0.1.sp
     )
 )

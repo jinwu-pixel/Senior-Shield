@@ -209,7 +209,7 @@ private fun PermissionsWarningBanner(
         ) {
             Icon(
                 imageVector = Icons.Rounded.Warning,
-                contentDescription = null,
+                contentDescription = "권한 경고",
                 tint = MaterialTheme.colorScheme.error,
                 modifier = Modifier
                     .size(20.dp)

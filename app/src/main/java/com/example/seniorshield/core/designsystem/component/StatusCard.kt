@@ -72,7 +72,7 @@ fun StatusCard(
                 )
                 Text(
                     text = body,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }

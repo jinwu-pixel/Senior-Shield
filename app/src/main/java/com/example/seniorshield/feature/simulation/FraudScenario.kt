@@ -89,4 +89,53 @@ val FRAUD_SCENARIOS = listOf(
             ),
         ),
     ),
+    FraudScenario(
+        id = "remote_control",
+        title = "원격제어 앱 설치 유도",
+        description = "기관을 사칭하여 원격제어 앱 설치를 요구하는 시나리오",
+        steps = listOf(
+            ScenarioStep(
+                fraudsterMessage = "금융감독원 조사관입니다. 고객님 계좌에 의심 거래가 발견되어 보안 점검이 필요합니다. 제가 안내하는 앱을 설치해 주세요.",
+                choices = listOf(
+                    ScenarioChoice("네, 어떤 앱을 설치하면 되나요?", false, "금융감독원은 절대 전화로 앱 설치를 요구하지 않습니다. 원격제어 앱을 설치하면 개인정보가 모두 유출됩니다."),
+                    ScenarioChoice("공공기관은 앱 설치를 요구하지 않습니다. 끊겠습니다.", true, "정확합니다! 어떤 공공기관도 전화로 앱 설치를 요구하지 않습니다. 즉시 끊으세요."),
+                ),
+            ),
+            ScenarioStep(
+                fraudsterMessage = "'팀뷰어'라는 보안 점검 프로그램을 설치해야 합니다. Play 스토어에서 검색해서 설치해 주세요.",
+                choices = listOf(
+                    ScenarioChoice("알겠습니다, 지금 설치할게요.", false, "팀뷰어는 원격제어 프로그램입니다! 설치하면 사기꾼이 내 폰을 완전히 조작할 수 있습니다. 절대 설치하지 마세요."),
+                    ScenarioChoice("원격제어 앱은 사기 수법입니다. 전화를 끊고 신고하겠습니다.", true, "훌륭합니다! 팀뷰어, 애니데스크 등 원격제어 앱 설치를 요구하면 100% 사기입니다. 112에 신고하세요."),
+                ),
+            ),
+            ScenarioStep(
+                fraudsterMessage = "앱을 설치하셨으면 접속 코드를 알려주세요. 저희가 원격으로 보안 점검을 진행하겠습니다.",
+                choices = listOf(
+                    ScenarioChoice("접속 코드는 123456입니다.", false, "접속 코드를 알려주면 사기꾼이 폰을 원격 조작하여 금융 앱에 접근하고 돈을 빼갑니다!"),
+                    ScenarioChoice("접속 코드를 절대 알려주지 않겠습니다. 앱을 삭제하겠습니다.", true, "완벽합니다! 이미 설치했다면 즉시 삭제하고, 접속 코드는 절대 알려주지 마세요. 비밀번호도 즉시 변경하세요."),
+                ),
+            ),
+        ),
+    ),
+    FraudScenario(
+        id = "bank_impersonation",
+        title = "은행 사칭 개인정보 탈취",
+        description = "은행 직원을 사칭하여 비밀번호와 인증번호를 요구하는 시나리오",
+        steps = listOf(
+            ScenarioStep(
+                fraudsterMessage = "○○은행 보안팀입니다. 고객님 계좌에서 비정상 출금 시도가 감지되었습니다. 본인 확인을 위해 계좌 비밀번호를 알려주세요.",
+                choices = listOf(
+                    ScenarioChoice("아이고, 큰일이네요. 비밀번호는...", false, "은행은 절대 전화로 비밀번호를 묻지 않습니다! 이것은 100% 사기입니다."),
+                    ScenarioChoice("은행은 전화로 비밀번호를 묻지 않습니다. 직접 은행에 확인하겠습니다.", true, "맞습니다! 은행은 어떤 경우에도 전화로 비밀번호, OTP, 보안카드 번호를 요구하지 않습니다."),
+                ),
+            ),
+            ScenarioStep(
+                fraudsterMessage = "지금 문자로 보내드린 인증번호를 알려주시면 출금을 차단해 드리겠습니다.",
+                choices = listOf(
+                    ScenarioChoice("네, 인증번호는 483921입니다.", false, "인증번호를 알려주면 사기꾼이 계좌에서 돈을 빼갑니다! 문자 인증번호는 절대 타인에게 알려주면 안 됩니다."),
+                    ScenarioChoice("인증번호는 본인만 사용해야 합니다. 전화를 끊겠습니다.", true, "정확합니다! 인증번호(OTP)는 본인만 알아야 하며, 누구에게도 알려주면 안 됩니다."),
+                ),
+            ),
+        ),
+    ),
 )

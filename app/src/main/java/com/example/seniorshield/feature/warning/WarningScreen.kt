@@ -187,7 +187,7 @@ private fun ChecklistItem(text: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
             imageVector = Icons.Rounded.Check,
-            contentDescription = null,
+            contentDescription = "확인",
             tint = MaterialTheme.colorScheme.primary,
         )
         Spacer(modifier = Modifier.width(12.dp))
