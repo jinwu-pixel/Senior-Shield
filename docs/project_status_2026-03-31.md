@@ -1,23 +1,207 @@
-# SeniorShield (시니어쉴드) 프로젝트 동작 현황서
+# 시니어쉴드 프로젝트 현황 보고서
 
-**작성일**: 2026-03-31  
-**버전**: 1.0 (Initial Release)  
+**작성일**: 2026년 3월 31일  
+**버전**: 1.0  
 **저장소**: https://github.com/jinwu-pixel/Senior-Shield
 
 ---
 
-## 1. 프로젝트 개요
+## 시니어쉴드란?
 
-시니어쉴드는 고령층 금융사기(보이스피싱) 예방을 위한 Android 앱이다.  
-통화, 앱 사용, 앱 설치, 기기 환경을 실시간 모니터링하여 위험 패턴을 감지하고,  
-본인에게 즉시 경고한다.
+시니어쉴드는 **고령층 금융사기(보이스피싱) 예방**을 위한 Android 앱입니다.
 
-### 핵심 원칙
-- **본인 보호형(self-protection only)**: 다른 성인을 자동 감시하지 않음
-- **외부 연락은 사용자가 명시적으로 시작**: ACTION_DIAL만 사용 (자동 전화 금지)
-- **감시로 오해될 수 있는 기능 금지**: 위치 추적, 행동 로깅 외부 전송, 보호자 대시보드 없음
+통화 중 수상한 패턴이 감지되면 본인에게 바로 경고하고, 올바른 대응 방법을 안내합니다.
+가족에게 직접 전화를 걸거나, 경찰(112)·금융감독원(1332) 등 공식 기관에 즉시 연락할 수 있도록 도와줍니다.
+
+> **핵심 가치**: "내가 나를 지키는 앱"
+>
+> 시니어쉴드는 누군가를 감시하는 앱이 아닙니다.
+> 본인이 직접 사용하고, 본인이 판단하고, 본인이 행동을 시작합니다.
+> 자동으로 다른 사람에게 연락하거나, 몰래 정보를 보내는 기능은 없습니다.
+
+---
+
+## 1. 앱에서 할 수 있는 것
+
+### 실시간 위험 감지
+
+앱이 백그라운드에서 조용히 동작하면서 다음과 같은 위험 상황을 감지합니다:
+
+| 감지 항목 | 어떤 상황인가요? |
+|-----------|-----------------|
+| 모르는 번호 통화 | 연락처에 저장되지 않은 번호에서 전화가 왔을 때 |
+| 최근 저장된 번호 | 7일 이내에 새로 저장한 번호일 때 (사기범이 저장을 유도하는 경우 대비) |
+| 장시간 통화 | 수상한 통화가 3분 이상 이어질 때 |
+| 원격제어 앱 실행 | 팀뷰어, 애니데스크 등 원격 조작 앱이 열렸을 때 |
+| 원격제어 후 금융 앱 사용 | 원격제어 앱 사용 직후 은행 앱을 열었을 때 (가장 위험한 패턴) |
+| 의심스러운 앱 설치 | 출처 불명의 앱이나 원격제어 앱이 새로 설치되었을 때 |
+| 기기 보안 위험 | 루팅 등 기기 보안이 훼손된 상태일 때 |
+
+감지 결과는 점수로 환산되어, 위험 수준을 4단계로 알려줍니다:
+
+- **안전** (0~24점) — 감지된 위험이 없습니다
+- **주의** (25~49점) — 기록에 남기고 주시합니다
+- **경고** (50~79점) — 본인에게 알림을 보내고, 필요 시 화면에 경고를 표시합니다
+- **위험** (80점 이상) — 최고 수준 경고와 함께 즉각 대응을 안내합니다
+
+### 위험 발생 시 대응 안내
+
+위험이 감지되면 당황하지 않도록 구체적인 행동 가이드를 제공합니다:
+
+1. **즉시 해야 할 일 체크리스트** — "전화를 끊으세요", "앱을 설치하지 마세요", "가족에게 먼저 확인하세요"
+2. **가족에게 전화 연결** — 등록된 보호자에게 바로 전화를 걸 수 있습니다 (다이얼러가 열리며, 본인이 직접 통화 버튼을 누릅니다)
+3. **공식 기관 연락처** — 경찰(112), 금융감독원(1332), 한국인터넷진흥원(118), 금융결제원(1577-5500)을 한 번에 연결할 수 있습니다
+
+### 보이스피싱 대응 연습 (시뮬레이션)
+
+실제 사기 시나리오를 체험하면서, 올바른 대응 방법을 미리 연습할 수 있습니다.
+현재 **5가지 시나리오**를 제공합니다:
+
+| 시나리오 | 단계 | 배우는 내용 |
+|---------|:----:|------------|
+| 검찰 사칭 사기 | 3단계 | 검찰은 전화로 수사를 알리지 않으며, "안전 계좌"는 존재하지 않습니다 |
+| 대출 사기 | 2단계 | 대출 전 선입금을 요구하면 100% 사기입니다 |
+| 자녀 사칭 사기 | 2단계 | 다른 번호로 급하게 돈을 요구하면 기존 번호로 직접 확인해야 합니다 |
+| 원격제어 앱 설치 유도 | 3단계 | 공공기관은 절대 앱 설치를 요구하지 않습니다 |
+| 은행 사칭 개인정보 탈취 | 2단계 | 은행은 전화로 비밀번호나 인증번호를 묻지 않습니다 |
+
+각 단계마다 선택지와 피드백을 제공하며, 완료 후 정답 수와 핵심 기억사항을 보여줍니다.
+진행 막대 애니메이션으로 현재 진행 상황을 직관적으로 확인할 수 있습니다.
+
+### 보호자 관리
+
+신뢰할 수 있는 가족이나 지인을 최대 3명까지 보호자로 등록할 수 있습니다.
+위험 상황에서 보호자에게 바로 전화를 걸 수 있어, 혼자 판단하기 어려울 때 도움을 받을 수 있습니다.
+
+---
+
+## 2. 화면 구성과 사용 흐름
+
+앱을 처음 설치하면 다음 순서로 진행됩니다:
+
+```
+앱 시작 → 소개 화면 → 권한 설정 → 홈 화면
+```
+
+홈 화면에서 모든 기능에 접근할 수 있습니다:
+
+| 화면 | 역할 |
+|------|------|
+| **홈** | 현재 위험 상태, 주간 예방 팁, 빠른 행동 버튼 |
+| **감지 기록** | 그동안 감지된 위험 이력을 시간순으로 확인 |
+| **위험 경고** | 위험 감지 시 대응 안내 + 가족/기관 연락 |
+| **보이스피싱 연습** | 5가지 시나리오로 사기 대응법 체험 |
+| **보호자 관리** | 가족 연락처 등록/삭제 (최대 3명) |
+| **권한 설정** | 앱이 제대로 동작하기 위한 권한 상태 안내 |
+| **서비스 원칙** | 개인정보 처리 방침과 앱의 동작 원칙 |
+| **앱 설정** | 기본 설정 및 디버그 옵션 |
+
+권한이 허용되지 않은 경우 홈 화면 상단에 경고 배너가 표시되어, 사용자가 놓치지 않도록 안내합니다.
+
+---
+
+## 3. 안전하게 만들기 위해 지킨 원칙
+
+시니어쉴드는 사용자의 신뢰를 가장 중요하게 생각합니다.
+아래 원칙을 코드 전체에 걸쳐 엄격히 지키고 있으며, 모든 변경사항은 이 원칙에 대해 자동 검사를 거칩니다.
+
+### 절대 하지 않는 것
+
+| 금지 항목 | 이유 |
+|-----------|------|
+| 다른 사람을 자동 감시 | 본인 보호 앱이지, 감시 앱이 아닙니다 |
+| 보호자에게 자동 메시지 발송 | 본인이 직접 시작하지 않은 연락은 보내지 않습니다 |
+| 자동 전화 걸기 | 다이얼러(전화 앱)를 열어주기만 하고, 통화 버튼은 본인이 누릅니다 |
+| 위치 추적 | 어디에 있는지 기록하거나 외부에 전송하지 않습니다 |
+| 행동 로깅 외부 전송 | 감지 데이터는 본인 기기에만 저장됩니다 |
+| 보호자 대시보드 | 보호자가 원격으로 모니터링하는 기능은 없습니다 |
+
+### 사용자 동의 하에 동작하는 기능
+
+일부 기능은 앱의 핵심 목적을 위해 필요하여, 사용자 동의를 전제로 동작합니다:
+
+- **본인 알림**: 위험 감지 시 본인 기기에만 알림을 표시합니다 (보호자에게 가는 것이 아닙니다)
+- **백그라운드 실행**: 앱을 닫아도 보호가 계속되도록 백그라운드에서 동작합니다
+- **보호자 SMS**: 설정에서 별도로 켜야 하며, 위험 감지 시 등록된 보호자에게 문자를 보냅니다
+
+### 정책 검증 결과 (2026-03-31)
+
+전체 코드에 대해 정책 위반 자동 검사를 실행한 결과:
+
+- ACTION_CALL (자동 전화 걸기) 사용: **없음** — ACTION_DIAL만 사용
+- 외부 서버 데이터 전송: **없음** — 모든 데이터는 기기 내 저장
+- 위치 추적 코드: **없음**
+- 보호자 대시보드/원격 모니터링: **없음**
+- 수정 필요 1건: SMS 본문에 존재하지 않는 "보호자 앱"을 언급하는 문구가 있어 수정 예정
+
+---
+
+## 4. 품질 확인
+
+### 테스트 현황
+
+**45개 단위 테스트** 작성 완료, **전체 통과** 확인되었습니다.
+
+| 검증 영역 | 테스트 수 | 확인하는 내용 |
+|-----------|:---------:|--------------|
+| 통화 신호 매핑 | 12개 | 모르는 번호, 신규 번호, 검증된 번호가 올바르게 분류되는지 |
+| 위험 점수 계산 | 10개 | 각 신호의 가중치가 정확히 반영되는지, 위험 수준 경계가 맞는지 |
+| 위험 이벤트 생성 | 7개 | 각 상황에 맞는 경고 메시지가 생성되는지 |
+| 위험 세션 관리 | 10개 | 신호가 누적되고, 세션이 올바르게 시작/유지/종료되는지 |
+| 경고 화면 | 6개 | 보호자 정보와 위험 이벤트가 화면에 올바르게 표시되는지 |
+
+### 알려진 제한사항
+
+투명하게 공유하는 현재 기술적 제한입니다:
+
+- **30분 세션 타임아웃**: 시간 기반 로직이라 자동 테스트가 어렵습니다. 향후 시간 주입 방식으로 개선할 예정입니다.
+- **홈 화면 테스트**: Android 컨텍스트 의존성이 있어 별도 테스트 도구(Robolectric) 도입이 필요합니다.
+
+### 기기 호환성
+
+- **지원 범위**: Android 8.0(API 26) ~ Android 14(API 34)
+- **통화 감지**: Android 12 이상에서는 최신 API(TelephonyCallback)를 사용하고, 이전 버전에서는 레거시 API로 자동 전환합니다
+- **루팅 탐지**: 커스텀 ROM 환경에서도 안전하게 동작하도록, 판단 불가 시 "안전 측"으로 처리합니다 (거짓 경고 최소화)
+
+---
+
+## 5. 고령층을 위한 디자인
+
+### 글씨 크기
+
+모든 텍스트는 고령층이 편하게 읽을 수 있도록 **최소 15sp 이상**으로 설정했습니다.
+주요 안내 문구와 버튼은 **17~28sp**로 더 크게 표시됩니다.
+
+| 용도 | 크기 | 적용 위치 |
+|------|:----:|----------|
+| 경고 제목 | 28sp | 위험 경고 화면의 핵심 문구 |
+| 화면 제목 | 24sp | 각 화면의 메인 제목 |
+| 카드 제목 | 20sp | 시나리오, 기관 정보 등 |
+| 본문/버튼 | 17~18sp | 안내 문구, 행동 버튼 |
+| 보조 설명 | 15~16sp | 부가 설명, 배너 텍스트 |
+
+### 색상
+
+위험 수준을 직관적으로 구분할 수 있도록 신호등 방식의 색상 체계를 사용합니다:
+
+- **파란색** — 앱 기본 색상 (신뢰감)
+- **초록색** — 안전 (위험 없음)
+- **노란색** — 주의 (경미한 위험)
+- **주황색** — 경고 (높은 위험)
+- **빨간색** — 위험 (즉각 대응 필요)
+
+### 접근성
+
+- 모든 아이콘에 화면 읽기 지원 설명(contentDescription)을 제공합니다
+- 버튼 높이를 최소 48dp 이상으로 유지하여 터치하기 쉽게 만들었습니다
+- 진행 상황을 텍스트와 시각적 진행 막대로 동시에 표시합니다
+
+---
+
+## 6. 기술 구조 (개발자용)
 
 ### 기술 스택
+
 | 항목 | 사양 |
 |------|------|
 | 언어 | Kotlin 1.9.24 |
@@ -27,345 +211,81 @@
 | 비동기 | Coroutines 1.8.1 + Flow |
 | 로컬 저장 | Room + DataStore Preferences |
 | 네비게이션 | Navigation Compose 2.7.7 |
-| Min SDK | 26 (Android 8.0) |
-| Target SDK | 34 (Android 14) |
+| Min SDK / Target SDK | 26 / 34 |
 | JVM | 17 |
 
----
+### 프로젝트 규모
 
-## 2. 아키텍처
+- **소스 파일**: 92개 (main) + 5개 (test)
+- **단위 테스트**: 45개 (전체 통과)
+
+### 아키텍처 구조
 
 ```
 :app (single module)
 ├── domain/          순수 Kotlin — Android 의존성 없음
 │   ├── model/       RiskScore, RiskLevel, RiskSignal, RiskEvent, Guardian 등
-│   └── repository/  RiskRepository, SettingsRepository, GuardianRepository (인터페이스)
+│   └── repository/  인터페이스만 정의
 │
-├── data/            Android 의존성 허용
+├── data/            구현체 + 로컬 저장소
 │   ├── local/       SettingsDataStore, GuardianDataStore, Room DB
-│   ├── repository/  인터페이스 구현체
-│   └── di/          DataModule, DatabaseModule (Hilt)
+│   ├── repository/  인터페이스 구현
+│   └── di/          Hilt 바인딩
 │
 ├── monitoring/      위험 감지 엔진
-│   ├── call/        통화 모니터 + 발신자 검증
+│   ├── call/        통화 모니터 + 발신자 검증 (CallerCheckResult)
 │   ├── appusage/    앱 사용 모니터
 │   ├── appinstall/  앱 설치 모니터
 │   ├── deviceenv/   기기 환경 모니터 (루팅 탐지)
-│   ├── evaluator/   위험 점수 평가
-│   ├── event/       위험 이벤트 생성
-│   ├── session/     위험 세션 관리
-│   ├── orchestrator/ 전체 조율 (Coordinator)
-│   └── di/          MonitoringModule (Hilt)
+│   ├── evaluator/   위험 점수 산출
+│   ├── session/     위험 세션 관리 (누적, 타임아웃)
+│   └── orchestrator/ 전체 스트림 조율
 │
-├── feature/         화면별 패키지
-│   ├── splash/      스플래시
-│   ├── onboarding/  온보딩
-│   ├── home/        홈 (메인 대시보드)
-│   ├── history/     감지 기록
-│   ├── warning/     위험 경고 + 보호자 연락
-│   ├── permissions/ 권한 설정 안내
-│   ├── policy/      서비스 원칙
-│   ├── settings/    앱 설정 + 디버그
-│   ├── guardian/    보호자 관리
-│   └── simulation/  보이스피싱 대응 연습
+├── feature/         화면 (ViewModel + Composable)
+│   ├── splash, onboarding, home, history, warning
+│   ├── permissions, policy, settings, guardian
+│   └── simulation
 │
-├── core/
-│   ├── navigation/  SeniorShieldDestination, NavGraph
-│   ├── designsystem/ Theme, Color, Type, 공통 컴포넌트
-│   ├── notification/ 본인 알림
-│   ├── overlay/     위험 팝업, 뱅킹 쿨다운
-│   ├── sms/         보호자 SMS (승인된 예외)
-│   └── util/        ContactIntentHelper, CallEndHelper
-│
-└── di/              AppModule
+└── core/            공통 인프라
+    ├── navigation/  목적지 정의 + NavGraph
+    ├── designsystem/ 테마, 색상, 타이포그래피, 공통 컴포넌트
+    ├── notification/ 본인 알림
+    ├── overlay/     위험 팝업, 뱅킹 쿨다운
+    └── sms/         보호자 SMS (승인된 예외)
 ```
 
----
+### 모니터 구현 상태
 
-## 3. 화면 구성
+모든 모니터가 실제 구현체(Real)로 동작 중이며, 테스트/개발용 Fake 구현체도 준비되어 있습니다:
 
-### 네비게이션 플로우
-```
-Splash → Onboarding → Permissions → Home
-                                      ├── History (감지 기록)
-                                      ├── Warning (위험 경고 → Guardian 선택)
-                                      ├── Permissions (권한 설정)
-                                      ├── Policy (서비스 원칙)
-                                      ├── Settings (앱 설정)
-                                      ├── Guardian (보호자 관리)
-                                      └── Simulation List → Simulation Play
-```
-
-### 화면별 기능
-
-| 화면 | Destination | 기능 |
-|------|-------------|------|
-| **Splash** | `splash` | 온보딩 완료 여부 확인 → 분기 |
-| **Onboarding** | `onboarding` | 앱 소개, 최초 실행 시 표시 |
-| **Home** | `home` | 현재 위험 상태, 주간 통계, 예방 팁, 권한 경고 배너 |
-| **History** | `history` | 전체 감지 기록 목록 (빈 상태 처리 포함) |
-| **Warning** | `warning` | 위험 경고 카드, 체크리스트, 보호자/공식기관 연락 |
-| **Permissions** | `permissions` | 필수 권한 상태 확인 및 설정 안내 |
-| **Policy** | `policy` | 서비스 원칙 및 개인정보 처리 방침 |
-| **Settings** | `settings` | 앱 설정, 디버그 모드 |
-| **Guardian** | `guardian` | 보호자 등록/삭제 (최대 3명) |
-| **Simulation List** | `simulation_list` | 보이스피싱 대응 연습 시나리오 목록 |
-| **Simulation Play** | `simulation_play/{id}` | 시나리오별 단계적 체험 + 결과 |
-
----
-
-## 4. 모니터링 엔진
-
-### 4.1 신호 체계
-
-7개 위험 신호(RiskSignal)를 감지한다:
-
-| 신호 | 가중치 | 감지 소스 | 설명 |
-|------|:------:|-----------|------|
-| `UNKNOWN_CALLER` | 20점 | CallerContactChecker | 연락처에 없는 발신자 |
-| `UNVERIFIED_CALLER` | 20점 | CallerContactChecker | 7일 이내 신규 저장 연락처 |
-| `LONG_CALL_DURATION` | 30점 | RealCallRiskMonitor | 3분 이상 통화 |
-| `REMOTE_CONTROL_APP_OPENED` | 30점 | RealAppUsageRiskMonitor | 원격제어 앱 포그라운드 |
-| `BANKING_APP_OPENED_AFTER_REMOTE_APP` | 40점 | RealAppUsageRiskMonitor | 원격제어 후 금융 앱 실행 |
-| `SUSPICIOUS_APP_INSTALLED` | 40점 | RealAppInstallRiskMonitor | 사이드로딩 또는 원격제어 앱 설치 |
-| `HIGH_RISK_DEVICE_ENVIRONMENT` | 20점 | RealDeviceEnvironmentRiskMonitor | 루팅/test-keys 탐지 |
-
-### 4.2 위험 수준
-
-| 수준 | 점수 범위 | 대응 |
-|------|:---------:|------|
-| **LOW** | 0~24 | 정상 상태 |
-| **MEDIUM** | 25~49 | 이력 기록 |
-| **HIGH** | 50~79 | 이력 + 본인 알림 + 위험 팝업(능동 위협 시) + SMS(능동 위협 시) |
-| **CRITICAL** | 80+ | HIGH와 동일, 최고 수준 경고 |
-
-### 4.3 모니터 구현 현황
-
-| 모니터 | Real 구현 | Fake | DI 활성 |
-|--------|:---------:|:----:|:-------:|
-| CallRiskMonitor | RealCallRiskMonitor | FakeCallRiskMonitor | **Real** |
-| AppUsageRiskMonitor | RealAppUsageRiskMonitor | FakeAppUsageRiskMonitor | **Real** |
-| AppInstallRiskMonitor | RealAppInstallRiskMonitor | FakeAppInstallRiskMonitor | **Real** |
-| DeviceEnvironmentRiskMonitor | RealDeviceEnvironmentRiskMonitor | FakeDeviceEnvironmentRiskMonitor | **Real** |
-| RiskEvaluator | RiskEvaluatorImpl | FakeRiskEvaluator | **Real** |
-
-모든 모니터가 Real 구현체로 바인딩되어 있으며, MonitoringModule.kt에서 주석 전환으로 Fake 복원 가능.
-
-### 4.4 통화 모니터 상세
-
-- **API 31+**: `TelephonyCallback` + `BroadcastReceiver`(EXTRA_INCOMING_NUMBER) 조합
-- **API 26~30**: `PhoneStateListener` (레거시)
-- **P1 수정 적용**: API 31+ 타이밍 경쟁 해소 — BroadcastReceiver에서 번호 확보 시 RINGING 컨텍스트를 re-emit
-- **발신자 검증**: `CallerContactChecker`가 `CallerCheckResult` enum 반환
-  - `NOT_IN_CONTACTS` → UNKNOWN_CALLER (25점)
-  - `NEW_CONTACT` (≤7일) → UNVERIFIED_CALLER (20점)
-  - `VERIFIED_CONTACT` → 신호 없음
-  - `UNAVAILABLE` → 판단 보류
-
-### 4.5 기기 환경 모니터 상세
-
-`RealDeviceEnvironmentRiskMonitor`가 앱 시작 시 1회 체크:
-- su 바이너리 존재 여부 (6개 경로)
-- Superuser.apk 존재 여부
-- Build.TAGS에 `test-keys` 포함 여부
-- 루팅 관련 패키지 설치 여부 (6개 패키지, `<queries>` 블록으로 API 30+ 대응)
-
-### 4.6 세션 관리
-
-`RiskSessionTracker`가 위험 세션의 생명주기를 관리:
-- 첫 신호 발생 시 세션 생성
-- 신호는 누적만 되고 감소하지 않음 (시퀀스 기반 탐지)
-- 30분 비활동 시 세션 자동 만료
-- 에스컬레이션: 이전 알림 수준보다 높아질 때만 새 알림 발행
-
-### 4.7 조율기 (Coordinator)
-
-`DefaultRiskDetectionCoordinator`가 5개 스트림을 combine:
-```
-callSignals + appUsageSignals + bankingForeground + installSignals + deviceEnvSignals
-    → 세션 누적 → 점수 평가 → 에스컬레이션 처리
-```
-
-에스컬레이션 시:
-1. 이벤트 기록 (RoomDB)
-2. HIGH+ → 본인 알림
-3. 능동 위협(원격제어/뱅킹 연계/의심 앱 설치) 시 → 전체화면 팝업 + 보호자 SMS
-4. HIGH+ + 뱅킹 포그라운드 → 60초 강제 대기(쿨다운 인터럽터)
-
----
-
-## 5. 권한 구성
-
-| 권한 | 용도 | 유형 |
-|------|------|------|
-| `READ_PHONE_STATE` | 통화 상태 감지 | 런타임 |
-| `PACKAGE_USAGE_STATS` | 앱 사용 기록 조회 | 시스템 설정 |
-| `POST_NOTIFICATIONS` | 위험 경고 알림 (Android 13+) | 런타임 |
-| `FOREGROUND_SERVICE` | 백그라운드 지속 실행 | 일반 |
-| `FOREGROUND_SERVICE_SPECIAL_USE` | 서비스 유형 | 일반 |
-| `SYSTEM_ALERT_WINDOW` | 위험 팝업 오버레이 | 시스템 설정 |
-| `ANSWER_PHONE_CALLS` | "전화 끊기" 버튼 (API 28+) | 런타임 |
-| `READ_CONTACTS` | 발신자 연락처 조회 | 런타임 |
-| `READ_CALL_LOG` | 수신 번호 캡처 (API 29+) | 런타임 |
-| `SEND_SMS` | 보호자 SMS 전송 (**승인된 예외**) | 런타임 |
-
----
-
-## 6. 시뮬레이션 (보이스피싱 대응 연습)
-
-5개 시나리오로 실제 사기 패턴을 체험하고 올바른 대응을 학습:
-
-| ID | 시나리오 | 단계 | 핵심 학습 |
-|----|---------|:----:|-----------|
-| `prosecutor` | 검찰 사칭 사기 | 3 | 검찰은 전화로 수사 통보 안 함, 안전 계좌 없음 |
-| `loan` | 대출 사기 | 2 | 선입금 요구는 100% 사기 |
-| `family` | 자녀 사칭 사기 | 2 | 다른 번호 급전 요구 시 기존 번호로 직접 확인 |
-| `remote_control` | 원격제어 앱 설치 유도 | 3 | 팀뷰어/애니데스크 설치 요구는 사기, 접속 코드 절대 불가 |
-| `bank_impersonation` | 은행 사칭 개인정보 탈취 | 2 | 은행은 전화로 비밀번호/OTP 안 물음 |
-
-각 단계마다 2개 선택지(정답/오답) + 피드백을 제공하며, 완료 시 정답 수와 핵심 기억사항을 표시.
-진행 막대(LinearProgressIndicator)로 현재 진행률을 시각적으로 표시.
-
----
-
-## 7. 디자인 시스템
-
-### 타이포그래피 (고령층 맞춤)
-
-| 스타일 | 크기 | 용도 |
+| 모니터 | 상태 | 비고 |
 |--------|:----:|------|
-| headlineLarge | 28sp | 경고 화면 핵심 제목 |
-| headlineMedium | 24sp | 일반 화면 메인 제목 |
-| titleLarge | 20sp | 카드/섹션 제목 |
-| titleMedium | 18sp | 버튼 텍스트, 기관 정보 |
-| titleSmall | 17sp | 카드/배너 내 라벨 |
-| bodyLarge | 17sp | 본문 텍스트 |
-| bodyMedium | 15sp | 보조 설명 |
-| bodySmall | 16sp | 배너 설명 |
-| labelLarge | 18sp | 버튼, 진행률 |
-| labelMedium | 16sp | 소형 버튼 |
+| 통화 모니터 (CallRiskMonitor) | Real 활성 | API 26~34 전체 지원 |
+| 앱 사용 모니터 (AppUsageRiskMonitor) | Real 활성 | 원격제어·금융 앱 감시 |
+| 앱 설치 모니터 (AppInstallRiskMonitor) | Real 활성 | 사이드로딩 감지 |
+| 기기 환경 모니터 (DeviceEnvironmentRiskMonitor) | Real 활성 | 루팅·test-keys 탐지 |
+| 위험 점수 평가 (RiskEvaluator) | Real 활성 | 가중치 기반 점수 산출 |
 
-### 색상 체계
+---
 
-| 색상 | 코드 | 용도 |
+## 7. 개발 이력
+
+| 날짜 | 커밋 | 내용 |
 |------|------|------|
-| BluePrimary | #1F4C8F | 주조색 (신뢰감) |
-| StatusGreen | #2E7D32 | LOW (안전) |
-| StatusYellow | #F9A825 | MEDIUM (주의) |
-| StatusOrange | #E67E22 | HIGH (경고) |
-| StatusRed | #C0392B | CRITICAL (위험) |
-
-### 공통 컴포넌트
-
-- **PrimaryButton**: 56dp 높이, 가장 중요한 행동
-- **SecondaryButton**: 56dp 높이, 보조 행동
-- **BasicTextButton**: 48dp 높이, 닫기 등
-- **StatusCard**: RiskLevel별 아이콘/색상/테두리 자동 적용
-- **SeniorShieldScaffold**: 통일된 상단바 + 뒤로가기
+| 2026-03-31 | `73d1464` | 프로젝트 초기 커밋 — 전체 화면, 모니터링 엔진, 정책 예외 |
+| 2026-03-31 | `e3b4481` | 발신자 검증 강화 — 3단계 연락처 판정(미저장/신규/검증) |
+| 2026-03-31 | `3abeba9` | 테스트 보강 — 29개 → 45개, Fake 패턴 완성 |
+| 2026-03-31 | `2351d34` | 제품 완성도 — 폰트 크기, 시나리오 추가, 접근성, 진행 막대 |
 
 ---
 
-## 8. 테스트 현황
+## 8. 앞으로 할 일
 
-**총 45개 단위 테스트** — 전체 통과
-
-| 테스트 클래스 | 수 | 검증 대상 |
-|---------------|:--:|-----------|
-| CallSignalMapperTest | 12 | 통화 신호 매핑, UNKNOWN/UNVERIFIED 상호 배타성 |
-| RiskEvaluatorImplTest | 10 | 가중치 계산, 위험 수준 임계값, 중복 제거 |
-| RiskEventFactoryTest | 7 | 이벤트 생성, 신호별 메시지 |
-| RiskSessionTrackerTest | 10 | 세션 생성/누적/유지, markNotified, reset |
-| WarningViewModelTest | 6 | uiState combine, 보호자/이벤트 반영, 상태 전환 |
-
-### 테스트 인프라
-- `junit:4.13.2` + `kotlinx-coroutines-test:1.8.1`
-- `unitTests.isReturnDefaultValues = true` (android.util.Log 등 기본값 반환)
-- ViewModel 테스트: `Dispatchers.setMain(UnconfinedTestDispatcher)` + `backgroundScope` 패턴
-
-### 알려진 제한
-- `RiskSessionTracker` 타임아웃(30분) 만료 경로: `System.currentTimeMillis()` 직접 호출로 테스트 불가 (Clock 주입 리팩터링 필요)
-- `HomeViewModel`: Context 의존성으로 순수 단위 테스트 불가 (Robolectric 필요)
-
----
-
-## 9. 정책 준수 현황
-
-### 위반 없음 확인
-- ACTION_CALL 사용 없음 (ACTION_DIAL만 사용)
-- WorkManager / 외부 서버 전송 없음
-- 위치 추적 없음
-- 보호자 대시보드 없음
-
-### 승인된 예외 (CLAUDE.md 등록, 2026-03-31 확정)
-
-| 예외 | 원칙 충돌 | 허용 근거 |
-|------|-----------|-----------|
-| 본인 푸시 알림 | 원칙 2 | 보호자가 아닌 본인에게만 표시 |
-| Foreground Service + START_STICKY | 원칙 2 | 실시간 위험 감지에 필수 |
-| SeniorShieldApp onCreate 초기화 | 구현 규칙 | 앱 시작 시 즉시 보호 활성화 |
-| SMS 자동 전송 + SEND_SMS | 원칙 2, 4 | 사용자 명시적 유지 요청, 설정 토글 사전 동의 |
-
-### 주의 필요 (1건)
-- `GuardianSmsManager.kt:83` — SMS 본문에 "보호자 앱에서 확인해 주세요." 문구가 존재하지 않는 보호자 앱을 언급. 수정 권장.
-
----
-
-## 10. Git 이력
-
-| 커밋 | 내용 | 변경 |
-|------|------|------|
-| `73d1464` | Initial commit: P1/P2/B1/B2 + 정책 예외 | 127파일, +7,345줄 |
-| `e3b4481` | B3: isVerifiedCaller 구현, B4: 폴백 정책 | 3파일, +112/-40 |
-| `3abeba9` | 테스트 보강 + Fake 패턴 완성 | 6파일, +424줄 |
-| `2351d34` | 제품 완성도: 폰트/시나리오/접근성/진행 막대 | 6파일, +100/-9 |
-
-**총 소스 파일**: 92개 (main) + 5개 (test)
-
----
-
-## 11. 오늘(2026-03-31) 작업 내역
-
-### B3: isVerifiedCaller 판정 로직 구현
-- `CallerContactChecker`에 `CallerCheckResult` enum 도입 (NOT_IN_CONTACTS / NEW_CONTACT / VERIFIED_CONTACT / UNAVAILABLE)
-- `RealCallRiskMonitor`에서 `isVerifiedCaller`를 올바르게 세팅
-- UNKNOWN_CALLER와 UNVERIFIED_CALLER를 상호 배타적으로 분리
-- CallSignalMapperTest에 4개 테스트 추가
-
-### B4: queryExistenceOnly 폴백 정책
-- 타임스탬프 미지원 단말에서 저장된 번호를 VERIFIED_CONTACT로 처리 (안전 측)
-- 정책 결정 근거를 KDoc에 문서화
-
-### 테스트 보강 (29 → 45개)
-- RiskSessionTrackerTest 10개: 세션 생명주기 전체 분기 검증
-- WarningViewModelTest 6개: WhileSubscribed stateIn 테스트 패턴 확립
-- `unitTests.isReturnDefaultValues = true` 설정 추가
-
-### Fake 패턴 완성
-- FakeAppInstallRiskMonitor 신규 생성
-- FakeRiskEvaluator 신규 생성
-- MonitoringModule에 모든 바인딩에 Fake 전환 가이드 주석 추가
-
-### 제품 완성도 개선
-- 폰트 크기 보정: titleSmall(17sp), bodySmall(16sp), labelMedium(16sp) 정의
-- StatusCard body: bodyMedium(15sp) → bodyLarge(17sp) 상향
-- 시뮬레이션 시나리오 2개 추가 (3→5개): 원격제어 앱 설치 유도, 은행 사칭
-- 불릿 문자 수정 (공백 → "•")
-- 애니메이션 진행 막대(LinearProgressIndicator) 추가
-- contentDescription 보강 (권한 경고, 체크리스트 아이콘)
-
-### 정책 검사
-- 전체 코드 정책 위반 검사 실행 → 위반 없음 (승인된 예외 제외)
-- GuardianSmsManager SMS 문구 수정 필요 1건 발견
-
----
-
-## 12. 향후 작업
-
-| 순위 | 작업 | 설명 |
-|------|------|------|
-| 1 | GuardianSmsManager SMS 문구 수정 | "보호자 앱" → 정확한 문구로 변경 |
-| 2 | GitHub Actions CI | push/PR 시 자동 빌드 + 테스트 |
-| 3 | ProGuard/R8 규칙 | 릴리스 빌드 난독화 확인 |
-| 4 | 앱 아이콘/스플래시 브랜딩 | 기본 아이콘 → 시니어쉴드 디자인 |
-| 5 | HomeViewModel 테스트 | Robolectric 도입 |
-| 6 | 릴리스 빌드 + 서명 설정 | Play Store 배포 준비 |
+| 우선순위 | 작업 | 목적 |
+|:--------:|------|------|
+| 1 | SMS 문구 수정 | "보호자 앱" 잘못된 참조를 올바른 문구로 변경 |
+| 2 | CI/CD 자동화 | 코드 변경 시 자동으로 빌드와 테스트 실행 |
+| 3 | 릴리스 빌드 설정 | 난독화(ProGuard/R8) 및 서명 설정 |
+| 4 | 앱 아이콘 디자인 | 시니어쉴드 브랜드 아이콘으로 교체 |
+| 5 | 홈 화면 테스트 추가 | Robolectric 도입으로 테스트 범위 확대 |
+| 6 | Play Store 배포 준비 | 스토어 등록 정보, 스크린샷, 개인정보 처리 방침 |
