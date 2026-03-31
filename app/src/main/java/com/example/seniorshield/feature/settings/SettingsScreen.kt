@@ -258,6 +258,9 @@ private fun RiskSignal.toKorean(): String = when (this) {
     RiskSignal.BANKING_APP_OPENED_AFTER_REMOTE_APP -> "원격 후 뱅킹 앱"
     RiskSignal.HIGH_RISK_DEVICE_ENVIRONMENT      -> "고위험 기기 환경"
     RiskSignal.SUSPICIOUS_APP_INSTALLED          -> "의심 앱 설치"
+    RiskSignal.REPEATED_UNKNOWN_CALLER           -> "반복 의심 호출"
+    RiskSignal.REPEATED_CALL_THEN_LONG_TALK      -> "반복 호출 후 장시간 통화"
+    RiskSignal.TELEBANKING_AFTER_SUSPICIOUS      -> "텔레뱅킹 유도"
 }
 
 private fun formatTime(millis: Long): String =

@@ -101,7 +101,9 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                             val hasActiveThreat = session.accumulatedSignals.any {
                                 it == RiskSignal.REMOTE_CONTROL_APP_OPENED ||
                                         it == RiskSignal.BANKING_APP_OPENED_AFTER_REMOTE_APP ||
-                                        it == RiskSignal.SUSPICIOUS_APP_INSTALLED
+                                        it == RiskSignal.SUSPICIOUS_APP_INSTALLED ||
+                                        it == RiskSignal.TELEBANKING_AFTER_SUSPICIOUS ||
+                                        it == RiskSignal.REPEATED_CALL_THEN_LONG_TALK
                             }
                             if (hasActiveThreat && !bankingForeground && !cooldownManager.isShowing()) {
                                 overlayManager.show(event)

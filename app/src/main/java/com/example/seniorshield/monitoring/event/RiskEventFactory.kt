@@ -23,6 +23,23 @@ class RiskEventFactory @Inject constructor() {
     }
 
     private fun buildMessage(signals: List<RiskSignal>): Pair<String, String> = when {
+        RiskSignal.TELEBANKING_AFTER_SUSPICIOUS in signals &&
+                (RiskSignal.REPEATED_UNKNOWN_CALLER in signals || RiskSignal.REPEATED_CALL_THEN_LONG_TALK in signals) ->
+            "반복 호출 후 텔레뱅킹 시도 감지" to
+                "반복적인 의심 전화 후 은행 ARS 번호로 발신이 감지되었습니다. 보이스피싱이 강력히 의심됩니다. 절대 송금하지 마세요."
+
+        RiskSignal.TELEBANKING_AFTER_SUSPICIOUS in signals ->
+            "의심 통화 후 텔레뱅킹 시도 감지" to
+                "수상한 통화 직후 은행 ARS 번호로 전화하려는 것이 감지되었습니다. 상대방의 지시로 전화하는 것이라면 즉시 중단해 주세요."
+
+        RiskSignal.REPEATED_CALL_THEN_LONG_TALK in signals ->
+            "반복 호출 후 장시간 통화 감지" to
+                "같은 유형의 번호에서 반복 전화 후 장시간 통화가 진행되고 있습니다. 금융사기 수법일 수 있으니 주의해 주세요."
+
+        RiskSignal.REPEATED_UNKNOWN_CALLER in signals ->
+            "의심스러운 반복 호출 감지" to
+                "확인되지 않은 번호에서 반복적으로 전화가 오고 있습니다. 금융기관을 사칭한 전화일 수 있으니 주의해 주세요."
+
         RiskSignal.BANKING_APP_OPENED_AFTER_REMOTE_APP in signals ->
             "원격제어 중 금융 앱 실행 감지" to
                 "원격제어 앱이 실행된 직후 금융 앱이 열렸습니다. 즉시 통화를 종료하고 주의해 주세요."
