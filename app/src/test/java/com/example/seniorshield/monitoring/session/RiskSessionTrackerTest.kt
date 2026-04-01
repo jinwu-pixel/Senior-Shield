@@ -12,6 +12,7 @@ package com.example.seniorshield.monitoring.session
 import com.example.seniorshield.domain.model.RiskLevel
 import com.example.seniorshield.domain.model.RiskSignal
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -155,5 +156,47 @@ class RiskSessionTrackerTest {
         assertEquals(2, result!!.accumulatedSignals.size)
         assertTrue(result.accumulatedSignals.contains(RiskSignal.UNKNOWN_CALLER))
         assertTrue(result.accumulatedSignals.contains(RiskSignal.REMOTE_CONTROL_APP_OPENED))
+    }
+
+    // -----------------------------------------------------------------------
+    // 11. P0.5 신호 누적 — 텔레뱅킹 유도 시나리오
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `텔레뱅킹 시나리오 신호 단계별 누적`() {
+        // Phase 1: 의심 통화
+        tracker.update(listOf(RiskSignal.UNKNOWN_CALLER), emptyList())
+        // Phase 2: 반복 호출 + 장시간 통화
+        tracker.update(
+            listOf(RiskSignal.REPEATED_UNKNOWN_CALLER, RiskSignal.LONG_CALL_DURATION, RiskSignal.REPEATED_CALL_THEN_LONG_TALK),
+            emptyList(),
+        )
+        // Phase 3: 텔레뱅킹
+        val session = tracker.update(listOf(RiskSignal.TELEBANKING_AFTER_SUSPICIOUS), emptyList())
+
+        assertNotNull(session)
+        assertEquals(5, session!!.accumulatedSignals.size)
+        assertTrue(session.accumulatedSignals.contains(RiskSignal.TELEBANKING_AFTER_SUSPICIOUS))
+        assertTrue(session.accumulatedSignals.contains(RiskSignal.REPEATED_UNKNOWN_CALLER))
+    }
+
+    // -----------------------------------------------------------------------
+    // 12. markActiveThreatsNotified 후 새 위협 추가 시 diff 감지
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `markActiveThreatsNotified 후 새 위협 추가 감지`() {
+        tracker.update(listOf(RiskSignal.REMOTE_CONTROL_APP_OPENED), emptyList())
+        tracker.markActiveThreatsNotified(setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED))
+
+        // 새 위협 추가
+        tracker.update(listOf(RiskSignal.TELEBANKING_AFTER_SUSPICIOUS), emptyList())
+
+        val session = tracker.sessionState.value
+        assertNotNull(session)
+        assertNotNull(session)
+        // 기존 알림 세트에는 REMOTE_CONTROL만 있으므로 TELEBANKING은 새 위협
+        assertFalse(session!!.notifiedActiveThreats.contains(RiskSignal.TELEBANKING_AFTER_SUSPICIOUS))
+        assertTrue(session.accumulatedSignals.contains(RiskSignal.TELEBANKING_AFTER_SUSPICIOUS))
     }
 }
