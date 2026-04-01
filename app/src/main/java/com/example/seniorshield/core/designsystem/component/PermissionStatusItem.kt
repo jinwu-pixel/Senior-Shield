@@ -1,5 +1,6 @@
 package com.example.seniorshield.core.designsystem.component
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -28,6 +29,11 @@ fun PermissionStatusItem(
         modifier = modifier
             .fillMaxWidth()
             .dpadFocusHighlight(shape = RoundedCornerShape(12.dp))
+            .then(
+                if (onAction != null && !item.granted)
+                    Modifier.clickable(onClick = onAction)
+                else Modifier
+            )
             .focusable(),
     ) {
         Row(

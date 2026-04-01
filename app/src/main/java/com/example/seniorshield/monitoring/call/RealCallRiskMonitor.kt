@@ -21,10 +21,10 @@ import com.example.seniorshield.monitoring.model.CallContext
 import com.example.seniorshield.monitoring.model.CallState
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
@@ -77,8 +77,14 @@ class RealCallRiskMonitor @Inject constructor(
         else observeCallContextLegacy()
 
     override fun observeCallSignals(): Flow<List<RiskSignal>> =
-        observeCallContext()
-            .flatMapLatest { ctx ->
+        combine(
+            observeCallContext(),
+            settingsRepository.observeTestModeEnabled(),
+        ) { ctx, testMode -> ctx to testMode }
+            .flatMapLatest { (ctx, testMode) ->
+                val thresholdMs = if (testMode) TEST_LONG_CALL_THRESHOLD_MS else LONG_CALL_THRESHOLD_MS
+                val thresholdSec = if (testMode) CallSignalMapper.TEST_LONG_CALL_THRESHOLD_SEC
+                                   else CallSignalMapper.LONG_CALL_THRESHOLD_SEC
                 when {
                     ctx == null -> flowOf(emptyList<RiskSignal>())
 
@@ -110,8 +116,6 @@ class RealCallRiskMonitor @Inject constructor(
                             }
                             emit(immediateSignals.ifEmpty { emptyList() })
 
-                            val testMode = settingsRepository.observeTestModeEnabled().first()
-                            val thresholdMs = if (testMode) TEST_LONG_CALL_THRESHOLD_MS else LONG_CALL_THRESHOLD_MS
                             Log.d(TAG, "통화 임계 대기: ${thresholdMs / 1000}초 (테스트모드=$testMode, repeated=$repeated)")
                             delay(thresholdMs)
                             val signals = buildList {
@@ -134,9 +138,6 @@ class RealCallRiskMonitor @Inject constructor(
                             lastSuspiciousCallEndedAt = ctx.endedAtMillis
                             Log.d(TAG, "의심 통화 종료 기록: ${ctx.endedAtMillis}")
                         }
-                        val testMode = settingsRepository.observeTestModeEnabled().first()
-                        val thresholdSec = if (testMode) CallSignalMapper.TEST_LONG_CALL_THRESHOLD_SEC
-                                           else CallSignalMapper.LONG_CALL_THRESHOLD_SEC
                         val signals = mapper.map(ctx, thresholdSec)
                         if (signals.isNotEmpty()) {
                             Log.d(TAG, "signals emitted: $signals")

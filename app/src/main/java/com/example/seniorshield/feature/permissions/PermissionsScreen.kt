@@ -120,7 +120,25 @@ private fun PermissionsContent(
         ) {
             Spacer(modifier = Modifier.height(8.dp))
             items.forEach { item ->
-                PermissionStatusItem(item = item)
+                PermissionStatusItem(
+                    item = item,
+                    onAction = if (!item.granted) {
+                        {
+                            when (item.name) {
+                                "앱 사용 기록" -> context.startActivity(
+                                    Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+                                )
+                                "다른 앱 위에 표시" -> context.startActivity(
+                                    Intent(
+                                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                        Uri.parse("package:${context.packageName}"),
+                                    )
+                                )
+                                else -> batchLauncher.launch(runtimePermissions.toTypedArray())
+                            }
+                        }
+                    } else null,
+                )
             }
             if (!allGranted) {
                 PrimaryButton(
