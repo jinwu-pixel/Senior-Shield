@@ -180,7 +180,7 @@ class BankingCooldownManager @Inject constructor(
 
         // 안내 메인
         contentArea.addView(TextView(context).apply {
-            text = "지금 통화 중에 은행 앱을\n사용하려고 하고 있습니다."
+            text = "지금 은행 앱을\n사용하려고 하고 있습니다."
             textSize = 20f
             setTextColor(Color.WHITE)
             setTypeface(null, Typeface.BOLD)
@@ -194,7 +194,7 @@ class BankingCooldownManager @Inject constructor(
         val warningText = if (level == RiskLevel.CRITICAL) {
             "매우 위험한 상황입니다!\n절대 송금하지 마시고\n가족에게 먼저 확인하세요."
         } else {
-            "지금 전화하는 분이 기다리라고 했다면\n그것은 금융사기일 수 있습니다."
+            "의심스러운 활동이 감지된 상태입니다.\n잠시 멈추고 확인해 주세요."
         }
         contentArea.addView(TextView(context).apply {
             text = warningText

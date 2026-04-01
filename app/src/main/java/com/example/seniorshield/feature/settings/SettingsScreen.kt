@@ -2,6 +2,7 @@ package com.example.seniorshield.feature.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,6 +39,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import com.example.seniorshield.BuildConfig
 import com.example.seniorshield.core.designsystem.component.SeniorShieldScaffold
+import com.example.seniorshield.core.designsystem.component.dpadFocusHighlight
 import com.example.seniorshield.core.designsystem.theme.SeniorShieldTheme
 import com.example.seniorshield.core.navigation.SeniorShieldDestination
 import com.example.seniorshield.domain.model.RiskLevel
@@ -312,7 +314,10 @@ private fun SettingsListItem(text: String, onClick: () -> Unit) {
     ListItem(
         headlineContent = { Text(text, style = MaterialTheme.typography.bodyLarge) },
         trailingContent = { Icon(Icons.Rounded.ChevronRight, contentDescription = null) },
-        modifier = Modifier.clickable(onClick = onClick),
+        modifier = Modifier
+            .dpadFocusHighlight(shape = RoundedCornerShape(0.dp))
+            .clickable(onClick = onClick)
+            .focusable(),
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
     )
 }
@@ -333,6 +338,9 @@ private fun SmsMenuToggleItem(enabled: Boolean, onToggle: (Boolean) -> Unit) {
         trailingContent = {
             Switch(checked = enabled, onCheckedChange = onToggle)
         },
+        modifier = Modifier
+            .dpadFocusHighlight(shape = RoundedCornerShape(0.dp))
+            .focusable(),
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
     )
 }

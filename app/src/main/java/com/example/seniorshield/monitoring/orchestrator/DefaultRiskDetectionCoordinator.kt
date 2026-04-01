@@ -113,7 +113,7 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                     if (!popupShownThisTick && score.level.ordinal >= RiskLevel.HIGH.ordinal) {
                         val newThreats = currentActiveThreats - session.notifiedActiveThreats
                         if (newThreats.isNotEmpty() && !bankingForeground && !cooldownManager.isShowing()) {
-                            val event = eventFactory.create(score)
+                            val event = eventFactory.create(score, triggerSignals = newThreats)
                             eventSink.pushRiskEvent(event)
                             notificationManager.notify(event)
                             overlayManager.show(event)

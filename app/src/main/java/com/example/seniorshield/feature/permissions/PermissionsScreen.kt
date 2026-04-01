@@ -120,6 +120,13 @@ private fun PermissionsContent(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Spacer(modifier = Modifier.height(8.dp))
+            if (!allGranted) {
+                PrimaryButton(
+                    text = "모두 허용하기 (${ungrantedCount}개 남음)",
+                    onClick = { batchLauncher.launch(runtimePermissions.toTypedArray()) },
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
             items.forEach { item ->
                 PermissionStatusItem(
                     item = item,
@@ -139,12 +146,6 @@ private fun PermissionsContent(
                             }
                         }
                     } else null,
-                )
-            }
-            if (!allGranted) {
-                PrimaryButton(
-                    text = "모두 허용하기 (${ungrantedCount}개 남음)",
-                    onClick = { batchLauncher.launch(runtimePermissions.toTypedArray()) },
                 )
             }
             if (fromOnboarding) {

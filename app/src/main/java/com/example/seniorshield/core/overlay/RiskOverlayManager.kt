@@ -16,6 +16,7 @@ import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import com.example.seniorshield.MainActivity
 import com.example.seniorshield.core.util.CallEndHelper
@@ -125,7 +126,7 @@ class RiskOverlayManager @Inject constructor(
         val contentArea = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f)
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)
             setPadding(dp(32), dp(56), dp(32), dp(0))
         }
 
@@ -247,7 +248,11 @@ class RiskOverlayManager @Inject constructor(
             }
         })
 
-        root.addView(contentArea)
+        val scrollView = ScrollView(context).apply {
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f)
+            addView(contentArea)
+        }
+        root.addView(scrollView)
         root.addView(buttonArea)
         return OverlayViews(root, primaryBtn)
     }

@@ -10,8 +10,13 @@ import javax.inject.Singleton
 @Singleton
 class RiskEventFactory @Inject constructor() {
 
-    fun create(score: RiskScore): RiskEvent {
-        val (title, description) = buildMessage(score.signals)
+    fun create(score: RiskScore, triggerSignals: Set<RiskSignal>? = null): RiskEvent {
+        val messageSignals = if (triggerSignals != null) {
+            triggerSignals.toList()
+        } else {
+            score.signals
+        }
+        val (title, description) = buildMessage(messageSignals)
         return RiskEvent(
             id = UUID.randomUUID().toString(),
             title = title,
