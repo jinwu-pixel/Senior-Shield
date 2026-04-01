@@ -7,6 +7,7 @@ import com.example.seniorshield.domain.model.RiskSignal
 import com.example.seniorshield.domain.repository.GuardianRepository
 import com.example.seniorshield.domain.repository.RiskRepository
 import com.example.seniorshield.domain.repository.SettingsRepository
+import com.example.seniorshield.monitoring.session.RiskSessionTracker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -19,6 +20,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -32,6 +34,7 @@ class WarningViewModelTest {
     private lateinit var guardianRepository: FakeGuardianRepository
     private lateinit var riskRepository: FakeRiskRepository
     private lateinit var settingsRepository: FakeSettingsRepository
+    private lateinit var sessionTracker: RiskSessionTracker
     private lateinit var viewModel: WarningViewModel
 
     @Before
@@ -40,7 +43,8 @@ class WarningViewModelTest {
         guardianRepository = FakeGuardianRepository()
         riskRepository = FakeRiskRepository()
         settingsRepository = FakeSettingsRepository()
-        viewModel = WarningViewModel(guardianRepository, riskRepository, settingsRepository)
+        sessionTracker = RiskSessionTracker()
+        viewModel = WarningViewModel(guardianRepository, riskRepository, settingsRepository, sessionTracker)
     }
 
     @After
@@ -156,6 +160,24 @@ class WarningViewModelTest {
         viewModel.clearMessage()
 
         assertNull(viewModel.uiState.value.message)
+    }
+
+    // -----------------------------------------------------------------------
+    // 7. confirmSafe 호출 시 세션 초기화
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `confirmSafe 호출 시 세션이 초기화됨`() = runTest {
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+
+        // 세션 생성
+        sessionTracker.update(listOf(RiskSignal.UNKNOWN_CALLER), emptyList())
+        assertNotNull(sessionTracker.sessionState.value)
+
+        // 안전 확인
+        viewModel.confirmSafe()
+
+        assertNull(sessionTracker.sessionState.value)
     }
 }
 

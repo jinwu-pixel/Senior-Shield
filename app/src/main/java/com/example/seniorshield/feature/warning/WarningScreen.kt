@@ -17,6 +17,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Error
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -40,6 +42,7 @@ import com.example.seniorshield.core.designsystem.component.PrimaryButton
 import com.example.seniorshield.core.designsystem.component.SecondaryButton
 import com.example.seniorshield.core.designsystem.component.SeniorShieldScaffold
 import com.example.seniorshield.core.designsystem.theme.SeniorShieldTheme
+import com.example.seniorshield.core.designsystem.theme.StatusGreen
 import com.example.seniorshield.core.designsystem.theme.StatusRed
 import com.example.seniorshield.core.navigation.SeniorShieldDestination
 import com.example.seniorshield.core.util.ContactIntentHelper
@@ -84,6 +87,10 @@ fun NavGraphBuilder.warningScreen(
                 context.startActivity(ContactIntentHelper.dialIntent(number))
             },
             onBack = onBack,
+            onConfirmSafe = {
+                viewModel.confirmSafe()
+                onBack()
+            },
             onDismissGuardianPicker = viewModel::dismissGuardianPicker,
             onGuardianSelected = { guardian ->
                 viewModel.dismissGuardianPicker()
@@ -123,6 +130,7 @@ private fun WarningContent(
     onFamilyCallClick: () -> Unit,
     onInstitutionCall: (String) -> Unit,
     onBack: () -> Unit,
+    onConfirmSafe: () -> Unit,
     onDismissGuardianPicker: () -> Unit,
     onGuardianSelected: (Guardian) -> Unit,
     onSmsClick: () -> Unit,
@@ -152,7 +160,19 @@ private fun WarningContent(
             }
             Spacer(modifier = Modifier.height(32.dp))
             InstitutionSection(onCall = onInstitutionCall)
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(32.dp))
+            Button(
+                onClick = onConfirmSafe,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = StatusGreen),
+            ) {
+                Text(
+                    text = "안전 확인 — 위험하지 않습니다",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
             BasicTextButton(text = "닫기", onClick = onBack)
         }
     }
@@ -349,6 +369,7 @@ private fun WarningScreenPreview() {
             onFamilyCallClick = {},
             onInstitutionCall = {},
             onBack = {},
+            onConfirmSafe = {},
             onDismissGuardianPicker = {},
             onGuardianSelected = {},
             onSmsClick = {},

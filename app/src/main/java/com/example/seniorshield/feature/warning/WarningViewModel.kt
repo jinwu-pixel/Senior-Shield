@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.seniorshield.domain.repository.GuardianRepository
 import com.example.seniorshield.domain.repository.RiskRepository
 import com.example.seniorshield.domain.repository.SettingsRepository
+import com.example.seniorshield.monitoring.session.RiskSessionTracker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -18,6 +19,7 @@ class WarningViewModel @Inject constructor(
     guardianRepository: GuardianRepository,
     riskRepository: RiskRepository,
     settingsRepository: SettingsRepository,
+    private val sessionTracker: RiskSessionTracker,
 ) : ViewModel() {
 
     private val _showGuardianPicker = MutableStateFlow(false)
@@ -58,4 +60,9 @@ class WarningViewModel @Inject constructor(
     fun clearMessage() { _message.value = null }
     fun showSmsPicker() { _showSmsPicker.value = true }
     fun dismissSmsPicker() { _showSmsPicker.value = false }
+
+    /** 사용자가 "안전 확인"을 선택하면 현재 위험 세션을 종료한다. */
+    fun confirmSafe() {
+        sessionTracker.reset()
+    }
 }
