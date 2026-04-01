@@ -71,6 +71,7 @@ fun NavGraphBuilder.settingsScreen(
             onResetAll = debugVm::resetAll,
             onShowTestOverlay = debugVm::showTestOverlay,
             onShowTestCooldown = debugVm::showTestCooldown,
+            onSimulateTelebanking = debugVm::simulateTelebankingDetection,
             onTestModeToggle = debugVm::setTestModeEnabled,
             onSmsMenuToggle = debugVm::setSmsMenuEnabled,
         )
@@ -89,6 +90,7 @@ private fun SettingsContent(
     onResetAll: () -> Unit,
     onShowTestOverlay: () -> Unit,
     onShowTestCooldown: () -> Unit,
+    onSimulateTelebanking: () -> Unit,
     onTestModeToggle: (Boolean) -> Unit,
     onSmsMenuToggle: (Boolean) -> Unit,
 ) {
@@ -115,6 +117,7 @@ private fun SettingsContent(
                     onResetAll = onResetAll,
                     onShowTestOverlay = onShowTestOverlay,
                     onShowTestCooldown = onShowTestCooldown,
+                    onSimulateTelebanking = onSimulateTelebanking,
                     onTestModeToggle = onTestModeToggle,
                 )
             }
@@ -132,6 +135,7 @@ private fun DebugPanel(
     onResetAll: () -> Unit,
     onShowTestOverlay: () -> Unit,
     onShowTestCooldown: () -> Unit,
+    onSimulateTelebanking: () -> Unit,
     onTestModeToggle: (Boolean) -> Unit,
 ) {
     Column(
@@ -187,6 +191,14 @@ private fun DebugPanel(
             ) {
                 Text("뱅킹 쿨다운\n미리보기", style = MaterialTheme.typography.labelMedium)
             }
+        }
+
+        // 텔레뱅킹 시뮬레이션
+        OutlinedButton(
+            onClick = onSimulateTelebanking,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("텔레뱅킹 유도 사기 시뮬레이션 (전체 파이프라인)")
         }
     }
 }
@@ -340,6 +352,7 @@ private fun SettingsScreenPreview() {
             onResetAll = {},
             onShowTestOverlay = {},
             onShowTestCooldown = {},
+            onSimulateTelebanking = {},
             onTestModeToggle = {},
             onSmsMenuToggle = {},
         )

@@ -37,6 +37,7 @@ import com.example.seniorshield.core.designsystem.component.PrimaryButton
 import com.example.seniorshield.core.designsystem.component.SeniorShieldScaffold
 import com.example.seniorshield.core.navigation.SeniorShieldDestination
 import com.example.seniorshield.domain.model.PermissionStatus
+import com.example.seniorshield.domain.model.PermissionType
 
 fun NavGraphBuilder.permissionsScreen(
     onBack: () -> Unit,
@@ -124,11 +125,11 @@ private fun PermissionsContent(
                     item = item,
                     onAction = if (!item.granted) {
                         {
-                            when (item.name) {
-                                "앱 사용 기록" -> context.startActivity(
+                            when (item.type) {
+                                PermissionType.USAGE_ACCESS -> context.startActivity(
                                     Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
                                 )
-                                "다른 앱 위에 표시" -> context.startActivity(
+                                PermissionType.OVERLAY -> context.startActivity(
                                     Intent(
                                         Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                                         Uri.parse("package:${context.packageName}"),
@@ -159,12 +160,12 @@ private fun PermissionsContent(
 }
 
 private fun openNextSettingsPermission(context: Context, items: List<PermissionStatus>) {
-    val usageItem = items.find { it.name == "앱 사용 기록" }
+    val usageItem = items.find { it.type == PermissionType.USAGE_ACCESS }
     if (usageItem != null && !usageItem.granted) {
         context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
         return
     }
-    val overlayItem = items.find { it.name == "다른 앱 위에 표시" }
+    val overlayItem = items.find { it.type == PermissionType.OVERLAY }
     if (overlayItem != null && !overlayItem.granted) {
         context.startActivity(
             Intent(
