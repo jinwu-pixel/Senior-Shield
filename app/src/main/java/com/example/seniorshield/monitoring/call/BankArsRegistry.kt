@@ -29,6 +29,12 @@ class BankArsRegistry @Inject constructor() {
         "1599-3333",
         // 토스뱅크
         "1661-7654",
+        // SC제일은행
+        "1588-1599",
+        // 케이뱅크
+        "1522-1000",
+        // 수협은행
+        "1588-1515",
     ).map { normalize(it) }.toSet()
 
     /** 전화번호가 은행 ARS 번호와 일치하면 true. */
@@ -37,6 +43,14 @@ class BankArsRegistry @Inject constructor() {
         return normalized in arsNumbers
     }
 
-    private fun normalize(number: String): String =
-        number.replace(Regex("[\\s\\-()]"), "")
+    /** 비숫자 문자 제거 + 한국 국가코드(+82) 처리. */
+    private fun normalize(number: String): String {
+        val digitsOnly = number.replace(Regex("[^0-9]"), "")
+        // +82 국가코드 제거: 82XXXXXXXX → XXXXXXXX (은행 ARS 번호는 8자리)
+        return if (digitsOnly.startsWith("82") && digitsOnly.length > 8) {
+            digitsOnly.removePrefix("82")
+        } else {
+            digitsOnly
+        }
+    }
 }

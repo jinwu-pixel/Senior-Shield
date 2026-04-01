@@ -53,6 +53,21 @@ class BankArsRegistryTest {
         assertTrue(registry.matches("16617654"))
     }
 
+    @Test
+    fun `SC제일은행 번호 매칭`() {
+        assertTrue(registry.matches("15881599"))
+    }
+
+    @Test
+    fun `케이뱅크 번호 매칭`() {
+        assertTrue(registry.matches("15221000"))
+    }
+
+    @Test
+    fun `수협은행 번호 매칭`() {
+        assertTrue(registry.matches("15881515"))
+    }
+
     // ── 번호 정규화 ─────────────────────────────────────────────────
 
     @Test
@@ -90,5 +105,29 @@ class BankArsRegistryTest {
     @Test
     fun `빈 문자열 비매칭`() {
         assertFalse(registry.matches(""))
+    }
+
+    // ── 국가코드 정규화 ─────────────────────────────────────────────
+
+    @Test
+    fun `+82 국가코드 포함 번호 매칭`() {
+        assertTrue(registry.matches("+8215882100"))
+    }
+
+    @Test
+    fun `+82 하이픈 포함 번호 매칭`() {
+        assertTrue(registry.matches("+82-1588-2100"))
+    }
+
+    @Test
+    fun `82 국가코드 숫자만 매칭`() {
+        assertTrue(registry.matches("8215882100"))
+    }
+
+    @Test
+    fun `82로 시작하는 짧은 번호는 국가코드 아님`() {
+        // "8215881515" 길이=10 → 국가코드 제거 대상 (길이>10이 아님)
+        // 하지만 이 번호 자체가 등록되지 않았으므로 false
+        assertFalse(registry.matches("8200"))
     }
 }

@@ -462,7 +462,7 @@ class RealCallRiskMonitor @Inject constructor(
                 arrayOf(android.provider.CallLog.Calls.NUMBER),
                 "${android.provider.CallLog.Calls.TYPE} = ?",
                 arrayOf(android.provider.CallLog.Calls.OUTGOING_TYPE.toString()),
-                "${android.provider.CallLog.Calls.DATE} DESC LIMIT 1",
+                "${android.provider.CallLog.Calls.DATE} DESC",
             )?.use { cursor ->
                 if (cursor.moveToFirst()) cursor.getString(0) else null
             }
