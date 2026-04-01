@@ -132,8 +132,9 @@ Tech: Min SDK 26, Target SDK 34, Kotlin 1.9.24, JVM 17, Compose + Material3, Nav
 - GuardianSmsManager 비활성화 (코드 보존, 호출 차단)
 - SEND_SMS 권한 AndroidManifest에서 제거
 - 보호자 연락 = ACTION_DIAL만 유지
-- SMS 관련 설정 토글 UI에서 숨김
+- **자동 SMS 관련** 설정 토글 UI에서 숨김 (smsAlertEnabled)
 - 이 결정은 제품 원칙 "자동 메시지 발송 금지"와 일치한다
+- 단, 수동 문자 보내기 메뉴 토글(smsMenuEnabled, 기본 OFF)은 별도 — ACTION_SENDTO 방식으로 원칙 위반 아님
 
 ---
 
@@ -165,7 +166,7 @@ Tech: Min SDK 26, Target SDK 34, Kotlin 1.9.24, JVM 17, Compose + Material3, Nav
 ### 팝업 즉시 발생 조건
 1. 위험 점수 50점 이상 도달
 2. 원격제어 앱 실행 감지 (단독)
-3. 위험 세션 중 금융 앱 실행
+3. 위험 세션 중 금융 앱 실행 → 쿨다운 인터럽터 발동 (BankingCooldownManager)
 4. 위험 세션 중 은행 ARS 번호 발신
 5. 원격제어 앱 직후 금융 앱 실행 (최고 위험)
 6. 반복 호출 패턴 후 원격제어 또는 금융행동
@@ -173,7 +174,8 @@ Tech: Min SDK 26, Target SDK 34, Kotlin 1.9.24, JVM 17, Compose + Material3, Nav
 ### 팝업 동작 규칙
 - 주 액션: "지금 전화 끊기"
 - 위험 세션 중 금융 앱/텔레뱅킹 시도 시 60초 쿨다운 (행동 지연)
-- foreground에서만 표시
+- TYPE_APPLICATION_OVERLAY 사용 — 통화 중에도 표시하기 위해 의도적으로 시스템 오버레이 사용
+- 새 위협 발생 시 기존 팝업을 닫고 새 내용으로 갱신
 - 자동 외부 연락 없음 (제품 원칙 준수)
 
 ---

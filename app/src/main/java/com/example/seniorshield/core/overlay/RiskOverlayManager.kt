@@ -53,8 +53,13 @@ class RiskOverlayManager @Inject constructor(
         }
         mainHandler.post {
             if (overlayView != null) {
-                Log.d(TAG, "팝업 이미 표시 중 — 생략")
-                return@post
+                Log.d(TAG, "팝업 이미 표시 중 — 새 내용으로 갱신")
+                try {
+                    windowManager.removeView(overlayView)
+                } catch (e: Exception) {
+                    Log.e(TAG, "기존 팝업 제거 실패: ${e.message}")
+                }
+                overlayView = null
             }
             val (view, primaryButton) = buildView(event)
             val params = WindowManager.LayoutParams(

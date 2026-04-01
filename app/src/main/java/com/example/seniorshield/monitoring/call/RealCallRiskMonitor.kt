@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -70,7 +71,7 @@ class RealCallRiskMonitor @Inject constructor(
     @Volatile private var lastSuspiciousCallEndedAt: Long? = null
 
     /** 최근 30분 이내 미확인/미검증 수신 호출 타임스탬프 버퍼 */
-    private val recentUnknownCalls = mutableListOf<Long>()
+    private val recentUnknownCalls: MutableList<Long> = CopyOnWriteArrayList()
 
     override fun observeCallContext(): Flow<CallContext?> =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) observeCallContextApi31()

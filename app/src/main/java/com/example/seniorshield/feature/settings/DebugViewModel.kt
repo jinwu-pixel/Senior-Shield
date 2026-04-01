@@ -79,4 +79,37 @@ class DebugViewModel @Inject constructor(
     fun setSmsMenuEnabled(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setSmsMenuEnabled(enabled) }
     }
+
+    /** 텔레뱅킹 유도 사기 전체 파이프라인을 시뮬레이션한다. */
+    fun simulateTelebankingDetection() {
+        // Phase 1: 의심 통화 수신
+        sessionTracker.update(listOf(RiskSignal.UNKNOWN_CALLER), emptyList())
+        // Phase 2: 반복 호출 + 장시간 통화
+        sessionTracker.update(
+            listOf(
+                RiskSignal.REPEATED_UNKNOWN_CALLER,
+                RiskSignal.LONG_CALL_DURATION,
+                RiskSignal.REPEATED_CALL_THEN_LONG_TALK,
+            ),
+            emptyList(),
+        )
+        // Phase 3: 텔레뱅킹 시도
+        val session = sessionTracker.update(
+            listOf(RiskSignal.TELEBANKING_AFTER_SUSPICIOUS),
+            emptyList(),
+        )
+        if (session != null) {
+            val score = evaluator.evaluate(session.accumulatedSignals.toList())
+            val event = RiskEvent(
+                id = "debug-telebanking-${System.currentTimeMillis()}",
+                title = "[테스트] 텔레뱅킹 유도 사기 감지",
+                description = "의심 통화 → 반복 호출 → 은행 ARS 발신 시뮬레이션",
+                occurredAtMillis = System.currentTimeMillis(),
+                level = score.level,
+                signals = session.accumulatedSignals.toList(),
+            )
+            viewModelScope.launch { eventSink.pushRiskEvent(event) }
+            overlayManager.show(event)
+        }
+    }
 }
