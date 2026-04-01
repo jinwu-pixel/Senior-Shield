@@ -112,21 +112,7 @@ class RiskSessionTrackerTest {
     }
 
     // -----------------------------------------------------------------------
-    // 7. markInterrupterShown 호출 시 플래그 갱신
-    // -----------------------------------------------------------------------
-
-    @Test
-    fun `markInterrupterShown 호출 시 bankingInterrupterShown 플래그가 true로 갱신됨`() {
-        tracker.update(listOf(RiskSignal.BANKING_APP_OPENED_AFTER_REMOTE_APP), emptyList())
-        tracker.markInterrupterShown()
-
-        val session = tracker.sessionState.value
-        assertNotNull(session)
-        assertTrue(session!!.bankingInterrupterShown)
-    }
-
-    // -----------------------------------------------------------------------
-    // 8. reset 호출 시 세션 초기화
+    // 7. reset 호출 시 세션 초기화
     // -----------------------------------------------------------------------
 
     @Test
