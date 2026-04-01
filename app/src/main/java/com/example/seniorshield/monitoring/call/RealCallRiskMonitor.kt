@@ -429,6 +429,11 @@ class RealCallRiskMonitor @Inject constructor(
 
     /** 미확인/미검증 수신 호출을 버퍼에 기록한다. */
     private fun recordUnknownCall() {
+        // 세션이 없으면 이전 버퍼를 초기화 (안전 확인 후 클린 슬레이트)
+        if (sessionTracker.sessionState.value == null) {
+            recentUnknownCalls.clear()
+            lastSuspiciousCallEndedAt = null
+        }
         val now = System.currentTimeMillis()
         val cutoff = now - REPEATED_CALL_WINDOW_MS
         recentUnknownCalls.removeAll { it < cutoff }
@@ -457,7 +462,7 @@ class RealCallRiskMonitor @Inject constructor(
                 arrayOf(android.provider.CallLog.Calls.NUMBER),
                 "${android.provider.CallLog.Calls.TYPE} = ?",
                 arrayOf(android.provider.CallLog.Calls.OUTGOING_TYPE.toString()),
-                "${android.provider.CallLog.Calls.DATE} DESC",
+                "${android.provider.CallLog.Calls.DATE} DESC LIMIT 1",
             )?.use { cursor ->
                 if (cursor.moveToFirst()) cursor.getString(0) else null
             }
