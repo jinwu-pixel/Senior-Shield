@@ -48,4 +48,15 @@ class SettingsRepositoryImpl @Inject constructor(
             prefs[SettingsKeys.TestModeEnabled] = enabled
         }
     }
+
+    override fun observeSmsMenuEnabled(): Flow<Boolean> =
+        context.settingsDataStore.data.map { prefs ->
+            prefs[SettingsKeys.SmsMenuEnabled] ?: false
+        }
+
+    override suspend fun setSmsMenuEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[SettingsKeys.SmsMenuEnabled] = enabled
+        }
+    }
 }

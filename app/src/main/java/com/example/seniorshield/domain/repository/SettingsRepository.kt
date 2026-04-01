@@ -11,4 +11,7 @@ interface SettingsRepository {
 
     fun observeTestModeEnabled(): Flow<Boolean>
     suspend fun setTestModeEnabled(enabled: Boolean)
+
+    fun observeSmsMenuEnabled(): Flow<Boolean>
+    suspend fun setSmsMenuEnabled(enabled: Boolean)
 }

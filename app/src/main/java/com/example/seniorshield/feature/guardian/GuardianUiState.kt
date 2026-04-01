@@ -7,4 +7,6 @@ data class GuardianUiState(
     val canAddMore: Boolean = true,
     val showAddDialog: Boolean = false,
     val message: String? = null,
+    val smsMenuEnabled: Boolean = false,
+    val showSmsPicker: Boolean = false,
 )

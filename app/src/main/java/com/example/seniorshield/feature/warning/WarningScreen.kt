@@ -1,5 +1,6 @@
 package com.example.seniorshield.feature.warning
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -36,6 +37,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import com.example.seniorshield.core.designsystem.component.BasicTextButton
 import com.example.seniorshield.core.designsystem.component.PrimaryButton
+import com.example.seniorshield.core.designsystem.component.SecondaryButton
 import com.example.seniorshield.core.designsystem.component.SeniorShieldScaffold
 import com.example.seniorshield.core.designsystem.theme.SeniorShieldTheme
 import com.example.seniorshield.core.designsystem.theme.StatusRed
@@ -87,6 +89,30 @@ fun NavGraphBuilder.warningScreen(
                 viewModel.dismissGuardianPicker()
                 context.startActivity(ContactIntentHelper.dialIntent(guardian.phoneNumber))
             },
+            onSmsClick = {
+                when {
+                    uiState.guardians.size == 1 -> {
+                        val intent = ContactIntentHelper.smsIntent(uiState.guardians.first().phoneNumber)
+                        if (intent.resolveActivity(context.packageManager) != null) {
+                            context.startActivity(intent)
+                        } else {
+                            Toast.makeText(context, "문자 앱을 찾을 수 없습니다", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    uiState.guardians.size > 1 -> viewModel.showSmsPicker()
+                    else -> Unit
+                }
+            },
+            onDismissSmsPicker = viewModel::dismissSmsPicker,
+            onSmsGuardianSelected = { guardian ->
+                viewModel.dismissSmsPicker()
+                val intent = ContactIntentHelper.smsIntent(guardian.phoneNumber)
+                if (intent.resolveActivity(context.packageManager) != null) {
+                    context.startActivity(intent)
+                } else {
+                    Toast.makeText(context, "문자 앱을 찾을 수 없습니다", Toast.LENGTH_SHORT).show()
+                }
+            },
         )
     }
 }
@@ -99,6 +125,9 @@ private fun WarningContent(
     onBack: () -> Unit,
     onDismissGuardianPicker: () -> Unit,
     onGuardianSelected: (Guardian) -> Unit,
+    onSmsClick: () -> Unit,
+    onDismissSmsPicker: () -> Unit,
+    onSmsGuardianSelected: (Guardian) -> Unit,
 ) {
     SeniorShieldScaffold(title = "위험 경고", onBackClick = onBack) { padding ->
         Column(
@@ -117,6 +146,10 @@ private fun WarningContent(
             Checklist()
             Spacer(modifier = Modifier.height(24.dp))
             PrimaryButton(text = "가족에게 전화하기", onClick = onFamilyCallClick)
+            if (uiState.smsMenuEnabled && uiState.guardians.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                SecondaryButton(text = "보호자에게 문자 보내기", onClick = onSmsClick)
+            }
             Spacer(modifier = Modifier.height(32.dp))
             InstitutionSection(onCall = onInstitutionCall)
             Spacer(modifier = Modifier.height(24.dp))
@@ -129,6 +162,14 @@ private fun WarningContent(
             guardians = uiState.guardians,
             onDismiss = onDismissGuardianPicker,
             onSelect = onGuardianSelected,
+        )
+    }
+
+    if (uiState.showSmsPicker) {
+        SmsGuardianPickerDialog(
+            guardians = uiState.guardians,
+            onDismiss = onDismissSmsPicker,
+            onSelect = onSmsGuardianSelected,
         )
     }
 }
@@ -265,6 +306,37 @@ private fun GuardianPickerDialog(
     )
 }
 
+@Composable
+private fun SmsGuardianPickerDialog(
+    guardians: List<Guardian>,
+    onDismiss: () -> Unit,
+    onSelect: (Guardian) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("문자 보낼 보호자 선택") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                guardians.forEach { guardian ->
+                    TextButton(
+                        onClick = { onSelect(guardian) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = "${guardian.name}${if (guardian.relationship.isNotBlank()) " (${guardian.relationship})" else ""}",
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("취소") }
+        },
+    )
+}
+
 @Preview(showBackground = true)
 @Composable
 private fun WarningScreenPreview() {
@@ -279,6 +351,9 @@ private fun WarningScreenPreview() {
             onBack = {},
             onDismissGuardianPicker = {},
             onGuardianSelected = {},
+            onSmsClick = {},
+            onDismissSmsPicker = {},
+            onSmsGuardianSelected = {},
         )
     }
 }

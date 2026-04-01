@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.seniorshield.domain.model.Guardian
 import com.example.seniorshield.domain.repository.GuardianRepository
+import com.example.seniorshield.domain.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -17,21 +18,33 @@ import javax.inject.Inject
 @HiltViewModel
 class GuardianViewModel @Inject constructor(
     private val guardianRepository: GuardianRepository,
+    settingsRepository: SettingsRepository,
 ) : ViewModel() {
 
     private val _showAddDialog = MutableStateFlow(false)
     private val _message = MutableStateFlow<String?>(null)
+    private val _showSmsPicker = MutableStateFlow(false)
 
     val uiState: StateFlow<GuardianUiState> = combine(
         guardianRepository.observeGuardians(),
         _showAddDialog,
         _message,
-    ) { guardians, showDialog, msg ->
+        settingsRepository.observeSmsMenuEnabled(),
+        _showSmsPicker,
+    ) { values ->
+        @Suppress("UNCHECKED_CAST")
+        val guardians = values[0] as List<Guardian>
+        val showDialog = values[1] as Boolean
+        val msg = values[2] as String?
+        val smsMenuEnabled = values[3] as Boolean
+        val showSmsPicker = values[4] as Boolean
         GuardianUiState(
             guardians = guardians,
             canAddMore = guardians.size < Guardian.MAX_COUNT,
             showAddDialog = showDialog,
             message = msg,
+            smsMenuEnabled = smsMenuEnabled,
+            showSmsPicker = showSmsPicker,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -42,6 +55,8 @@ class GuardianViewModel @Inject constructor(
     fun showAddDialog() { _showAddDialog.value = true }
     fun hideAddDialog() { _showAddDialog.value = false }
     fun clearMessage() { _message.value = null }
+    fun showSmsPicker() { _showSmsPicker.value = true }
+    fun dismissSmsPicker() { _showSmsPicker.value = false }
 
     fun addGuardian(name: String, phone: String, relationship: String) {
         viewModelScope.launch {

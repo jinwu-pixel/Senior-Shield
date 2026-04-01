@@ -1,10 +1,13 @@
 package com.example.seniorshield.feature.guardian
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -26,20 +29,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import com.example.seniorshield.core.designsystem.component.PrimaryButton
+import com.example.seniorshield.core.designsystem.component.SecondaryButton
 import com.example.seniorshield.core.designsystem.component.SeniorShieldScaffold
 import com.example.seniorshield.core.navigation.SeniorShieldDestination
+import com.example.seniorshield.core.util.ContactIntentHelper
 import com.example.seniorshield.domain.model.Guardian
 
 fun NavGraphBuilder.guardianScreen(onBack: () -> Unit) {
     composable(route = SeniorShieldDestination.GUARDIAN) {
         val viewModel: GuardianViewModel = hiltViewModel()
         val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+        val context = LocalContext.current
 
         GuardianContent(
             uiState = uiState,
@@ -48,6 +55,30 @@ fun NavGraphBuilder.guardianScreen(onBack: () -> Unit) {
             onConfirmAdd = viewModel::addGuardian,
             onRemove = viewModel::removeGuardian,
             onBack = onBack,
+            onSmsClick = {
+                when {
+                    uiState.guardians.size == 1 -> {
+                        val intent = ContactIntentHelper.smsIntent(uiState.guardians.first().phoneNumber)
+                        if (intent.resolveActivity(context.packageManager) != null) {
+                            context.startActivity(intent)
+                        } else {
+                            Toast.makeText(context, "문자 앱을 찾을 수 없습니다", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    uiState.guardians.size > 1 -> viewModel.showSmsPicker()
+                    else -> Unit
+                }
+            },
+            onDismissSmsPicker = viewModel::dismissSmsPicker,
+            onSmsGuardianSelected = { guardian ->
+                viewModel.dismissSmsPicker()
+                val intent = ContactIntentHelper.smsIntent(guardian.phoneNumber)
+                if (intent.resolveActivity(context.packageManager) != null) {
+                    context.startActivity(intent)
+                } else {
+                    Toast.makeText(context, "문자 앱을 찾을 수 없습니다", Toast.LENGTH_SHORT).show()
+                }
+            },
         )
 
         uiState.message?.let { msg ->
@@ -67,6 +98,9 @@ private fun GuardianContent(
     onConfirmAdd: (String, String, String) -> Unit,
     onRemove: (String) -> Unit,
     onBack: () -> Unit,
+    onSmsClick: () -> Unit,
+    onDismissSmsPicker: () -> Unit,
+    onSmsGuardianSelected: (Guardian) -> Unit,
 ) {
     SeniorShieldScaffold(title = "보호자 연락처 관리", onBackClick = onBack) { padding ->
         LazyColumn(
@@ -96,6 +130,16 @@ private fun GuardianContent(
                 }
             }
 
+            if (uiState.smsMenuEnabled && uiState.guardians.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(4.dp))
+                    SecondaryButton(
+                        text = "보호자에게 문자 보내기",
+                        onClick = onSmsClick,
+                    )
+                }
+            }
+
             uiState.message?.let { msg ->
                 item {
                     Text(
@@ -112,6 +156,14 @@ private fun GuardianContent(
         AddGuardianDialog(
             onDismiss = onDismissDialog,
             onConfirm = onConfirmAdd,
+        )
+    }
+
+    if (uiState.showSmsPicker) {
+        SmsGuardianPickerDialog(
+            guardians = uiState.guardians,
+            onDismiss = onDismissSmsPicker,
+            onSelect = onSmsGuardianSelected,
         )
     }
 }
@@ -143,6 +195,37 @@ private fun GuardianCard(guardian: Guardian, onRemove: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+private fun SmsGuardianPickerDialog(
+    guardians: List<Guardian>,
+    onDismiss: () -> Unit,
+    onSelect: (Guardian) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("문자 보낼 보호자 선택") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                guardians.forEach { guardian ->
+                    TextButton(
+                        onClick = { onSelect(guardian) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = "${guardian.name}${if (guardian.relationship.isNotBlank()) " (${guardian.relationship})" else ""}",
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("취소") }
+        },
+    )
 }
 
 @Composable

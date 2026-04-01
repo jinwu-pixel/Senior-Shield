@@ -38,6 +38,10 @@ class DebugViewModel @Inject constructor(
     val testModeEnabled: StateFlow<Boolean> = settingsRepository.observeTestModeEnabled()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
+    /** 보호자 문자 보내기 메뉴 표시 여부. */
+    val smsMenuEnabled: StateFlow<Boolean> = settingsRepository.observeSmsMenuEnabled()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     /** 세션에서 계산된 현재 점수. 세션이 없으면 null. */
     val score: StateFlow<RiskScore?> = session
         .map { s -> s?.let { evaluator.evaluate(it.accumulatedSignals.toList()) } }
@@ -70,5 +74,9 @@ class DebugViewModel @Inject constructor(
 
     fun setTestModeEnabled(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setTestModeEnabled(enabled) }
+    }
+
+    fun setSmsMenuEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setSmsMenuEnabled(enabled) }
     }
 }

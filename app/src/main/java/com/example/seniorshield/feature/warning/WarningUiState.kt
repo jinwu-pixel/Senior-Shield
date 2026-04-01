@@ -10,4 +10,6 @@ data class WarningUiState(
     val detectedEventTitle: String? = null,
     val detectedEventDescription: String? = null,
     val detectedEventLevel: RiskLevel? = null,
+    val smsMenuEnabled: Boolean = false,
+    val showSmsPicker: Boolean = false,
 )

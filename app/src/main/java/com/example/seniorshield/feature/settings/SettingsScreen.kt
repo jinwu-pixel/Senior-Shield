@@ -58,11 +58,13 @@ fun NavGraphBuilder.settingsScreen(
         val session by debugVm.session.collectAsStateWithLifecycle()
         val score by debugVm.score.collectAsStateWithLifecycle()
         val testModeEnabled by debugVm.testModeEnabled.collectAsStateWithLifecycle()
+        val smsMenuEnabled by debugVm.smsMenuEnabled.collectAsStateWithLifecycle()
 
         SettingsContent(
             session = session,
             score = score,
             testModeEnabled = testModeEnabled,
+            smsMenuEnabled = smsMenuEnabled,
             onNavigatePolicy = onNavigatePolicy,
             onNavigateGuardian = onNavigateGuardian,
             onBack = onBack,
@@ -70,6 +72,7 @@ fun NavGraphBuilder.settingsScreen(
             onShowTestOverlay = debugVm::showTestOverlay,
             onShowTestCooldown = debugVm::showTestCooldown,
             onTestModeToggle = debugVm::setTestModeEnabled,
+            onSmsMenuToggle = debugVm::setSmsMenuEnabled,
         )
     }
 }
@@ -79,6 +82,7 @@ private fun SettingsContent(
     session: RiskSession?,
     score: RiskScore?,
     testModeEnabled: Boolean,
+    smsMenuEnabled: Boolean,
     onNavigatePolicy: () -> Unit,
     onNavigateGuardian: () -> Unit,
     onBack: () -> Unit,
@@ -86,6 +90,7 @@ private fun SettingsContent(
     onShowTestOverlay: () -> Unit,
     onShowTestCooldown: () -> Unit,
     onTestModeToggle: (Boolean) -> Unit,
+    onSmsMenuToggle: (Boolean) -> Unit,
 ) {
     SeniorShieldScaffold(title = "앱 설정", onBackClick = onBack) { padding ->
         Column(
@@ -96,6 +101,7 @@ private fun SettingsContent(
         ) {
             SettingsListItem(text = "보호자 연락처 관리", onClick = onNavigateGuardian)
             SettingsListItem(text = "서비스 원칙 및 개인정보 처리방침", onClick = onNavigatePolicy)
+            SmsMenuToggleItem(enabled = smsMenuEnabled, onToggle = onSmsMenuToggle)
 
             if (BuildConfig.DEBUG) {
                 Spacer(Modifier.height(16.dp))
@@ -299,6 +305,26 @@ private fun SettingsListItem(text: String, onClick: () -> Unit) {
     )
 }
 
+@Composable
+private fun SmsMenuToggleItem(enabled: Boolean, onToggle: (Boolean) -> Unit) {
+    ListItem(
+        headlineContent = {
+            Text("보호자에게 문자 보내기 메뉴", style = MaterialTheme.typography.bodyLarge)
+        },
+        supportingContent = {
+            Text(
+                "문자는 사용자가 직접 확인 후 전송합니다",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+        trailingContent = {
+            Switch(checked = enabled, onCheckedChange = onToggle)
+        },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+    )
+}
+
 @Preview(showBackground = true)
 @Composable
 private fun SettingsScreenPreview() {
@@ -307,6 +333,7 @@ private fun SettingsScreenPreview() {
             session = null,
             score = null,
             testModeEnabled = false,
+            smsMenuEnabled = false,
             onNavigatePolicy = {},
             onNavigateGuardian = {},
             onBack = {},
@@ -314,6 +341,7 @@ private fun SettingsScreenPreview() {
             onShowTestOverlay = {},
             onShowTestCooldown = {},
             onTestModeToggle = {},
+            onSmsMenuToggle = {},
         )
     }
 }

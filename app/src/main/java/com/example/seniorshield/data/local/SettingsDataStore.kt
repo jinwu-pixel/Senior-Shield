@@ -10,4 +10,5 @@ object SettingsKeys {
     val OnboardingCompleted = booleanPreferencesKey("onboarding_completed")
     val SmsAlertEnabled = booleanPreferencesKey("sms_alert_enabled")
     val TestModeEnabled = booleanPreferencesKey("test_mode_enabled")
+    val SmsMenuEnabled = booleanPreferencesKey("sms_menu_enabled")
 }

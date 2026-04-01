@@ -6,6 +6,7 @@ import com.example.seniorshield.domain.model.RiskLevel
 import com.example.seniorshield.domain.model.RiskSignal
 import com.example.seniorshield.domain.repository.GuardianRepository
 import com.example.seniorshield.domain.repository.RiskRepository
+import com.example.seniorshield.domain.repository.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -30,6 +31,7 @@ class WarningViewModelTest {
 
     private lateinit var guardianRepository: FakeGuardianRepository
     private lateinit var riskRepository: FakeRiskRepository
+    private lateinit var settingsRepository: FakeSettingsRepository
     private lateinit var viewModel: WarningViewModel
 
     @Before
@@ -37,7 +39,8 @@ class WarningViewModelTest {
         Dispatchers.setMain(testDispatcher)
         guardianRepository = FakeGuardianRepository()
         riskRepository = FakeRiskRepository()
-        viewModel = WarningViewModel(guardianRepository, riskRepository)
+        settingsRepository = FakeSettingsRepository()
+        viewModel = WarningViewModel(guardianRepository, riskRepository, settingsRepository)
     }
 
     @After
@@ -199,4 +202,23 @@ private class FakeRiskRepository : RiskRepository {
     fun setCurrentEvent(event: RiskEvent?) {
         _currentEvent.value = event
     }
+}
+
+private class FakeSettingsRepository : SettingsRepository {
+    private val _onboardingCompleted = MutableStateFlow(false)
+    private val _smsAlertEnabled = MutableStateFlow(false)
+    private val _testModeEnabled = MutableStateFlow(false)
+    private val _smsMenuEnabled = MutableStateFlow(false)
+
+    override fun observeOnboardingCompleted(): Flow<Boolean> = _onboardingCompleted
+    override suspend fun setOnboardingCompleted(completed: Boolean) { _onboardingCompleted.value = completed }
+
+    override fun observeSmsAlertEnabled(): Flow<Boolean> = _smsAlertEnabled
+    override suspend fun setSmsAlertEnabled(enabled: Boolean) { _smsAlertEnabled.value = enabled }
+
+    override fun observeTestModeEnabled(): Flow<Boolean> = _testModeEnabled
+    override suspend fun setTestModeEnabled(enabled: Boolean) { _testModeEnabled.value = enabled }
+
+    override fun observeSmsMenuEnabled(): Flow<Boolean> = _smsMenuEnabled
+    override suspend fun setSmsMenuEnabled(enabled: Boolean) { _smsMenuEnabled.value = enabled }
 }
