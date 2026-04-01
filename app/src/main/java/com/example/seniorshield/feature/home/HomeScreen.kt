@@ -157,6 +157,15 @@ private fun HomeContent(
                 }
             }
 
+            if (uiState.guardedCard != null) {
+                item {
+                    GuardedSessionCard(
+                        card = uiState.guardedCard,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+                    )
+                }
+            }
+
             if (uiState.weeklyTip.isNotEmpty()) {
                 item {
                     WeeklyTipCard(
@@ -181,6 +190,38 @@ private fun HomeContent(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun GuardedSessionCard(card: GuardedCardInfo, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.tertiaryContainer)
+            .padding(16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Rounded.Warning,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                modifier = Modifier.size(20.dp),
+            )
+            Text(
+                text = card.title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = card.body,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onTertiaryContainer,
+        )
     }
 }
 

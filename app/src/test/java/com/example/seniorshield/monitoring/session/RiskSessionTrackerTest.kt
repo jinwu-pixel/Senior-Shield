@@ -199,4 +199,78 @@ class RiskSessionTrackerTest {
         assertFalse(session!!.notifiedActiveThreats.contains(RiskSignal.TELEBANKING_AFTER_SUSPICIOUS))
         assertTrue(session.accumulatedSignals.contains(RiskSignal.TELEBANKING_AFTER_SUSPICIOUS))
     }
+
+    // -----------------------------------------------------------------------
+    // 13. HIGH_RISK_DEVICE_ENVIRONMENT 단독으로는 세션 미생성
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `HIGH_RISK_DEVICE_ENVIRONMENT 단독 세션 미생성`() {
+        val result = tracker.update(
+            emptyList(),
+            listOf(RiskSignal.HIGH_RISK_DEVICE_ENVIRONMENT),
+        )
+        assertNull(result)
+        assertNull(tracker.sessionState.value)
+    }
+
+    @Test
+    fun `HIGH_RISK_DEVICE_ENVIRONMENT + 다른 신호 동시 도착 시 세션 생성`() {
+        val result = tracker.update(
+            listOf(RiskSignal.UNKNOWN_CALLER),
+            listOf(RiskSignal.HIGH_RISK_DEVICE_ENVIRONMENT),
+        )
+        assertNotNull(result)
+        assertTrue(result!!.accumulatedSignals.contains(RiskSignal.HIGH_RISK_DEVICE_ENVIRONMENT))
+        assertTrue(result.accumulatedSignals.contains(RiskSignal.UNKNOWN_CALLER))
+    }
+
+    // -----------------------------------------------------------------------
+    // 14. hasTrigger 플래그
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `PASSIVE 신호만 - hasTrigger false`() {
+        val result = tracker.update(listOf(RiskSignal.UNKNOWN_CALLER), emptyList())
+        assertNotNull(result)
+        assertFalse(result!!.hasTrigger)
+    }
+
+    @Test
+    fun `TRIGGER 신호 포함 - hasTrigger true`() {
+        tracker.update(listOf(RiskSignal.UNKNOWN_CALLER), emptyList())
+        val result = tracker.update(
+            emptyList(),
+            listOf(RiskSignal.REMOTE_CONTROL_APP_OPENED),
+        )
+        assertNotNull(result)
+        assertTrue(result!!.hasTrigger)
+    }
+
+    @Test
+    fun `hasTrigger 한 번 true이면 이후에도 true 유지`() {
+        tracker.update(listOf(RiskSignal.UNKNOWN_CALLER), emptyList())
+        tracker.update(emptyList(), listOf(RiskSignal.REMOTE_CONTROL_APP_OPENED))
+        // PASSIVE만 추가해도 hasTrigger 유지
+        val result = tracker.update(listOf(RiskSignal.LONG_CALL_DURATION), emptyList())
+        assertNotNull(result)
+        assertTrue(result!!.hasTrigger)
+    }
+
+    // -----------------------------------------------------------------------
+    // 15. markAlertStateNotified
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `markAlertStateNotified 정상 갱신`() {
+        tracker.update(listOf(RiskSignal.UNKNOWN_CALLER), emptyList())
+        tracker.markAlertStateNotified(com.example.seniorshield.domain.model.AlertState.GUARDED)
+
+        val session = tracker.sessionState.value
+        assertNotNull(session)
+        assertEquals(
+            com.example.seniorshield.domain.model.AlertState.GUARDED,
+            session!!.notifiedAlertState,
+        )
+    }
 }

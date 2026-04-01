@@ -57,14 +57,16 @@ class BankingCooldownManager @Inject constructor(
     fun triggerPreview(countdownSec: Int) {
         if (isShowing()) return
         if (!Settings.canDrawOverlays(context)) return
-        mainHandler.post { startCooldown(countdownSec, RiskLevel.HIGH) }
+        mainHandler.post { startCooldown(countdownSec, RiskLevel.HIGH, null) }
     }
 
     /**
      * 위험 수준에 따라 카운트다운 시간을 결정하고, 쿨다운을 시작한다.
      * 이미 표시 중이거나 SYSTEM_ALERT_WINDOW 권한이 없으면 생략한다.
+     *
+     * @param reason 쿨다운 이유 설명 — 현재 세션 컨텍스트에 맞는 사용자 설명형 문구.
      */
-    fun triggerIfNotActive(level: RiskLevel) {
+    fun triggerIfNotActive(level: RiskLevel, reason: String? = null) {
         if (isShowing()) {
             Log.d(TAG, "already showing — skipped")
             return
@@ -78,12 +80,12 @@ class BankingCooldownManager @Inject constructor(
             RiskLevel.HIGH -> 30
             else -> 10
         }
-        Log.d(TAG, "쿨다운 발동: level=$level, countdown=${countdownSec}초")
-        mainHandler.post { startCooldown(countdownSec, level) }
+        Log.d(TAG, "쿨다운 발동: level=$level, countdown=${countdownSec}초, reason=$reason")
+        mainHandler.post { startCooldown(countdownSec, level, reason) }
     }
 
-    private fun startCooldown(countdownSec: Int, level: RiskLevel) {
-        val (root, countdownText, bottomText, endCallButton) = buildView(countdownSec, level)
+    private fun startCooldown(countdownSec: Int, level: RiskLevel, reason: String?) {
+        val (root, countdownText, bottomText, endCallButton) = buildView(countdownSec, level, reason)
         val params = WindowManager.LayoutParams(
             MATCH_PARENT, MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
@@ -135,7 +137,7 @@ class BankingCooldownManager @Inject constructor(
         val endCallButton: Button,
     )
 
-    private fun buildView(countdownSec: Int, level: RiskLevel): CooldownViews {
+    private fun buildView(countdownSec: Int, level: RiskLevel, reason: String?): CooldownViews {
         val bg = when (level) {
             RiskLevel.CRITICAL -> Color.parseColor("#B71C1C")
             else -> Color.parseColor("#BF360C")
@@ -205,6 +207,19 @@ class BankingCooldownManager @Inject constructor(
                 topMargin = dp(16)
             }
         })
+
+        // 이유 설명 — 세션 컨텍스트에 맞는 구체적 이유
+        if (reason != null) {
+            contentArea.addView(TextView(context).apply {
+                text = reason
+                textSize = 15f
+                setTextColor(Color.parseColor("#FFCDD2"))
+                gravity = Gravity.CENTER
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
+                    topMargin = dp(12)
+                }
+            })
+        }
 
         // 남은 시간
         val bottomText = TextView(context).apply {

@@ -1,8 +1,10 @@
 package com.example.seniorshield.monitoring.session
 
 import android.util.Log
+import com.example.seniorshield.domain.model.AlertState
 import com.example.seniorshield.domain.model.RiskLevel
 import com.example.seniorshield.domain.model.RiskSignal
+import com.example.seniorshield.domain.model.SignalCategory
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -11,11 +13,24 @@ import javax.inject.Singleton
 
 private const val TAG = "SeniorShield-Session"
 
-/** 비활동 30분이 지나면 세션을 자동 만료한다. */
-private const val SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000L
+/** 기본 TTL: 마지막 신호로부터 30분. */
+private const val DEFAULT_IDLE_TIMEOUT_MS = 30 * 60 * 1000L
+/** TRIGGER 발생 시 연장 TTL: 60분. */
+private const val TRIGGER_IDLE_TIMEOUT_MS = 60 * 60 * 1000L
 
 /**
  * 위험 세션의 생명주기를 관리하고 신호를 누적한다.
+ *
+ * ## 세션 TTL 규칙
+ * - 기본 TTL: 마지막 신호로부터 30분
+ * - 새 PASSIVE/AMPLIFIER 신호 발생 시 TTL 30분 리셋
+ * - TRIGGER 발생 시 TTL 60분으로 연장
+ * - 사용자 "안전 확인" → 즉시 종료
+ * - TTL 만료 → OBSERVE 복귀
+ *
+ * ## 세션 생성 조건
+ * - PASSIVE 신호 1개 이상 감지 시 생성
+ * - HIGH_RISK_DEVICE_ENVIRONMENT 단독으로는 세션을 생성하지 않음 (modifier)
  *
  * [sessionState]를 통해 외부(DebugViewModel 등)에서 현재 세션을 관찰할 수 있다.
  */
@@ -27,7 +42,6 @@ class RiskSessionTracker @Inject constructor() {
     /** 현재 활성 세션을 실시간으로 관찰한다. null = 세션 없음. */
     val sessionState: StateFlow<RiskSession?> = _sessionState.asStateFlow()
 
-    // session 프로퍼티 변경 시 StateFlow가 자동 갱신된다.
     private var session: RiskSession?
         get() = _sessionState.value
         set(value) { _sessionState.value = value }
@@ -41,24 +55,37 @@ class RiskSessionTracker @Inject constructor() {
             current == null && newSignals.isEmpty() -> null
 
             current == null -> {
-                RiskSession(startedAt = now, accumulatedSignals = newSignals, lastSignalAt = now)
-                    .also { Log.d(TAG, "session opened [${it.id}] signals=$newSignals") }
+                // HIGH_RISK_DEVICE_ENVIRONMENT 단독으로는 세션 생성 불가
+                val sessionCreators = newSignals.filter { it != RiskSignal.HIGH_RISK_DEVICE_ENVIRONMENT }
+                if (sessionCreators.isEmpty()) {
+                    null
+                } else {
+                    val hasTrigger = newSignals.any { it.category == SignalCategory.TRIGGER }
+                    RiskSession(
+                        startedAt = now,
+                        accumulatedSignals = newSignals,
+                        lastSignalAt = now,
+                        hasTrigger = hasTrigger,
+                    ).also { Log.d(TAG, "session opened [${it.id}] signals=$newSignals") }
+                }
             }
 
-            newSignals.isEmpty() && now - current.lastSignalAt > SESSION_IDLE_TIMEOUT_MS -> {
+            newSignals.isEmpty() && now - current.lastSignalAt > currentTimeout(current) -> {
                 val duration = (now - current.startedAt) / 1000L
-                Log.d(TAG, "session expired [${current.id}] after ${duration}s")
+                Log.d(TAG, "session expired [${current.id}] after ${duration}s (ttl=${if (current.hasTrigger) "60" else "30"}min)")
                 null
             }
 
             newSignals.isNotEmpty() -> {
                 val added = newSignals - current.accumulatedSignals
+                val hasTrigger = current.hasTrigger || newSignals.any { it.category == SignalCategory.TRIGGER }
                 current.copy(
                     accumulatedSignals = current.accumulatedSignals + newSignals,
                     lastSignalAt = now,
+                    hasTrigger = hasTrigger,
                 ).also {
                     if (added.isNotEmpty())
-                        Log.d(TAG, "session updated [${it.id}] +$added → total=${it.accumulatedSignals}")
+                        Log.d(TAG, "session updated [${it.id}] +$added → total=${it.accumulatedSignals} ttl=${if (hasTrigger) "60" else "30"}min")
                 }
             }
 
@@ -73,15 +100,23 @@ class RiskSessionTracker @Inject constructor() {
         Log.d(TAG, "notifiedLevel updated → $level")
     }
 
+    fun markAlertStateNotified(state: AlertState) {
+        session = session?.copy(notifiedAlertState = state)
+        Log.d(TAG, "notifiedAlertState updated → $state")
+    }
+
     fun markActiveThreatsNotified(threats: Set<RiskSignal>) {
         session = session?.copy(notifiedActiveThreats = threats)
         Log.d(TAG, "notifiedActiveThreats updated → $threats")
     }
 
-    /** 세션을 강제로 초기화한다. 테스트·디버그 전용. */
+    /** 사용자 "안전 확인" — 세션 즉시 종료. */
     fun reset() {
         val id = session?.id
         session = null
         Log.d(TAG, "session reset [id=$id]")
     }
+
+    private fun currentTimeout(session: RiskSession): Long =
+        if (session.hasTrigger) TRIGGER_IDLE_TIMEOUT_MS else DEFAULT_IDLE_TIMEOUT_MS
 }

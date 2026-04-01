@@ -4,8 +4,10 @@ import android.util.Log
 import com.example.seniorshield.core.notification.RiskNotificationManager
 import com.example.seniorshield.core.overlay.BankingCooldownManager
 import com.example.seniorshield.core.overlay.RiskOverlayManager
+import com.example.seniorshield.domain.model.AlertState
 import com.example.seniorshield.domain.model.RiskLevel
 import com.example.seniorshield.domain.model.RiskSignal
+import com.example.seniorshield.domain.model.SignalCategory
 import com.example.seniorshield.domain.repository.RiskEventSink
 import com.example.seniorshield.monitoring.appinstall.AppInstallRiskMonitor
 import com.example.seniorshield.monitoring.appusage.AppUsageRiskMonitor
@@ -28,18 +30,20 @@ private const val TAG = "SeniorShield-Coordinator"
 /**
  * 통화·앱 사용 신호를 세션 단위로 누적 평가하고 알림·인터럽터를 조율한다.
  *
- * ## 에스컬레이션 알림
- * 세션 점수가 이전 알림 수준보다 올라갈 때만 이벤트를 발행한다.
- * - MEDIUM: 이력 기록만
- * - HIGH+:  이력 + 알림 + 위험 팝업 (능동적 위협 시, 뱅킹 앱 미포그라운드)
+ * ## 핵심 원칙
+ * "수동 신호는 위험 세션만 만든다.
+ *  팝업은 위험 세션 위에서 발생한 고신뢰 행동 트리거에만 반응한다."
  *
- * ## 새 능동적 위협 재알림
- * 에스컬레이션 없이도 새로운 능동적 위협 신호(원격제어, 텔레뱅킹 등)가
- * HIGH+ 세션에 추가되면 팝업을 재표시한다.
+ * ## AlertState 행동 정책
+ * - OBSERVE:   노출 없음
+ * - GUARDED:   notification (상태 전이 1회). 팝업 없음. call-based 세션일 때만 banking cooldown.
+ * - INTERRUPT: notification + popup. banking cooldown.
+ * - CRITICAL:  notification + popup. banking cooldown.
  *
- * ## 뱅킹 쿨다운 인터럽터
- * HIGH+ 세션 중 뱅킹 앱이 포그라운드로 전환될 때마다 [BankingCooldownManager]가
- * 위험 수준에 따라 차등 카운트다운(HIGH=30초, CRITICAL=60초)을 표시한다.
+ * ## 노출 dedupe
+ * - notification: AlertState 전이 시 1회만
+ * - popup: 동일 trigger 반복 시 debounce (notifiedActiveThreats)
+ * - banking cooldown: 포그라운드 전환(false→true)마다 발동
  */
 @Singleton
 class DefaultRiskDetectionCoordinator @Inject constructor(
@@ -54,6 +58,7 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
     private val overlayManager: RiskOverlayManager,
     private val cooldownManager: BankingCooldownManager,
     private val sessionTracker: RiskSessionTracker,
+    private val alertStateResolver: AlertStateResolver,
     private val ioDispatcher: CoroutineDispatcher,
 ) : RiskDetectionCoordinator {
 
@@ -84,51 +89,66 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                     }
 
                     val score = evaluator.evaluate(session.accumulatedSignals.toList())
-                    Log.d(TAG, "session score: total=${score.total}, level=${score.level}")
+                    val alertState = alertStateResolver.resolve(session)
+                    Log.d(TAG, "session score: total=${score.total}, level=${score.level}, alertState=$alertState")
 
-                    val currentActiveThreats = session.accumulatedSignals.intersect(ACTIVE_THREAT_SIGNALS)
+                    if (alertState == AlertState.OBSERVE) {
+                        previousBankingForeground = bankingForeground
+                        return@collect
+                    }
 
-                    // ── 에스컬레이션: 이전보다 위험 수준이 높아졌을 때만 처리 ───────
+                    val triggers = session.accumulatedSignals.filter { it.category == SignalCategory.TRIGGER }.toSet()
+
+                    // ── notification: AlertState 전이 시 1회만 ────────────────
                     var popupShownThisTick = false
-                    val prevOrdinal = session.notifiedLevel?.ordinal ?: -1
-                    if (score.level.ordinal > prevOrdinal &&
-                        score.level.ordinal >= RiskLevel.MEDIUM.ordinal
-                    ) {
+                    val prevAlertOrdinal = session.notifiedAlertState?.ordinal ?: -1
+                    if (alertState.ordinal > prevAlertOrdinal) {
                         val event = eventFactory.create(score)
                         eventSink.pushRiskEvent(event)
+                        sessionTracker.markAlertStateNotified(alertState)
                         sessionTracker.markNotified(score.level)
-                        Log.d(TAG, "escalation: ${session.notifiedLevel} → ${score.level}")
+                        Log.d(TAG, "notification escalation: ${session.notifiedAlertState} → $alertState")
 
-                        if (score.level.ordinal >= RiskLevel.HIGH.ordinal) {
-                            notificationManager.notify(event)
-                            if (currentActiveThreats.isNotEmpty() && !bankingForeground && !cooldownManager.isShowing()) {
-                                overlayManager.show(event)
-                                sessionTracker.markActiveThreatsNotified(currentActiveThreats)
-                                popupShownThisTick = true
-                            }
+                        notificationManager.notify(event)
+
+                        // popup: INTERRUPT/CRITICAL 전이 시 — 뱅킹 미포그라운드 + 쿨다운 미표시
+                        if (alertState.ordinal >= AlertState.INTERRUPT.ordinal &&
+                            !bankingForeground && !cooldownManager.isShowing()
+                        ) {
+                            overlayManager.show(event)
+                            sessionTracker.markActiveThreatsNotified(triggers)
+                            popupShownThisTick = true
+                            Log.d(TAG, "popup shown on state transition → $alertState")
                         }
                     }
 
-                    // ── 새 능동적 위협: 에스컬레이션 없이도 새 위협 감지 시 팝업 재표시 ──
-                    if (!popupShownThisTick && score.level.ordinal >= RiskLevel.HIGH.ordinal) {
-                        val newThreats = currentActiveThreats - session.notifiedActiveThreats
-                        if (newThreats.isNotEmpty() && !bankingForeground && !cooldownManager.isShowing()) {
-                            val event = eventFactory.create(score, triggerSignals = newThreats)
+                    // ── 새 trigger 재알림: 에스컬레이션 없이도 새 trigger 감지 시 팝업 ──
+                    // popupShownThisTick 가드: 같은 사이클에서 에스컬레이션 팝업과 중복 방지
+                    if (!popupShownThisTick &&
+                        alertState.ordinal >= AlertState.INTERRUPT.ordinal && triggers.isNotEmpty()
+                    ) {
+                        val newTriggers = triggers - session.notifiedActiveThreats
+                        if (newTriggers.isNotEmpty() && !bankingForeground && !cooldownManager.isShowing()) {
+                            val event = eventFactory.create(score, triggerSignals = newTriggers)
                             eventSink.pushRiskEvent(event)
                             notificationManager.notify(event)
                             overlayManager.show(event)
-                            sessionTracker.markActiveThreatsNotified(currentActiveThreats)
-                            Log.d(TAG, "새 능동적 위협 팝업: newThreats=$newThreats")
+                            sessionTracker.markActiveThreatsNotified(triggers)
+                            Log.d(TAG, "새 trigger 팝업: newTriggers=$newTriggers")
                         }
                     }
 
-                    // ── 뱅킹 쿨다운 인터럽터: 포그라운드 전환(false→true)마다 발동 ───
+                    // ── banking cooldown: call-based 세션에서만 발동 ──────────
                     val bankingJustOpened = bankingForeground && !previousBankingForeground
-                    if (bankingJustOpened &&
-                        score.level.ordinal >= RiskLevel.HIGH.ordinal
-                    ) {
-                        cooldownManager.triggerIfNotActive(score.level)
-                        Log.d(TAG, "뱅킹 쿨다운 인터럽터 발동: level=${score.level}")
+                    if (bankingJustOpened && alertState.ordinal >= AlertState.GUARDED.ordinal) {
+                        val isCallBased = session.accumulatedSignals.any { it in AlertStateResolver.CALL_SIGNALS }
+                        if (isCallBased) {
+                            val reason = buildCooldownReason(session.accumulatedSignals)
+                            cooldownManager.triggerIfNotActive(score.level, reason)
+                            Log.d(TAG, "뱅킹 쿨다운 발동: level=${score.level}, alertState=$alertState, reason=$reason")
+                        } else {
+                            Log.d(TAG, "뱅킹 쿨다운 생략: call-based 세션 아님")
+                        }
                     }
 
                     previousBankingForeground = bankingForeground
@@ -141,15 +161,25 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
         job = null
     }
 
-    companion object {
-        /** 능동적 위협으로 간주하는 신호 — 팝업 발동 조건에 사용. */
-        private val ACTIVE_THREAT_SIGNALS = setOf(
-            RiskSignal.REMOTE_CONTROL_APP_OPENED,
-            RiskSignal.BANKING_APP_OPENED_AFTER_REMOTE_APP,
-            RiskSignal.SUSPICIOUS_APP_INSTALLED,
-            RiskSignal.TELEBANKING_AFTER_SUSPICIOUS,
-            RiskSignal.REPEATED_CALL_THEN_LONG_TALK,
-        )
+    /**
+     * 현재 세션 신호에 기반한 쿨다운 이유 문구 생성.
+     */
+    private fun buildCooldownReason(signals: Set<RiskSignal>): String = when {
+        RiskSignal.TELEBANKING_AFTER_SUSPICIOUS in signals ->
+            "위험 신호가 감지된 뒤 은행 전화를 시도했습니다.\n지시를 받고 하는 것이라면 즉시 중단하세요."
+
+        RiskSignal.REMOTE_CONTROL_APP_OPENED in signals ->
+            "원격제어 앱이 실행된 상태입니다.\n지금 송금이나 인증을 진행하지 마세요."
+
+        RiskSignal.REPEATED_CALL_THEN_LONG_TALK in signals ||
+                RiskSignal.REPEATED_UNKNOWN_CALLER in signals ->
+            "확인되지 않은 번호에서 반복 전화가 감지되었습니다.\n송금이나 인증 전에 가족에게 먼저 확인하세요."
+
+        RiskSignal.LONG_CALL_DURATION in signals ->
+            "방금 낯선 번호와 오래 통화했습니다.\n지금 바로 송금이나 인증을 진행하지 마세요."
+
+        else ->
+            "의심스러운 활동이 감지된 상태입니다.\n잠시 멈추고 확인해 주세요."
     }
 }
 

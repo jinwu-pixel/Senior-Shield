@@ -29,8 +29,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraphBuilder
@@ -237,6 +243,9 @@ private fun AddGuardianDialog(
     var phone by remember { mutableStateOf("") }
     var relationship by remember { mutableStateOf("") }
 
+    val phoneFocus = remember { FocusRequester() }
+    val relationshipFocus = remember { FocusRequester() }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("보호자 추가") },
@@ -247,6 +256,8 @@ private fun AddGuardianDialog(
                     onValueChange = { name = it },
                     label = { Text("이름") },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    keyboardActions = KeyboardActions(onNext = { phoneFocus.requestFocus() }),
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
@@ -255,7 +266,14 @@ private fun AddGuardianDialog(
                     label = { Text("전화번호") },
                     placeholder = { Text("010-1234-5678") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Phone,
+                        imeAction = ImeAction.Next,
+                    ),
+                    keyboardActions = KeyboardActions(onNext = { relationshipFocus.requestFocus() }),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(phoneFocus),
                 )
                 OutlinedTextField(
                     value = relationship,
@@ -263,7 +281,13 @@ private fun AddGuardianDialog(
                     label = { Text("관계 (선택)") },
                     placeholder = { Text("예: 아들, 딸") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = {
+                        if (name.isNotBlank() && phone.isNotBlank()) onConfirm(name, phone, relationship)
+                    }),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(relationshipFocus),
                 )
             }
         },
