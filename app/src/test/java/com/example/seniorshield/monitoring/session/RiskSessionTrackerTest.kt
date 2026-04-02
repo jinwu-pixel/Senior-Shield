@@ -273,4 +273,66 @@ class RiskSessionTrackerTest {
             session!!.notifiedAlertState,
         )
     }
+
+    // -----------------------------------------------------------------------
+    // 커버리지 보완 — 세션 없는 상태에서 mark 메서드 호출
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `세션 없는 상태에서 markNotified 호출 - 에러 없이 null 유지`() {
+        assertNull(tracker.sessionState.value)
+        tracker.markNotified(RiskLevel.HIGH)
+        assertNull(tracker.sessionState.value)
+    }
+
+    @Test
+    fun `세션 없는 상태에서 markAlertStateNotified 호출 - 에러 없이 null 유지`() {
+        assertNull(tracker.sessionState.value)
+        tracker.markAlertStateNotified(com.example.seniorshield.domain.model.AlertState.GUARDED)
+        assertNull(tracker.sessionState.value)
+    }
+
+    @Test
+    fun `세션 없는 상태에서 markActiveThreatsNotified 호출 - 에러 없이 null 유지`() {
+        assertNull(tracker.sessionState.value)
+        tracker.markActiveThreatsNotified(setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED))
+        assertNull(tracker.sessionState.value)
+    }
+
+    // -----------------------------------------------------------------------
+    // 커버리지 보완 — reset 후 재생성된 세션은 이전과 다른 UUID
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `reset 후 신호 재입력 시 새 세션 UUID가 이전과 다름`() {
+        val first = tracker.update(listOf(RiskSignal.UNKNOWN_CALLER), emptyList())
+        assertNotNull(first)
+        val firstId = first!!.id
+
+        tracker.reset()
+        assertNull(tracker.sessionState.value)
+
+        val second = tracker.update(listOf(RiskSignal.UNKNOWN_CALLER), emptyList())
+        assertNotNull(second)
+        val secondId = second!!.id
+
+        assertFalse("reset 후 새 세션 UUID는 이전과 달라야 한다", firstId == secondId)
+    }
+
+    // -----------------------------------------------------------------------
+    // 커버리지 보완 — callSignals + appSignals 양쪽 동일 신호 중복 처리
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `callSignals와 appSignals에 동일 신호 입력 시 accumulatedSignals 중복 없음`() {
+        // UNKNOWN_CALLER를 callSignals와 appSignals 양쪽에 모두 전달
+        val result = tracker.update(
+            callSignals = listOf(RiskSignal.UNKNOWN_CALLER),
+            appSignals = listOf(RiskSignal.UNKNOWN_CALLER),
+        )
+        assertNotNull(result)
+        // Set 합산이므로 중복 제거 → 신호 1개만 누적
+        assertEquals(1, result!!.accumulatedSignals.size)
+        assertTrue(result.accumulatedSignals.contains(RiskSignal.UNKNOWN_CALLER))
+    }
 }

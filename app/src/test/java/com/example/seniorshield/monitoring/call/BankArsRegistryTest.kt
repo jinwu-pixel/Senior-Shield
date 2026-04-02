@@ -130,4 +130,43 @@ class BankArsRegistryTest {
         // 하지만 이 번호 자체가 등록되지 않았으므로 false
         assertFalse(registry.matches("8200"))
     }
+
+    // ── 커버리지 보완 ─────────────────────────────────────────────────
+
+    @Test
+    fun `length 8 초과 82 시작 번호 국가코드 제거 후 매칭`() {
+        // "8215889999": 10자리, 82로 시작, length(10) > 8 → "82" 제거 → "15889999" → 매칭
+        assertTrue(registry.matches("8215889999"))
+    }
+
+    @Test
+    fun `82 시작이지만 제거 후 8자리 이하 - 국가코드 제거 안 함`() {
+        // "82123456": 8자리, startsWith("82") && length(8) > 8 → false → 제거 안 함
+        // "82123456" 그대로 → 등록 번호 없음 → false
+        assertFalse(registry.matches("82123456"))
+    }
+
+    @Test
+    fun `짧은 숫자 입력 - false`() {
+        // "1234": 4자리 → 등록 번호 없음
+        assertFalse(registry.matches("1234"))
+    }
+
+    @Test
+    fun `전체 공백 입력 - false`() {
+        // "   ": 비숫자만 → normalize 후 빈 문자열 → 등록 번호 없음
+        assertFalse(registry.matches("   "))
+    }
+
+    @Test
+    fun `비숫자 문자만 입력 - false`() {
+        // "abc-def": 비숫자 제거 후 빈 문자열 → 등록 번호 없음
+        assertFalse(registry.matches("abc-def"))
+    }
+
+    @Test
+    fun `하이픈 포함 토스뱅크 번호 매칭`() {
+        // "1661-7654": 하이픈 제거 후 "16617654" → 토스뱅크 등록 번호
+        assertTrue(registry.matches("1661-7654"))
+    }
 }

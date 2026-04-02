@@ -4,6 +4,7 @@ import com.example.seniorshield.domain.model.AlertState
 import com.example.seniorshield.domain.model.RiskSignal
 import com.example.seniorshield.monitoring.session.RiskSession
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AlertStateResolverTest {
@@ -197,5 +198,63 @@ class AlertStateResolverTest {
             RiskSignal.HIGH_RISK_DEVICE_ENVIRONMENT,
         )
         assertEquals(AlertState.GUARDED, resolver.resolve(session))
+    }
+
+    // ── 커버리지 보완 ─────────────────────────────────────────────────
+
+    @Test
+    fun `TELEBANKING_AFTER_SUSPICIOUS 단독 TRIGGER 세션 - INTERRUPT`() {
+        // call 신호 없는 세션에서 TELEBANKING 단독 발생 → INTERRUPT
+        val session = session(RiskSignal.TELEBANKING_AFTER_SUSPICIOUS)
+        assertEquals(AlertState.INTERRUPT, resolver.resolve(session))
+    }
+
+    @Test
+    fun `BANKING_APP_OPENED_AFTER_REMOTE_APP 단독 TRIGGER - INTERRUPT`() {
+        // REMOTE_CONTROL_APP_OPENED 없이 BANKING_APP 단독 → REMOTE+BANKING 콤보 미성립 → INTERRUPT
+        val session = session(RiskSignal.BANKING_APP_OPENED_AFTER_REMOTE_APP)
+        assertEquals(AlertState.INTERRUPT, resolver.resolve(session))
+    }
+
+    @Test
+    fun `SUSPICIOUS_APP_INSTALLED + TELEBANKING_AFTER_SUSPICIOUS no call - INTERRUPT`() {
+        // call 신호 없는 세션에서 두 TRIGGER가 존재해도 REMOTE+BANKING 콤보가 아니면 INTERRUPT
+        val session = session(
+            RiskSignal.SUSPICIOUS_APP_INSTALLED,
+            RiskSignal.TELEBANKING_AFTER_SUSPICIOUS,
+        )
+        assertEquals(AlertState.INTERRUPT, resolver.resolve(session))
+    }
+
+    /**
+     * UNVERIFIED_CALLER only session은 call-based가 아니므로 banking cooldown 미발동
+     *
+     * 설계 결정 명문화:
+     * AlertStateResolver.CALL_SIGNALS에는 UNVERIFIED_CALLER가 포함되어 있다.
+     * 따라서 UNVERIFIED_CALLER 단독 세션은 call-based 세션으로 분류된다.
+     * 단, TRIGGER가 없으면 isHighConfidenceCombo 조건이 충족되지 않아 GUARDED를 반환한다.
+     * banking cooldown(TRIGGER 발동 조건)은 이 세션에서 활성화되지 않는다.
+     */
+    @Test
+    fun `UNVERIFIED_CALLER only session은 call-based가 아니므로 banking cooldown 미발동`() {
+        // UNVERIFIED_CALLER는 CALL_SIGNALS 멤버 — call-based 세션으로 분류됨
+        assertTrue(
+            "UNVERIFIED_CALLER는 AlertStateResolver.CALL_SIGNALS에 포함된다",
+            RiskSignal.UNVERIFIED_CALLER in AlertStateResolver.CALL_SIGNALS,
+        )
+        val session = session(RiskSignal.UNVERIFIED_CALLER)
+        // TRIGGER 없음 → 고신뢰 콤보 미성립 → GUARDED (banking cooldown 미발동)
+        assertEquals(AlertState.GUARDED, resolver.resolve(session))
+    }
+
+    @Test
+    fun `UNVERIFIED_CALLER + TRIGGER 조합 - CRITICAL`() {
+        // UNVERIFIED_CALLER는 CALL_SIGNALS에 포함 → call-based 세션.
+        // call-based 세션 + TRIGGER → isHighConfidenceCombo 성립 → CRITICAL
+        val session = session(
+            RiskSignal.UNVERIFIED_CALLER,
+            RiskSignal.SUSPICIOUS_APP_INSTALLED,
+        )
+        assertEquals(AlertState.CRITICAL, resolver.resolve(session))
     }
 }
