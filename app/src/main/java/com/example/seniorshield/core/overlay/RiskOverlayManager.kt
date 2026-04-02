@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
@@ -18,8 +19,10 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import com.example.seniorshield.MainActivity
 import com.example.seniorshield.core.util.CallEndHelper
+import com.example.seniorshield.domain.model.Guardian
 import com.example.seniorshield.domain.model.RiskEvent
 import com.example.seniorshield.domain.model.RiskLevel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -47,7 +50,7 @@ class RiskOverlayManager @Inject constructor(
 
     @Volatile private var overlayView: LinearLayout? = null
 
-    fun show(event: RiskEvent) {
+    fun show(event: RiskEvent, guardian: Guardian? = null) {
         if (!Settings.canDrawOverlays(context)) {
             Log.w(TAG, "SYSTEM_ALERT_WINDOW 권한 없음 — 팝업 생략")
             return
@@ -63,7 +66,7 @@ class RiskOverlayManager @Inject constructor(
                     return@post
                 }
             }
-            val (view, primaryButton) = buildView(event)
+            val (view, primaryButton) = buildView(event, guardian)
             val params = WindowManager.LayoutParams(
                 MATCH_PARENT,
                 MATCH_PARENT,
@@ -103,7 +106,7 @@ class RiskOverlayManager @Inject constructor(
         val primaryButton: Button,
     )
 
-    private fun buildView(event: RiskEvent): OverlayViews {
+    private fun buildView(event: RiskEvent, guardian: Guardian? = null): OverlayViews {
         val bgColor = when (event.level) {
             RiskLevel.CRITICAL -> Color.parseColor("#B71C1C")
             RiskLevel.HIGH     -> Color.parseColor("#BF360C")
@@ -214,6 +217,47 @@ class RiskOverlayManager @Inject constructor(
             }
         }
         buttonArea.addView(primaryBtn)
+
+        // 보조 버튼: 보호자에게 도움 요청 (guardian이 설정된 경우에만 표시)
+        if (guardian != null) {
+            buttonArea.addView(Button(context).apply {
+                text = "보호자에게 도움 요청"
+                textSize = 16f
+                setTextColor(Color.WHITE)
+                isFocusable = true
+                isFocusableInTouchMode = true
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = cornerPx
+                    setColor(Color.TRANSPARENT)
+                    setStroke(dp(2), Color.WHITE)
+                }
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(56)).apply {
+                    topMargin = dp(12)
+                }
+                setOnClickListener {
+                    val smsUri = Uri.parse("smsto:${guardian.phoneNumber}")
+                    val smsIntent = Intent(Intent.ACTION_SENDTO, smsUri).apply {
+                        putExtra("sms_body", "[시니어쉴드] 위험 경고가 떠서 연락드립니다. 송금이나 인증 전에 같이 확인해주세요.")
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    if (smsIntent.resolveActivity(context.packageManager) != null) {
+                        context.startActivity(smsIntent)
+                    } else {
+                        Toast.makeText(context, "이 기기에서는 문자 전송을 지원하지 않습니다", Toast.LENGTH_SHORT).show()
+                    }
+                    dismiss()
+                }
+                setOnFocusChangeListener { _, hasFocus ->
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.RECTANGLE
+                        cornerRadius = cornerPx
+                        setColor(Color.TRANSPARENT)
+                        setStroke(dp(if (hasFocus) 4 else 2), if (hasFocus) Color.YELLOW else Color.WHITE)
+                    }
+                }
+            })
+        }
 
         // 보조 버튼: 앱 열어서 확인하기
         buttonArea.addView(Button(context).apply {

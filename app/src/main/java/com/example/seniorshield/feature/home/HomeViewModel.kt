@@ -7,8 +7,10 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.seniorshield.domain.model.AlertState
+import com.example.seniorshield.domain.model.Guardian
 import com.example.seniorshield.domain.model.RiskLevel
 import com.example.seniorshield.domain.model.RiskSignal
+import com.example.seniorshield.domain.repository.GuardianRepository
 import com.example.seniorshield.domain.repository.RiskRepository
 import com.example.seniorshield.monitoring.orchestrator.AlertStateResolver
 import com.example.seniorshield.monitoring.session.RiskSessionTracker
@@ -34,6 +36,7 @@ class HomeViewModel @Inject constructor(
     private val riskRepository: RiskRepository,
     private val sessionTracker: RiskSessionTracker,
     private val alertStateResolver: AlertStateResolver,
+    private val guardianRepository: GuardianRepository,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -54,9 +57,13 @@ class HomeViewModel @Inject constructor(
         riskRepository.getRecentRiskEvents(),
         _hasCriticalPermissions,
         _weeklySnapshot,
-        combine(sessionTracker.sessionState, _guardedCardShownSessionId) { s, id -> s to id },
-    ) { current, recent, hasPermissions, weekly, sessionPair ->
-        val (session, shownId) = sessionPair
+        combine(
+            sessionTracker.sessionState,
+            _guardedCardShownSessionId,
+            guardianRepository.observeGuardians(),
+        ) { s, id, guardians -> Triple(s, id, guardians) },
+    ) { current, recent, hasPermissions, weekly, sessionTriple ->
+        val (session, shownId, guardians) = sessionTriple
         val baseBody = current?.title ?: "안전합니다. 감지된 위험이 없습니다."
         val summary = "최근 24시간: ${recent.size}건 · 이번 주: ${weekly.eventCount}건"
         val body = "$baseBody\n$summary"
@@ -69,6 +76,10 @@ class HomeViewModel @Inject constructor(
             else -> null
         }
 
+        val smsGuardian: Guardian? =
+            if (alertState.ordinal >= AlertState.INTERRUPT.ordinal) guardians.firstOrNull()
+            else null
+
         HomeUiState(
             currentRiskTitle = if (current != null) "위험 감지" else "현재 보호 상태",
             currentRiskBody = body,
@@ -78,6 +89,9 @@ class HomeViewModel @Inject constructor(
             weeklyEventCount = weekly.eventCount,
             weeklyTip = weekly.tip,
             guardedCard = guardedCard,
+            showSmsHelpButton = smsGuardian != null,
+            smsGuardianName = smsGuardian?.name ?: "",
+            smsGuardianPhone = smsGuardian?.phoneNumber ?: "",
         )
     }.stateIn(
         scope = viewModelScope,

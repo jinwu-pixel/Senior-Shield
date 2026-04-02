@@ -1,5 +1,8 @@
 package com.example.seniorshield.feature.home
 
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
@@ -40,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -106,6 +110,7 @@ private fun HomeContent(
     onNavigateSimulation: () -> Unit,
 ) {
     val hasActiveRisk = uiState.currentRiskLevel.ordinal >= RiskLevel.HIGH.ordinal
+    val context = LocalContext.current
 
     SeniorShieldScaffold(title = "시니어쉴드") { padding ->
         LazyColumn(
@@ -149,6 +154,31 @@ private fun HomeContent(
                 ) {
                     if (hasActiveRisk) {
                         PrimaryButton(text = "가족에게 바로 연락하기", onClick = onNavigateWarning)
+                    }
+                    if (uiState.showSmsHelpButton) {
+                        val guardianPhone = uiState.smsGuardianPhone
+                        val guardianName = uiState.smsGuardianName
+                        SecondaryButton(
+                            text = if (guardianName.isNotEmpty()) "${guardianName}에게 도움 요청" else "보호자에게 도움 요청",
+                            onClick = {
+                                val smsUri = Uri.parse("smsto:$guardianPhone")
+                                val smsIntent = Intent(Intent.ACTION_SENDTO, smsUri).apply {
+                                    putExtra(
+                                        "sms_body",
+                                        "[시니어쉴드] 위험 경고가 떠서 연락드립니다. 송금이나 인증 전에 같이 확인해주세요.",
+                                    )
+                                }
+                                if (smsIntent.resolveActivity(context.packageManager) != null) {
+                                    context.startActivity(smsIntent)
+                                } else {
+                                    Toast.makeText(
+                                        context,
+                                        "이 기기에서는 문자 전송을 지원하지 않습니다",
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                }
+                            },
+                        )
                     }
                     if (uiState.recentEventCount > 0) {
                         SecondaryButton(text = "전체 감지 기록 보기", onClick = onNavigateHistory)

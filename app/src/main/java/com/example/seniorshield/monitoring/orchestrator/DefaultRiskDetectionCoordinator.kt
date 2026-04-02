@@ -5,9 +5,11 @@ import com.example.seniorshield.core.notification.RiskNotificationManager
 import com.example.seniorshield.core.overlay.BankingCooldownManager
 import com.example.seniorshield.core.overlay.RiskOverlayManager
 import com.example.seniorshield.domain.model.AlertState
+import com.example.seniorshield.domain.model.Guardian
 import com.example.seniorshield.domain.model.RiskLevel
 import com.example.seniorshield.domain.model.RiskSignal
 import com.example.seniorshield.domain.model.SignalCategory
+import com.example.seniorshield.domain.repository.GuardianRepository
 import com.example.seniorshield.domain.repository.RiskEventSink
 import com.example.seniorshield.monitoring.appinstall.AppInstallRiskMonitor
 import com.example.seniorshield.monitoring.appusage.AppUsageRiskMonitor
@@ -21,6 +23,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -59,12 +62,16 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
     private val cooldownManager: BankingCooldownManager,
     private val sessionTracker: RiskSessionTracker,
     private val alertStateResolver: AlertStateResolver,
+    private val guardianRepository: GuardianRepository,
     private val ioDispatcher: CoroutineDispatcher,
 ) : RiskDetectionCoordinator {
 
     private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
     private var job: Job? = null
     @Volatile private var previousBankingForeground = false
+
+    private suspend fun firstGuardian(): Guardian? =
+        guardianRepository.observeGuardians().first().firstOrNull()
 
     override fun start() {
         if (job?.isActive == true) return
@@ -115,7 +122,7 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                         if (alertState.ordinal >= AlertState.INTERRUPT.ordinal &&
                             !bankingForeground && !cooldownManager.isShowing()
                         ) {
-                            overlayManager.show(event)
+                            overlayManager.show(event, firstGuardian())
                             sessionTracker.markActiveThreatsNotified(triggers)
                             popupShownThisTick = true
                             Log.d(TAG, "popup shown on state transition → $alertState")
@@ -132,7 +139,7 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                             val event = eventFactory.create(score, triggerSignals = newTriggers)
                             eventSink.pushRiskEvent(event)
                             notificationManager.notify(event)
-                            overlayManager.show(event)
+                            overlayManager.show(event, firstGuardian())
                             sessionTracker.markActiveThreatsNotified(triggers)
                             Log.d(TAG, "새 trigger 팝업: newTriggers=$newTriggers")
                         }
