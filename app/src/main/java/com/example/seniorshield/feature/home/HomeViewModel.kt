@@ -47,36 +47,25 @@ class HomeViewModel @Inject constructor(
     private val _weeklySnapshot = MutableStateFlow(WeeklySnapshot())
 
     /** GUARDED 카드를 이미 표시한 세션 ID. 세션당 1회만 노출. */
-    private var guardedCardShownSessionId: String? = null
+    private val _guardedCardShownSessionId = MutableStateFlow<String?>(null)
 
     val uiState: StateFlow<HomeUiState> = combine(
         riskRepository.getCurrentRiskEvent(),
         riskRepository.getRecentRiskEvents(),
         _hasCriticalPermissions,
         _weeklySnapshot,
-        sessionTracker.sessionState,
-    ) { current, recent, hasPermissions, weekly, session ->
+        combine(sessionTracker.sessionState, _guardedCardShownSessionId) { s, id -> s to id },
+    ) { current, recent, hasPermissions, weekly, sessionPair ->
+        val (session, shownId) = sessionPair
         val baseBody = current?.title ?: "안전합니다. 감지된 위험이 없습니다."
         val summary = "최근 24시간: ${recent.size}건 · 이번 주: ${weekly.eventCount}건"
         val body = "$baseBody\n$summary"
 
-        // GUARDED 카드: 세션당 1회, INTERRUPT/CRITICAL 진입 시 정리
         val alertState = alertStateResolver.resolve(session)
         val guardedCard = when {
             alertState == AlertState.GUARDED && session != null
-                    && guardedCardShownSessionId != session.id -> {
-                guardedCardShownSessionId = session.id
+                    && shownId == session.id ->
                 buildGuardedCard(session.accumulatedSignals)
-            }
-            alertState.ordinal >= AlertState.INTERRUPT.ordinal -> {
-                // INTERRUPT/CRITICAL 진입 시 카드 정리
-                null
-            }
-            alertState == AlertState.GUARDED && session != null
-                    && guardedCardShownSessionId == session.id -> {
-                // 이미 표시한 세션 — 유지
-                buildGuardedCard(session.accumulatedSignals)
-            }
             else -> null
         }
 
@@ -117,6 +106,16 @@ class HomeViewModel @Inject constructor(
 
     init {
         viewModelScope.launch { loadWeeklySnapshot() }
+        viewModelScope.launch {
+            sessionTracker.sessionState.collect { session ->
+                val alertState = alertStateResolver.resolve(session)
+                if (alertState == AlertState.GUARDED && session != null
+                    && _guardedCardShownSessionId.value != session.id
+                ) {
+                    _guardedCardShownSessionId.value = session.id
+                }
+            }
+        }
         viewModelScope.launch {
             riskRepository.getCurrentRiskEvent()
                 .filterNotNull()
