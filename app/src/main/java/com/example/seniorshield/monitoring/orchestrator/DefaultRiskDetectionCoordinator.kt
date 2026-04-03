@@ -89,6 +89,12 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                 .collect { (callSignals, appSignals, bankingForeground, installSignals, deviceEnvSignals) ->
                     Log.d(TAG, "combine fired — call=$callSignals, app=$appSignals, banking=$bankingForeground, install=$installSignals, deviceEnv=$deviceEnvSignals")
 
+                    // ── end-call suppression: IDLE 감지 시 안정화 타이머 시작 ──
+                    if (overlayManager.isEndCallSuppressed() && callSignals.isEmpty()) {
+                        overlayManager.scheduleSuppressionRelease()
+                        Log.d(TAG, "call became IDLE during suppression, stabilization scheduled")
+                    }
+
                     val session = sessionTracker.update(callSignals, appSignals + installSignals + deviceEnvSignals) ?: run {
                         Log.d(TAG, "no active session")
                         previousBankingForeground = bankingForeground
@@ -104,17 +110,27 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                         return@collect
                     }
 
+                    // ── end-call suppression 중 UI 액션 전체 스킵 ──────────
+                    if (overlayManager.isEndCallSuppressed()) {
+                        Log.d(TAG, "suppression active, skip popup/notification/cooldown")
+                        previousBankingForeground = bankingForeground
+                        return@collect
+                    }
+
                     val triggers = session.accumulatedSignals.filter { it.category == SignalCategory.TRIGGER }.toSet()
 
-                    // ── notification: AlertState 전이 시 1회만 ────────────────
+                    // ── notification: AlertState 전이 또는 RiskLevel 상승 시 ────
                     var popupShownThisTick = false
                     val prevAlertOrdinal = session.notifiedAlertState?.ordinal ?: -1
-                    if (alertState.ordinal > prevAlertOrdinal) {
+                    val prevLevelOrdinal = session.notifiedLevel?.ordinal ?: -1
+                    val alertEscalated = alertState.ordinal > prevAlertOrdinal
+                    val levelEscalated = score.level.ordinal > prevLevelOrdinal
+                    if (alertEscalated || levelEscalated) {
                         val event = eventFactory.create(score)
                         eventSink.pushRiskEvent(event)
-                        sessionTracker.markAlertStateNotified(alertState)
+                        if (alertEscalated) sessionTracker.markAlertStateNotified(alertState)
                         sessionTracker.markNotified(score.level)
-                        Log.d(TAG, "notification escalation: ${session.notifiedAlertState} → $alertState")
+                        Log.d(TAG, "notification escalation: alertState=${session.notifiedAlertState}→$alertState, level=${session.notifiedLevel}→${score.level}")
 
                         notificationManager.notify(event)
 

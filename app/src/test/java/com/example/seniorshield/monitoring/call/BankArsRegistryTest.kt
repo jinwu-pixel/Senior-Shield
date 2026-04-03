@@ -8,40 +8,78 @@ class BankArsRegistryTest {
 
     private val registry = BankArsRegistry()
 
-    // ── 정확한 번호 매칭 ─────────────────────────────────────────────
+    // ── 시중·특수은행 ──────────────────────────────────────────────
 
     @Test
     fun `KB국민은행 번호 매칭`() {
         assertTrue(registry.matches("15889999"))
         assertTrue(registry.matches("15999999"))
+        assertTrue(registry.matches("16449999"))
     }
 
     @Test
     fun `신한은행 번호 매칭`() {
         assertTrue(registry.matches("15778000"))
         assertTrue(registry.matches("15998000"))
+        assertTrue(registry.matches("15448000"))
     }
 
     @Test
     fun `우리은행 번호 매칭`() {
         assertTrue(registry.matches("15885000"))
+        assertTrue(registry.matches("15995000"))
+        assertTrue(registry.matches("15335000"))
     }
 
     @Test
     fun `하나은행 번호 매칭`() {
         assertTrue(registry.matches("15881111"))
+        assertTrue(registry.matches("15991111"))
     }
 
     @Test
     fun `NH농협은행 번호 매칭`() {
         assertTrue(registry.matches("15882100"))
         assertTrue(registry.matches("16613000"))
+        assertTrue(registry.matches("15223000"))
+    }
+
+    @Test
+    fun `지역농축협 번호 매칭`() {
+        assertTrue(registry.matches("16612100"))
+        assertTrue(registry.matches("15222100"))
+        assertTrue(registry.matches("1661-2100"))
     }
 
     @Test
     fun `IBK기업은행 번호 매칭`() {
         assertTrue(registry.matches("15882588"))
+        assertTrue(registry.matches("15662566"))
     }
+
+    @Test
+    fun `KDB산업은행 번호 매칭`() {
+        assertTrue(registry.matches("15881500"))
+        assertTrue(registry.matches("16681500"))
+    }
+
+    @Test
+    fun `SC제일은행 번호 매칭`() {
+        assertTrue(registry.matches("15881599"))
+    }
+
+    @Test
+    fun `한국씨티은행 번호 매칭`() {
+        assertTrue(registry.matches("15887000"))
+    }
+
+    @Test
+    fun `수협은행 번호 매칭`() {
+        assertTrue(registry.matches("15881515"))
+        assertTrue(registry.matches("16441515"))
+    }
+
+    // ── 인터넷전문은행 ─────────────────────────────────────────────
 
     @Test
     fun `카카오뱅크 번호 매칭`() {
@@ -54,18 +92,64 @@ class BankArsRegistryTest {
     }
 
     @Test
-    fun `SC제일은행 번호 매칭`() {
-        assertTrue(registry.matches("15881599"))
-    }
-
-    @Test
     fun `케이뱅크 번호 매칭`() {
         assertTrue(registry.matches("15221000"))
     }
 
+    // ── 지방은행 ──────────────────────────────────────────────────
+
     @Test
-    fun `수협은행 번호 매칭`() {
-        assertTrue(registry.matches("15881515"))
+    fun `iM뱅크 대구 번호 매칭`() {
+        assertTrue(registry.matches("15665050"))
+        assertTrue(registry.matches("15885050"))
+    }
+
+    @Test
+    fun `BNK부산은행 번호 매칭`() {
+        assertTrue(registry.matches("15886200"))
+        assertTrue(registry.matches("15446200"))
+    }
+
+    @Test
+    fun `BNK경남은행 번호 매칭`() {
+        assertTrue(registry.matches("16008585"))
+        assertTrue(registry.matches("15888585"))
+    }
+
+    @Test
+    fun `광주은행 번호 매칭`() {
+        assertTrue(registry.matches("15883388"))
+        assertTrue(registry.matches("16004000"))
+    }
+
+    @Test
+    fun `전북은행 번호 매칭`() {
+        assertTrue(registry.matches("15884477"))
+    }
+
+    @Test
+    fun `제주은행 번호 매칭`() {
+        assertTrue(registry.matches("15880079"))
+    }
+
+    // ── 상호금융·우체국 ────────────────────────────────────────────
+
+    @Test
+    fun `새마을금고 번호 매칭`() {
+        assertTrue(registry.matches("15888801"))
+        assertTrue(registry.matches("15999000"))
+    }
+
+    @Test
+    fun `신협 번호 매칭`() {
+        assertTrue(registry.matches("15666000"))
+        assertTrue(registry.matches("16446000"))
+    }
+
+    @Test
+    fun `우체국예금 번호 매칭`() {
+        assertTrue(registry.matches("15991900"))
+        assertTrue(registry.matches("15881900"))
     }
 
     // ── 번호 정규화 ─────────────────────────────────────────────────

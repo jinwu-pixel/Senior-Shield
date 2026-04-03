@@ -31,6 +31,15 @@ import javax.inject.Singleton
 
 private const val TAG = "SeniorShield-Overlay"
 
+/** dismiss() 후 endCall() 호출까지 지연 시간. 오버레이 제거가 완료된 뒤 통화 종료. */
+private const val END_CALL_AFTER_DISMISS_DELAY_MS = 150L
+
+/** IDLE 감지 후 suppression 유지 시간. 다이얼러 정리 시퀀스 안정화 대기. */
+private const val POST_CALL_UI_STABILIZATION_MS = 500L
+
+/** IDLE이 감지되지 않을 경우 suppression 강제 해제 (안전 타임아웃). */
+private const val MAX_END_CALL_SUPPRESSION_MS = 3_000L
+
 /**
  * 위험 감지 시 화면 전체를 덮는 경고 팝업을 표시한다.
  *
@@ -50,7 +59,16 @@ class RiskOverlayManager @Inject constructor(
 
     @Volatile private var overlayView: LinearLayout? = null
 
+    // ── end-call suppression state ──────────────────────────────────
+    @Volatile private var endCallSuppressionActive = false
+    @Volatile private var idleStabilizationScheduled = false
+    private var suppressionReleaseRunnable: Runnable? = null
+
     fun show(event: RiskEvent, guardian: Guardian? = null) {
+        if (endCallSuppressionActive) {
+            Log.d(TAG, "suppression active, skip risk popup")
+            return
+        }
         if (!Settings.canDrawOverlays(context)) {
             Log.w(TAG, "SYSTEM_ALERT_WINDOW 권한 없음 — 팝업 생략")
             return
@@ -97,6 +115,49 @@ class RiskOverlayManager @Inject constructor(
                 overlayView = null
             }
         }
+    }
+
+    // ── end-call suppression ───────────────────────────────────────
+
+    /** coordinator가 UI 억제 여부를 확인할 때 사용. */
+    fun isEndCallSuppressed(): Boolean = endCallSuppressionActive
+
+    /**
+     * "지금 전화 끊기" 버튼 탭 시 호출.
+     * 안전 타임아웃을 건 뒤, IDLE 감지 또는 타임아웃 도래 시 해제된다.
+     */
+    private fun startEndCallSuppression() {
+        endCallSuppressionActive = true
+        idleStabilizationScheduled = false
+        suppressionReleaseRunnable?.let { mainHandler.removeCallbacks(it) }
+        val safetyRelease = Runnable {
+            endCallSuppressionActive = false
+            idleStabilizationScheduled = false
+            suppressionReleaseRunnable = null
+            Log.d(TAG, "suppression force-released (safety timeout)")
+        }
+        suppressionReleaseRunnable = safetyRelease
+        mainHandler.postDelayed(safetyRelease, MAX_END_CALL_SUPPRESSION_MS)
+        Log.d(TAG, "end-call suppression started")
+    }
+
+    /**
+     * coordinator가 IDLE(callSignals 비어짐)을 감지하면 호출.
+     * 안전 타임아웃을 취소하고 짧은 안정화 지연 후 suppression 해제.
+     */
+    fun scheduleSuppressionRelease() {
+        if (!endCallSuppressionActive || idleStabilizationScheduled) return
+        idleStabilizationScheduled = true
+        suppressionReleaseRunnable?.let { mainHandler.removeCallbacks(it) }
+        val release = Runnable {
+            endCallSuppressionActive = false
+            idleStabilizationScheduled = false
+            suppressionReleaseRunnable = null
+            Log.d(TAG, "suppression released after stabilization")
+        }
+        suppressionReleaseRunnable = release
+        mainHandler.postDelayed(release, POST_CALL_UI_STABILIZATION_MS)
+        Log.d(TAG, "call became IDLE, suppression release in ${POST_CALL_UI_STABILIZATION_MS}ms")
     }
 
     // ── 레이아웃 ─────────────────────────────────────────────────
@@ -204,8 +265,14 @@ class RiskOverlayManager @Inject constructor(
             }
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(60))
             setOnClickListener {
-                callEndHelper.endCurrentCall()
+                Log.d(TAG, "end-call button clicked")
                 dismiss()
+                Log.d(TAG, "overlay dismissed before endCall")
+                startEndCallSuppression()
+                mainHandler.postDelayed({
+                    Log.d(TAG, "delayed endCall executed")
+                    callEndHelper.endCurrentCall()
+                }, END_CALL_AFTER_DISMISS_DELAY_MS)
             }
             setOnFocusChangeListener { _, hasFocus ->
                 background = GradientDrawable().apply {
