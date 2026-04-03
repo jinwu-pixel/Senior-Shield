@@ -26,6 +26,12 @@ private const val TAG = "SeniorShield-CallEnd"
 class CallEndHelper @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
+    /** 현재 통화 중인지 동기적으로 확인한다. */
+    fun isInCall(): Boolean {
+        val telecom = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+        return telecom?.isInCall ?: false
+    }
+
     fun endCurrentCall() {
         val telecom = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && tryEndCallApi28(telecom)) return

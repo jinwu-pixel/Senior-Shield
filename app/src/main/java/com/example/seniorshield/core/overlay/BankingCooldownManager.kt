@@ -43,6 +43,7 @@ private const val TAG = "SeniorShield-Cooldown"
 class BankingCooldownManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val callEndHelper: CallEndHelper,
+    private val overlayManager: RiskOverlayManager,
 ) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -57,7 +58,7 @@ class BankingCooldownManager @Inject constructor(
     fun triggerPreview(countdownSec: Int) {
         if (isShowing()) return
         if (!Settings.canDrawOverlays(context)) return
-        mainHandler.post { startCooldown(countdownSec, RiskLevel.HIGH, null) }
+        mainHandler.post { startCooldown(countdownSec, RiskLevel.HIGH, null, isCallActive = false) }
     }
 
     /**
@@ -65,8 +66,9 @@ class BankingCooldownManager @Inject constructor(
      * 이미 표시 중이거나 SYSTEM_ALERT_WINDOW 권한이 없으면 생략한다.
      *
      * @param reason 쿨다운 이유 설명 — 현재 세션 컨텍스트에 맞는 사용자 설명형 문구.
+     * @param isCallActive true이면 "전화 끊기" CTA 포함, false이면 "확인했습니다" CTA로 다운그레이드.
      */
-    fun triggerIfNotActive(level: RiskLevel, reason: String? = null) {
+    fun triggerIfNotActive(level: RiskLevel, reason: String? = null, isCallActive: Boolean = true) {
         if (isShowing()) {
             Log.d(TAG, "already showing — skipped")
             return
@@ -80,12 +82,12 @@ class BankingCooldownManager @Inject constructor(
             RiskLevel.HIGH -> 30
             else -> 10
         }
-        Log.d(TAG, "쿨다운 발동: level=$level, countdown=${countdownSec}초, reason=$reason")
-        mainHandler.post { startCooldown(countdownSec, level, reason) }
+        Log.d(TAG, "쿨다운 발동: level=$level, countdown=${countdownSec}초, reason=$reason, isCallActive=$isCallActive")
+        mainHandler.post { startCooldown(countdownSec, level, reason, isCallActive) }
     }
 
-    private fun startCooldown(countdownSec: Int, level: RiskLevel, reason: String?) {
-        val (root, countdownText, bottomText, endCallButton) = buildView(countdownSec, level, reason)
+    private fun startCooldown(countdownSec: Int, level: RiskLevel, reason: String?, isCallActive: Boolean) {
+        val (root, countdownText, bottomText, endCallButton) = buildView(countdownSec, level, reason, isCallActive)
         val params = WindowManager.LayoutParams(
             MATCH_PARENT, MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
@@ -137,7 +139,7 @@ class BankingCooldownManager @Inject constructor(
         val endCallButton: Button,
     )
 
-    private fun buildView(countdownSec: Int, level: RiskLevel, reason: String?): CooldownViews {
+    private fun buildView(countdownSec: Int, level: RiskLevel, reason: String?, isCallActive: Boolean): CooldownViews {
         val bg = when (level) {
             RiskLevel.CRITICAL -> Color.parseColor("#B71C1C")
             else -> Color.parseColor("#BF360C")
@@ -235,7 +237,7 @@ class BankingCooldownManager @Inject constructor(
 
         root.addView(contentArea)
 
-        // ── 버튼 영역: "전화 끊기" ──────────────────────────────────
+        // ── 버튼 영역 ──────────────────────────────────────────────
         val buttonArea = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)
@@ -243,8 +245,10 @@ class BankingCooldownManager @Inject constructor(
         }
 
         val cornerPx = dp(8).toFloat()
-        val endCallBtn = Button(context).apply {
-            text = "지금 전화 끊기"
+        // 통화 중: "전화 앱으로 이동" — 사용자가 직접 종료
+        // 통화 종료 후: "확인했습니다" — 즉시 dismiss
+        val actionBtn = Button(context).apply {
+            text = if (isCallActive) "전화 앱으로 이동" else "확인했습니다"
             textSize = 18f
             setTextColor(bg)
             setTypeface(null, Typeface.BOLD)
@@ -257,7 +261,13 @@ class BankingCooldownManager @Inject constructor(
             }
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(60))
             setOnClickListener {
-                callEndHelper.endCurrentCall()
+                countdownJob?.cancel()
+                countdownJob = null
+                if (callEndHelper.isInCall()) {
+                    Log.d(TAG, "opening dialer for manual call end")
+                    val telecom = context.getSystemService(Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
+                    telecom?.showInCallScreen(false)
+                }
                 dismiss()
             }
             setOnFocusChangeListener { _, hasFocus ->
@@ -269,11 +279,11 @@ class BankingCooldownManager @Inject constructor(
                 }
             }
         }
-        buttonArea.addView(endCallBtn)
+        buttonArea.addView(actionBtn)
 
         root.addView(buttonArea)
 
-        return CooldownViews(root, countdownText, bottomText, endCallBtn)
+        return CooldownViews(root, countdownText, bottomText, actionBtn)
     }
 
     private fun dp(value: Int): Int =

@@ -110,6 +110,11 @@ class RiskSessionTracker @Inject constructor() {
         Log.d(TAG, "notifiedActiveThreats updated → $threats")
     }
 
+    fun markCooldownConsumed() {
+        session = session?.copy(cooldownConsumedAt = System.currentTimeMillis())
+        Log.d(TAG, "cooldownConsumedAt updated")
+    }
+
     /** 사용자 "안전 확인" — 세션 즉시 종료. */
     fun reset() {
         val id = session?.id

@@ -166,9 +166,18 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                     if (bankingJustOpened && alertState.ordinal >= AlertState.GUARDED.ordinal) {
                         val isCallBased = session.accumulatedSignals.any { it in AlertStateResolver.CALL_SIGNALS }
                         if (isCallBased) {
-                            val reason = buildCooldownReason(session.accumulatedSignals)
-                            cooldownManager.triggerIfNotActive(score.level, reason)
-                            Log.d(TAG, "뱅킹 쿨다운 발동: level=${score.level}, alertState=$alertState, reason=$reason")
+                            // 동일 세션 내 재발동 방지: 새 신호 없이 banking 재진입만으로 반복하지 않음
+                            val consumed = session.cooldownConsumedAt
+                            val hasNewSignals = consumed == null || session.lastSignalAt > consumed
+                            if (hasNewSignals) {
+                                val reason = buildCooldownReason(session.accumulatedSignals)
+                                val isCallActive = callSignals.isNotEmpty()
+                                cooldownManager.triggerIfNotActive(score.level, reason, isCallActive)
+                                sessionTracker.markCooldownConsumed()
+                                Log.d(TAG, "뱅킹 쿨다운 발동: level=${score.level}, alertState=$alertState, isCallActive=$isCallActive, reason=$reason")
+                            } else {
+                                Log.d(TAG, "뱅킹 쿨다운 생략: 동일 세션 내 재발동 (새 신호 없음)")
+                            }
                         } else {
                             Log.d(TAG, "뱅킹 쿨다운 생략: call-based 세션 아님")
                         }

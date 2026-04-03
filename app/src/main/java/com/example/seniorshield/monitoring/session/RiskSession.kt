@@ -30,4 +30,6 @@ data class RiskSession(
     val notifiedActiveThreats: Set<RiskSignal> = emptySet(),
     /** TRIGGER 신호가 한 번이라도 발생했으면 true — TTL 60분 적용. */
     val hasTrigger: Boolean = false,
+    /** 이 세션에서 쿨다운이 마지막으로 소비된 시각. 동일 세션 내 재발동 방지에 사용. */
+    val cooldownConsumedAt: Long? = null,
 )

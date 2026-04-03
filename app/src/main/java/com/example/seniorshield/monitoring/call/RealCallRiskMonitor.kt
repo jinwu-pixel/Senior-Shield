@@ -266,6 +266,7 @@ class RealCallRiskMonitor @Inject constructor(
         var capturedPhoneNumber: String? = null
         var isUnknownCaller: Boolean? = null
         var isVerifiedCaller: Boolean? = null
+        var isOutgoing = false
 
         // BroadcastReceiver로 수신 번호를 캡처한다.
         // EXTRA_INCOMING_NUMBER는 API 29+에서 READ_CALL_LOG 권한이 필요하다.
@@ -320,7 +321,10 @@ class RealCallRiskMonitor @Inject constructor(
                 val ctx = buildContext(
                     previousState, newState, offhookAtMillis,
                     capturedPhoneNumber, isUnknownCaller, isVerifiedCaller,
-                ) { offhookAtMillis = it }
+                    isOutgoing,
+                    onOffhookUpdated = { offhookAtMillis = it },
+                    onOutgoingUpdated = { isOutgoing = it },
+                )
                 previousState = newState
                 if (newState == CallState.IDLE) {
                     capturedPhoneNumber = null
@@ -354,7 +358,10 @@ class RealCallRiskMonitor @Inject constructor(
             val seedCtx = buildContext(
                 CallState.IDLE, currentCallState, offhookAtMillis,
                 capturedPhoneNumber, isUnknownCaller, isVerifiedCaller,
-            ) { offhookAtMillis = it }
+                isOutgoing,
+                onOffhookUpdated = { offhookAtMillis = it },
+                onOutgoingUpdated = { isOutgoing = it },
+            )
             previousState = currentCallState
             if (seedCtx != null) {
                 trySend(seedCtx)
@@ -396,6 +403,7 @@ class RealCallRiskMonitor @Inject constructor(
         var capturedPhoneNumber: String? = null
         var isUnknownCaller: Boolean? = null
         var isVerifiedCaller: Boolean? = null
+        var isOutgoing = false
 
         val listener = object : PhoneStateListener() {
             @Deprecated("Deprecated in Java")
@@ -416,7 +424,10 @@ class RealCallRiskMonitor @Inject constructor(
                 val ctx = buildContext(
                     previousState, newState, offhookAtMillis,
                     capturedPhoneNumber, isUnknownCaller, isVerifiedCaller,
-                ) { offhookAtMillis = it }
+                    isOutgoing,
+                    onOffhookUpdated = { offhookAtMillis = it },
+                    onOutgoingUpdated = { isOutgoing = it },
+                )
                 previousState = newState
 
                 // IDLE 전환 후 리셋 (buildContext가 먼저 값을 사용한 뒤 초기화)
@@ -450,7 +461,9 @@ class RealCallRiskMonitor @Inject constructor(
         phoneNumber: String?,
         isUnknownCaller: Boolean?,
         isVerifiedCaller: Boolean?,
+        isOutgoing: Boolean,
         onOffhookUpdated: (Long?) -> Unit,
+        onOutgoingUpdated: (Boolean) -> Unit,
     ): CallContext? = when (next) {
         CallState.RINGING -> CallContext(
             state = CallState.RINGING,
@@ -467,6 +480,7 @@ class RealCallRiskMonitor @Inject constructor(
             val now = System.currentTimeMillis()
             onOffhookUpdated(now)
             val outgoing = previous == CallState.IDLE
+            onOutgoingUpdated(outgoing)
             Log.d(TAG, "call connected, startedAtMillis=$now, isOutgoing=$outgoing, isUnknownCaller=$isUnknownCaller, isVerifiedCaller=$isVerifiedCaller")
             CallContext(
                 state = CallState.OFFHOOK,
@@ -487,8 +501,9 @@ class RealCallRiskMonitor @Inject constructor(
                 CallState.OFFHOOK -> {
                     val durationMs = offhookAtMillis?.let { now - it } ?: 0L
                     val durationSec = durationMs / 1000L
-                    Log.d(TAG, "call ended (OFFHOOK→IDLE), durationMs=$durationMs, durationSec=$durationSec, isUnknownCaller=$isUnknownCaller, isVerifiedCaller=$isVerifiedCaller")
+                    Log.d(TAG, "call ended (OFFHOOK→IDLE), durationMs=$durationMs, durationSec=$durationSec, isUnknownCaller=$isUnknownCaller, isVerifiedCaller=$isVerifiedCaller, isOutgoing=$isOutgoing")
                     onOffhookUpdated(null)
+                    onOutgoingUpdated(false)
                     CallContext(
                         state = CallState.IDLE,
                         phoneNumber = phoneNumber,
@@ -498,11 +513,13 @@ class RealCallRiskMonitor @Inject constructor(
                         durationSec = durationSec,
                         isUnknownCaller = isUnknownCaller,
                         isVerifiedCaller = isVerifiedCaller,
+                        isOutgoing = isOutgoing,
                     )
                 }
                 CallState.RINGING -> {
                     Log.d(TAG, "missed/rejected call (RINGING→IDLE)")
                     onOffhookUpdated(null)
+                    onOutgoingUpdated(false)
                     CallContext(
                         state = CallState.IDLE,
                         phoneNumber = phoneNumber,
@@ -512,6 +529,7 @@ class RealCallRiskMonitor @Inject constructor(
                         durationSec = 0L,
                         isUnknownCaller = isUnknownCaller,
                         isVerifiedCaller = isVerifiedCaller,
+                        isOutgoing = isOutgoing,
                     )
                 }
                 CallState.IDLE -> null

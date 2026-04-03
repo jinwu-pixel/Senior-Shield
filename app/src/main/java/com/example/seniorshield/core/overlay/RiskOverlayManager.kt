@@ -31,11 +31,8 @@ import javax.inject.Singleton
 
 private const val TAG = "SeniorShield-Overlay"
 
-/** dismiss() 후 endCall() 호출까지 지연 시간. 오버레이 제거가 완료된 뒤 통화 종료. */
-private const val END_CALL_AFTER_DISMISS_DELAY_MS = 150L
-
-/** IDLE 감지 후 suppression 유지 시간. 다이얼러 정리 시퀀스 안정화 대기. */
-private const val POST_CALL_UI_STABILIZATION_MS = 500L
+/** IDLE 감지 후 suppression 유지 시간. 다이얼러 InCallFragment 정리 시퀀스 완료 대기. */
+private const val POST_CALL_UI_STABILIZATION_MS = 1_000L
 
 /** IDLE이 감지되지 않을 경우 suppression 강제 해제 (안전 타임아웃). */
 private const val MAX_END_CALL_SUPPRESSION_MS = 3_000L
@@ -63,6 +60,7 @@ class RiskOverlayManager @Inject constructor(
     @Volatile private var endCallSuppressionActive = false
     @Volatile private var idleStabilizationScheduled = false
     private var suppressionReleaseRunnable: Runnable? = null
+    private var onSuppressionReleased: (() -> Unit)? = null
 
     fun show(event: RiskEvent, guardian: Guardian? = null) {
         if (endCallSuppressionActive) {
@@ -125,16 +123,20 @@ class RiskOverlayManager @Inject constructor(
     /**
      * "지금 전화 끊기" 버튼 탭 시 호출.
      * 안전 타임아웃을 건 뒤, IDLE 감지 또는 타임아웃 도래 시 해제된다.
+     * BankingCooldownManager에서도 동일 보호가 필요하므로 internal.
      */
-    private fun startEndCallSuppression() {
+    internal fun startEndCallSuppression(onReleased: (() -> Unit)? = null) {
         endCallSuppressionActive = true
         idleStabilizationScheduled = false
+        onSuppressionReleased = onReleased
         suppressionReleaseRunnable?.let { mainHandler.removeCallbacks(it) }
         val safetyRelease = Runnable {
             endCallSuppressionActive = false
             idleStabilizationScheduled = false
             suppressionReleaseRunnable = null
             Log.d(TAG, "suppression force-released (safety timeout)")
+            onSuppressionReleased?.invoke()
+            onSuppressionReleased = null
         }
         suppressionReleaseRunnable = safetyRelease
         mainHandler.postDelayed(safetyRelease, MAX_END_CALL_SUPPRESSION_MS)
@@ -154,6 +156,8 @@ class RiskOverlayManager @Inject constructor(
             idleStabilizationScheduled = false
             suppressionReleaseRunnable = null
             Log.d(TAG, "suppression released after stabilization")
+            onSuppressionReleased?.invoke()
+            onSuppressionReleased = null
         }
         suppressionReleaseRunnable = release
         mainHandler.postDelayed(release, POST_CALL_UI_STABILIZATION_MS)
@@ -249,10 +253,11 @@ class RiskOverlayManager @Inject constructor(
             setPadding(dp(24), dp(16), dp(24), dp(48))
         }
 
-        // 주 버튼: 지금 전화 끊기
+        // 주 버튼: 통화 중이면 "전화 앱으로 이동", 아니면 "확인했습니다"
         val cornerPx = dp(8).toFloat()
+        val inCall = callEndHelper.isInCall()
         val primaryBtn = Button(context).apply {
-            text = "지금 전화 끊기"
+            text = if (inCall) "전화 앱으로 이동" else "확인했습니다"
             textSize = 18f
             setTextColor(bgColor)
             setTypeface(null, Typeface.BOLD)
@@ -265,14 +270,12 @@ class RiskOverlayManager @Inject constructor(
             }
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(60))
             setOnClickListener {
-                Log.d(TAG, "end-call button clicked")
+                if (callEndHelper.isInCall()) {
+                    Log.d(TAG, "opening dialer for manual call end")
+                    val telecom = context.getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager
+                    telecom.showInCallScreen(false)
+                }
                 dismiss()
-                Log.d(TAG, "overlay dismissed before endCall")
-                startEndCallSuppression()
-                mainHandler.postDelayed({
-                    Log.d(TAG, "delayed endCall executed")
-                    callEndHelper.endCurrentCall()
-                }, END_CALL_AFTER_DISMISS_DELAY_MS)
             }
             setOnFocusChangeListener { _, hasFocus ->
                 background = GradientDrawable().apply {
