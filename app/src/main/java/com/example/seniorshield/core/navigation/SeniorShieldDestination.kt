@@ -10,6 +10,7 @@ object SeniorShieldDestination {
     const val POLICY = "policy"
     const val SETTINGS = "settings"
     const val GUARDIAN = "guardian"
+    const val GUARDIAN_ADD = "guardian_add"
     const val SIMULATION_LIST = "simulation_list"
     const val SIMULATION_PLAY = "simulation_play"
 }

@@ -18,25 +18,15 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraphBuilder
@@ -48,7 +38,7 @@ import com.example.seniorshield.core.navigation.SeniorShieldDestination
 import com.example.seniorshield.core.util.ContactIntentHelper
 import com.example.seniorshield.domain.model.Guardian
 
-fun NavGraphBuilder.guardianScreen(onBack: () -> Unit) {
+fun NavGraphBuilder.guardianScreen(onBack: () -> Unit, onNavigateAdd: () -> Unit) {
     composable(route = SeniorShieldDestination.GUARDIAN) {
         val viewModel: GuardianViewModel = hiltViewModel()
         val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -56,9 +46,7 @@ fun NavGraphBuilder.guardianScreen(onBack: () -> Unit) {
 
         GuardianContent(
             uiState = uiState,
-            onAddClick = viewModel::showAddDialog,
-            onDismissDialog = viewModel::hideAddDialog,
-            onConfirmAdd = viewModel::addGuardian,
+            onAddClick = onNavigateAdd,
             onRemove = viewModel::removeGuardian,
             onBack = onBack,
             onSmsClick = {
@@ -100,8 +88,6 @@ fun NavGraphBuilder.guardianScreen(onBack: () -> Unit) {
 private fun GuardianContent(
     uiState: GuardianUiState,
     onAddClick: () -> Unit,
-    onDismissDialog: () -> Unit,
-    onConfirmAdd: (String, String, String) -> Unit,
     onRemove: (String) -> Unit,
     onBack: () -> Unit,
     onSmsClick: () -> Unit,
@@ -156,13 +142,6 @@ private fun GuardianContent(
                 }
             }
         }
-    }
-
-    if (uiState.showAddDialog) {
-        AddGuardianDialog(
-            onDismiss = onDismissDialog,
-            onConfirm = onConfirmAdd,
-        )
     }
 
     if (uiState.showSmsPicker) {
@@ -234,71 +213,3 @@ private fun SmsGuardianPickerDialog(
     )
 }
 
-@Composable
-private fun AddGuardianDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (String, String, String) -> Unit,
-) {
-    var name by remember { mutableStateOf("") }
-    var phone by remember { mutableStateOf("") }
-    var relationship by remember { mutableStateOf("") }
-
-    val phoneFocus = remember { FocusRequester() }
-    val relationshipFocus = remember { FocusRequester() }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("보호자 추가") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("이름") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    keyboardActions = KeyboardActions(onNext = { phoneFocus.requestFocus() }),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = phone,
-                    onValueChange = { phone = it },
-                    label = { Text("전화번호") },
-                    placeholder = { Text("010-1234-5678") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Phone,
-                        imeAction = ImeAction.Next,
-                    ),
-                    keyboardActions = KeyboardActions(onNext = { relationshipFocus.requestFocus() }),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(phoneFocus),
-                )
-                OutlinedTextField(
-                    value = relationship,
-                    onValueChange = { relationship = it },
-                    label = { Text("관계 (선택)") },
-                    placeholder = { Text("예: 아들, 딸") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = {
-                        if (name.isNotBlank() && phone.isNotBlank()) onConfirm(name, phone, relationship)
-                    }),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(relationshipFocus),
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(name, phone, relationship) },
-                enabled = name.isNotBlank() && phone.isNotBlank(),
-            ) { Text("등록") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("취소") }
-        },
-    )
-}
