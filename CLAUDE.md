@@ -61,7 +61,7 @@ data/
 monitoring/
   evaluator/    → RiskEvaluator (interface), RiskEvaluatorImpl
   call/         → CallRiskMonitor, RealCallRiskMonitor, CallSignalMapper, CallerContactChecker, BankArsRegistry
-  appusage/     → AppUsageRiskMonitor, RealAppUsageRiskMonitor, FakeAppUsageRiskMonitor
+  appusage/     → AppUsageRiskMonitor, RealAppUsageRiskMonitor
   appinstall/   → AppInstallRiskMonitor, RealAppInstallRiskMonitor
   deviceenv/    → DeviceEnvironmentRiskMonitor, RealDeviceEnvironmentRiskMonitor
   orchestrator/ → RiskDetectionCoordinator, DefaultRiskDetectionCoordinator, AlertStateResolver
@@ -89,7 +89,6 @@ core/
   designsystem/ → Theme, Color, Type, SeniorShieldScaffold, StatusCard, LargeActionButton
   notification/ → RiskNotificationManager
   overlay/      → RiskOverlayManager, BankingCooldownManager
-  sms/          → GuardianSmsManager (비활성화됨)
   util/         → CallEndHelper
 
 di/             → AppModule
@@ -149,12 +148,11 @@ Tech: Min SDK 26, Target SDK 34, Kotlin 1.9.24, JVM 17, Compose + Material3, Nav
 
 ## SMS 방향 결정: 공개판에서 제거 (B안 확정)
 
-- GuardianSmsManager 비활성화 (코드 보존, 호출 차단)
+- GuardianSmsManager 삭제 완료 (2026-04-07)
 - SEND_SMS 권한 AndroidManifest에서 제거
 - 보호자 연락 = ACTION_DIAL만 유지
-- **자동 SMS 관련** 설정 토글 UI에서 숨김 (smsAlertEnabled)
-- 이 결정은 제품 원칙 "자동 메시지 발송 금지"와 일치한다
-- 단, 수동 문자 보내기 메뉴 토글(smsMenuEnabled, 기본 OFF)은 별도 — ACTION_SENDTO 방식으로 원칙 위반 아님
+- 자동 SMS 관련 코드 및 설정(smsAlertEnabled) 전량 제거됨
+- 수동 문자 보내기 메뉴 토글(smsMenuEnabled, 기본 OFF)은 유지 — ACTION_SENDTO 방식으로 원칙 위반 아님
 
 ---
 

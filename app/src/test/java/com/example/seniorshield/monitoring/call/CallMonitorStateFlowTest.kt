@@ -288,17 +288,4 @@ class CallMonitorStateFlowTest {
         job.cancel()
     }
 
-    // ── 9. FakeCallRiskMonitor 반환 타입 검증 ────────────────────────────────────
-
-    @Test
-    fun `FakeCallRiskMonitor - Idle 반환`() = runTest {
-        val fake = FakeCallRiskMonitor()
-        val results = mutableListOf<CallMonitorState>()
-        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
-            fake.observeCallContext().toList(results)
-        }
-        assertTrue(results.isNotEmpty())
-        assertEquals(CallMonitorState.Idle, results.first())
-        job.cancel()
-    }
 }
