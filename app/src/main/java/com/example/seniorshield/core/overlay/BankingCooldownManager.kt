@@ -54,6 +54,13 @@ class BankingCooldownManager @Inject constructor(
 
     fun isShowing(): Boolean = overlayView != null
 
+    /** 세션 종료(안전 확인, TTL 만료) 시 표시 중인 쿨다운을 즉시 닫는다. */
+    fun dismissIfShowing() {
+        if (!isShowing()) return
+        mainHandler.post { dismiss() }
+        Log.d(TAG, "dismissIfShowing — 세션 종료로 쿨다운 해제")
+    }
+
     /** 디버그/미리보기 전용. 지정된 초 수만큼 HIGH 레벨로 쿨다운을 표시한다. */
     fun triggerPreview(countdownSec: Int) {
         if (isShowing()) return
@@ -253,7 +260,6 @@ class BankingCooldownManager @Inject constructor(
             setTextColor(bg)
             setTypeface(null, Typeface.BOLD)
             isFocusable = true
-            isFocusableInTouchMode = true
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = cornerPx

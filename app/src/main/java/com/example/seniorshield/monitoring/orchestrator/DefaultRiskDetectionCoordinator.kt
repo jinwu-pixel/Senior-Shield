@@ -96,7 +96,10 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                     }
 
                     val session = sessionTracker.update(callSignals, appSignals + installSignals + deviceEnvSignals) ?: run {
-                        Log.d(TAG, "no active session")
+                        Log.d(TAG, "no active session — dismiss overlay/cooldown if showing")
+                        overlayManager.dismiss()
+                        cooldownManager.dismissIfShowing()
+                        eventSink.clearCurrentRiskEvent()
                         previousBankingForeground = bankingForeground
                         return@collect
                     }

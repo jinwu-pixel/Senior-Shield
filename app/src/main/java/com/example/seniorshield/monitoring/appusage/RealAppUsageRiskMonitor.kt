@@ -1,9 +1,11 @@
 package com.example.seniorshield.monitoring.appusage
 
+import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.util.Log
 import com.example.seniorshield.domain.model.RiskSignal
+import com.example.seniorshield.monitoring.registry.RemoteControlAppRegistry
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.delay
@@ -49,6 +51,7 @@ private const val REMOTE_APP_WINDOW_MS = 30 * 60 * 1000L
 class RealAppUsageRiskMonitor @Inject constructor(
     @ApplicationContext private val context: Context,
     private val ioDispatcher: CoroutineDispatcher,
+    private val remoteControlRegistry: RemoteControlAppRegistry,
 ) : AppUsageRiskMonitor {
 
     private val usageStatsManager: UsageStatsManager? by lazy {
@@ -119,73 +122,95 @@ class RealAppUsageRiskMonitor @Inject constructor(
         return signals
     }
 
-    /**
-     * 원격제어 앱 여부 판단.
-     *
-     * 정확한 패키지명 매칭(REMOTE_CONTROL_PACKAGES) 외에
-     * 접두사 매칭(REMOTE_CONTROL_PREFIXES)을 병행한다.
-     *
-     * 배경: TeamViewer는 배포 채널에 따라 패키지명이 다르다.
-     *   - Google Play:   com.teamviewer.teamviewer
-     *   - Samsung Store: com.teamviewer.teamviewer.market.mobile
-     *   - QuickSupport:  com.teamviewer.quicksupport.host
-     *   → com.teamviewer. 접두사로 한 번에 포괄한다.
-     */
     private fun isRemoteControlApp(packageName: String): Boolean =
-        packageName in REMOTE_CONTROL_PACKAGES ||
-                REMOTE_CONTROL_PREFIXES.any { packageName.startsWith(it) }
+        remoteControlRegistry.matches(packageName)
 
     /**
      * 최근 [windowMs] 이내에 사용된 앱의 패키지명 집합을 반환한다.
      *
-     * INTERVAL_BEST: 수초 단위의 고해상도 사용 기록을 반환하는 모드.
+     * 기기 호환성을 위해 3단계 fallback 체인으로 조회한다:
+     * 1. INTERVAL_BEST — 수초 단위 고해상도 (대부분의 기기)
+     * 2. INTERVAL_DAILY — 일부 MediaTek ROM에서 INTERVAL_BEST가 빈 결과를 반환하는 경우
+     * 3. queryEvents — MOVE_TO_FOREGROUND 이벤트 직접 조회 (최종 폴백)
+     *
      * PACKAGE_USAGE_STATS 미허가 시 빈 집합을 반환하고 경고 로그를 출력한다.
      */
     private fun getRecentlyUsedPackages(windowMs: Long): Set<String> {
         val manager = usageStatsManager ?: return emptySet()
         val endTime = System.currentTimeMillis()
         val startTime = endTime - windowMs
+
+        // 1순위: INTERVAL_BEST (수초 단위 고해상도)
+        tryQueryUsageStats(manager, UsageStatsManager.INTERVAL_BEST, startTime, endTime)?.let {
+            Log.d(TAG, "recent packages via INTERVAL_BEST (${windowMs / 1000}s, ${it.size}개): $it")
+            return it
+        }
+
+        // 2순위: INTERVAL_DAILY (일부 MediaTek ROM에서 INTERVAL_BEST 미지원)
+        tryQueryUsageStats(manager, UsageStatsManager.INTERVAL_DAILY, startTime, endTime)?.let {
+            Log.d(TAG, "recent packages via INTERVAL_DAILY fallback (${windowMs / 1000}s, ${it.size}개): $it")
+            return it
+        }
+
+        // 3순위: queryEvents → MOVE_TO_FOREGROUND 직접 조회
+        tryQueryEvents(manager, startTime, endTime)?.let {
+            Log.d(TAG, "recent packages via queryEvents fallback (${windowMs / 1000}s, ${it.size}개): $it")
+            return it
+        }
+
+        Log.w(TAG, "모든 UsageStats 조회 실패 — 권한 미부여 또는 기기 호환성 문제")
+        return emptySet()
+    }
+
+    /** queryUsageStats 시도. 유효 결과 없으면 null 반환. */
+    private fun tryQueryUsageStats(
+        manager: UsageStatsManager,
+        interval: Int,
+        startTime: Long,
+        endTime: Long,
+    ): Set<String>? {
         return try {
-            val stats = manager.queryUsageStats(UsageStatsManager.INTERVAL_BEST, startTime, endTime)
-            if (stats.isNullOrEmpty()) {
-                Log.w(TAG, "queryUsageStats 결과 없음 — PACKAGE_USAGE_STATS 권한 미부여 또는 최근 앱 사용 없음")
-                emptySet()
-            } else {
-                stats
-                    .filter { it.lastTimeUsed >= startTime }
-                    .mapTo(mutableSetOf()) { it.packageName }
-                    .also { Log.d(TAG, "recent packages (${windowMs / 1000}s window, ${it.size}개): $it") }
-            }
+            val stats = manager.queryUsageStats(interval, startTime, endTime)
+            val raw = stats?.size ?: -1
+            val filtered = stats
+                ?.filter { it.lastTimeUsed >= startTime }
+                ?.mapTo(mutableSetOf()) { it.packageName }
+                ?: emptySet()
+            Log.w(TAG, "tryQueryUsageStats(interval=$interval): raw=$raw, filtered=${filtered.size} $filtered")
+            filtered.takeIf { it.isNotEmpty() }
         } catch (e: Exception) {
-            Log.w(TAG, "queryUsageStats 실패: ${e.message}")
-            emptySet()
+            Log.w(TAG, "queryUsageStats(interval=$interval) 실패: ${e.message}")
+            null
+        }
+    }
+
+    /** queryEvents로 MOVE_TO_FOREGROUND 이벤트에서 패키지명 추출. */
+    private fun tryQueryEvents(
+        manager: UsageStatsManager,
+        startTime: Long,
+        endTime: Long,
+    ): Set<String>? {
+        return try {
+            val events = manager.queryEvents(startTime, endTime)
+            val event = UsageEvents.Event()
+            val packages = mutableSetOf<String>()
+            var totalEvents = 0
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                totalEvents++
+                if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) {
+                    packages.add(event.packageName)
+                }
+            }
+            Log.w(TAG, "tryQueryEvents: totalEvents=$totalEvents, foreground=${packages.size} $packages")
+            packages.takeIf { it.isNotEmpty() }
+        } catch (e: Exception) {
+            Log.w(TAG, "queryEvents 실패: ${e.message}")
+            null
         }
     }
 
     companion object {
-        /**
-         * 접두사 매칭: 해당 prefix로 시작하는 모든 패키지를 원격제어 앱으로 간주한다.
-         * 배포 채널별 패키지명 변형을 한 번에 포괄하기 위해 사용한다.
-         */
-        private val REMOTE_CONTROL_PREFIXES = setOf(
-            "com.teamviewer.",   // TeamViewer 전 변형 (market.mobile, quicksupport.host 등)
-            "net.anydesk.",      // AnyDesk 구버전
-            "com.anydesk.",      // AnyDesk 신버전
-        )
-
-        /** 정확한 패키지명 매칭 목록 (접두사 매칭으로 포괄되지 않는 앱) */
-        private val REMOTE_CONTROL_PACKAGES = setOf(
-            // 알서포트 (국내 다수 사용)
-            "com.rsupport.rs.activity.rsupport",              // MobileSupport - RemoteCall
-            "com.rsupport.rs.activity.rsupport.sec",          // MobileSupport for SAMSUNG
-            "com.rsupport.remotecall.rtc.host",               // RemoteCall
-
-            // 기타
-            "com.logmein.rescuemobile",                       // LogMeIn Rescue
-            "com.splashtop.remote.pad.v2",                    // Splashtop Personal
-            "com.realvnc.viewer.android",                     // RealVNC Viewer
-        )
-
         /** 원격제어 앱과 연계 감지 대상인 뱅킹 앱 패키지명 목록 */
         private val BANKING_PACKAGES = setOf(
             "com.kbstar.kbbank",                              // KB국민은행 (KB스타뱅킹)

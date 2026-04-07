@@ -1,6 +1,7 @@
 package com.example.seniorshield.monitoring.session
 
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import com.example.seniorshield.domain.model.AlertState
 import com.example.seniorshield.domain.model.RiskLevel
 import com.example.seniorshield.domain.model.RiskSignal
@@ -22,8 +23,9 @@ private const val TRIGGER_IDLE_TIMEOUT_MS = 60 * 60 * 1000L
  * 위험 세션의 생명주기를 관리하고 신호를 누적한다.
  *
  * ## 세션 TTL 규칙
- * - 기본 TTL: 마지막 신호로부터 30분
- * - 새 PASSIVE/AMPLIFIER 신호 발생 시 TTL 30분 리셋
+ * - 기본 TTL: 마지막 **새** 신호로부터 30분
+ * - 이미 누적된 동일 신호 재수신 시 TTL 미갱신 (영구 유지 방지)
+ * - 진짜 새 신호 발생 시 TTL 리셋
  * - TRIGGER 발생 시 TTL 60분으로 연장
  * - 사용자 "안전 확인" → 즉시 종료
  * - TTL 만료 → OBSERVE 복귀
@@ -37,6 +39,10 @@ private const val TRIGGER_IDLE_TIMEOUT_MS = 60 * 60 * 1000L
 @Singleton
 class RiskSessionTracker @Inject constructor() {
 
+    /** 테스트용 시계 주입점. 프로덕션은 System.currentTimeMillis(). */
+    @VisibleForTesting
+    internal var clock: () -> Long = System::currentTimeMillis
+
     private val _sessionState = MutableStateFlow<RiskSession?>(null)
 
     /** 현재 활성 세션을 실시간으로 관찰한다. null = 세션 없음. */
@@ -48,12 +54,14 @@ class RiskSessionTracker @Inject constructor() {
 
     fun update(callSignals: List<RiskSignal>, appSignals: List<RiskSignal>): RiskSession? {
         val newSignals: Set<RiskSignal> = (callSignals + appSignals).toSet()
-        val now = System.currentTimeMillis()
+        val now = clock()
         val current = session
 
         session = when {
+            // 세션 없음 + 신호 없음 → 아무 것도 없음
             current == null && newSignals.isEmpty() -> null
 
+            // 세션 없음 + 신호 있음 → 새 세션 생성
             current == null -> {
                 // HIGH_RISK_DEVICE_ENVIRONMENT 단독으로는 세션 생성 불가
                 val sessionCreators = newSignals.filter { it != RiskSignal.HIGH_RISK_DEVICE_ENVIRONMENT }
@@ -70,26 +78,34 @@ class RiskSessionTracker @Inject constructor() {
                 }
             }
 
-            newSignals.isEmpty() && now - current.lastSignalAt > currentTimeout(current) -> {
-                val duration = (now - current.startedAt) / 1000L
-                Log.d(TAG, "session expired [${current.id}] after ${duration}s (ttl=${if (current.hasTrigger) "60" else "30"}min)")
-                null
-            }
-
-            newSignals.isNotEmpty() -> {
+            // 세션 존재 → 새 신호 여부에 따라 갱신 또는 만료 체크
+            else -> {
                 val added = newSignals - current.accumulatedSignals
-                val hasTrigger = current.hasTrigger || newSignals.any { it.category == SignalCategory.TRIGGER }
-                current.copy(
-                    accumulatedSignals = current.accumulatedSignals + newSignals,
-                    lastSignalAt = now,
-                    hasTrigger = hasTrigger,
-                ).also {
-                    if (added.isNotEmpty())
-                        Log.d(TAG, "session updated [${it.id}] +$added → total=${it.accumulatedSignals} ttl=${if (hasTrigger) "60" else "30"}min")
+
+                when {
+                    // 진짜 새 신호 없이 TTL 초과 → 세션 만료
+                    added.isEmpty() && now - current.lastSignalAt > currentTimeout(current) -> {
+                        val duration = (now - current.startedAt) / 1000L
+                        Log.d(TAG, "session expired [${current.id}] after ${duration}s (ttl=${if (current.hasTrigger) "60" else "30"}min)")
+                        null
+                    }
+
+                    // 진짜 새 신호 있음 → 누적 + TTL 리셋
+                    added.isNotEmpty() -> {
+                        val hasTrigger = current.hasTrigger || newSignals.any { it.category == SignalCategory.TRIGGER }
+                        current.copy(
+                            accumulatedSignals = current.accumulatedSignals + newSignals,
+                            lastSignalAt = now,
+                            hasTrigger = hasTrigger,
+                        ).also {
+                            Log.d(TAG, "session updated [${it.id}] +$added → total=${it.accumulatedSignals} ttl=${if (hasTrigger) "60" else "30"}min")
+                        }
+                    }
+
+                    // 새 신호 없음, TTL 미초과 → 현재 세션 유지
+                    else -> current
                 }
             }
-
-            else -> current
         }
 
         return session
@@ -111,7 +127,7 @@ class RiskSessionTracker @Inject constructor() {
     }
 
     fun markCooldownConsumed() {
-        session = session?.copy(cooldownConsumedAt = System.currentTimeMillis())
+        session = session?.copy(cooldownConsumedAt = clock())
         Log.d(TAG, "cooldownConsumedAt updated")
     }
 

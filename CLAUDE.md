@@ -59,25 +59,38 @@ data/
   di/           → DataModule (Hilt bindings)
 
 monitoring/
-  evaluator/    → RiskEvaluator (interface), FakeRiskEvaluator
-  call/         → CallRiskMonitor (interface), FakeCallRiskMonitor
-  appusage/     → AppUsageRiskMonitor (interface), FakeAppUsageRiskMonitor
+  evaluator/    → RiskEvaluator (interface), RiskEvaluatorImpl
+  call/         → CallRiskMonitor, RealCallRiskMonitor, CallSignalMapper, CallerContactChecker, BankArsRegistry
+  appusage/     → AppUsageRiskMonitor, RealAppUsageRiskMonitor, FakeAppUsageRiskMonitor
+  appinstall/   → AppInstallRiskMonitor, RealAppInstallRiskMonitor
+  deviceenv/    → DeviceEnvironmentRiskMonitor, RealDeviceEnvironmentRiskMonitor
+  orchestrator/ → RiskDetectionCoordinator, DefaultRiskDetectionCoordinator, AlertStateResolver
+  session/      → RiskSessionTracker, RiskSession
+  registry/     → RemoteControlAppRegistry
+  event/        → RiskEventFactory
+  model/        → CallContext, CallMonitorState, CallState
+  service/      → MonitoringForegroundService
   di/           → MonitoringModule
 
 feature/
   home/         → HomeScreen, HomeViewModel, HomeUiState
   history/      → HistoryScreen, HistoryViewModel
   warning/      → WarningScreen, WarningViewModel
-  settings/     → SettingsScreen
-  guardian/     → GuardianScreen, GuardianViewModel, GuardianUiState
+  settings/     → SettingsScreen, DebugViewModel
+  guardian/     → GuardianScreen, GuardianAddScreen, GuardianViewModel, GuardianAddViewModel
   permissions/  → PermissionsScreen, PermissionsViewModel
   policy/       → PolicyScreen, PolicyViewModel
   onboarding/   → OnboardingScreen, OnboardingViewModel
   splash/       → SplashScreen, SplashViewModel, SplashUiState
+  simulation/   → FraudScenario
 
 core/
   navigation/   → SeniorShieldDestination (enum), SeniorShieldNavGraph
   designsystem/ → Theme, Color, Type, SeniorShieldScaffold, StatusCard, LargeActionButton
+  notification/ → RiskNotificationManager
+  overlay/      → RiskOverlayManager, BankingCooldownManager
+  sms/          → GuardianSmsManager (비활성화됨)
+  util/         → CallEndHelper
 
 di/             → AppModule
 ```

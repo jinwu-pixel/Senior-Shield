@@ -161,7 +161,7 @@ class RealCallRiskMonitor @Inject constructor(
             settingsRepository.observeTestModeEnabled(),
         ) { state, testMode -> state to testMode }
             .flatMapLatest { (state, testMode) ->
-                val thresholdMs = if (testMode) TEST_LONG_CALL_THRESHOLD_MS else LONG_CALL_THRESHOLD_MS
+                val thresholdMs = if (testMode) CallSignalMapper.TEST_LONG_CALL_THRESHOLD_MS else CallSignalMapper.LONG_CALL_THRESHOLD_MS
                 when (state) {
                     is CallMonitorState.NoPermission -> {
                         Log.d(TAG, "observeCallSignals: NoPermission — empty signals")
@@ -227,10 +227,13 @@ class RealCallRiskMonitor @Inject constructor(
                                     }
                                 }
 
-                                val signals = mapper.map(ctx, thresholdMs)
-                                if (signals.isNotEmpty()) {
-                                    Log.d(TAG, "signals emitted (FINAL): $signals")
-                                    emit(CallSignalEvent(SignalPhase.FINAL, signals))
+                                // 수신 통화만 mapper 적용 — 발신은 텔레뱅킹 감지만 해당
+                                if (!ctx.isOutgoing) {
+                                    val signals = mapper.map(ctx, thresholdMs)
+                                    if (signals.isNotEmpty()) {
+                                        Log.d(TAG, "signals emitted (FINAL): $signals")
+                                        emit(CallSignalEvent(SignalPhase.FINAL, signals))
+                                    }
                                 }
                                 emit(CallSignalEvent(SignalPhase.RESET, emptyList()))
                             }
@@ -685,8 +688,6 @@ class RealCallRiskMonitor @Inject constructor(
 
     companion object {
         private const val TAG = "SeniorShield-CallMonitor"
-        private const val LONG_CALL_THRESHOLD_MS = 180_000L      // 프로덕션: 3분
-        private const val TEST_LONG_CALL_THRESHOLD_MS = 10_000L  // 테스트 모드: 10초
         private const val TELEBANKING_WINDOW_MS = 5 * 60 * 1000L // 텔레뱅킹 감지 윈도우: 5분
         private const val CALL_LOG_QUERY_MAX_RETRIES = 3          // CallLog 조회 재시도 횟수
         private const val CALL_LOG_QUERY_RETRY_DELAY_MS = 800L    // 재시도 간격
