@@ -262,7 +262,6 @@ class RiskOverlayManager @Inject constructor(
             setTextColor(bgColor)
             setTypeface(null, Typeface.BOLD)
             isFocusable = true
-            isFocusableInTouchMode = true
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = cornerPx
@@ -295,7 +294,6 @@ class RiskOverlayManager @Inject constructor(
                 textSize = 16f
                 setTextColor(Color.WHITE)
                 isFocusable = true
-                isFocusableInTouchMode = true
                 background = GradientDrawable().apply {
                     shape = GradientDrawable.RECTANGLE
                     cornerRadius = cornerPx
@@ -335,7 +333,6 @@ class RiskOverlayManager @Inject constructor(
             textSize = 16f
             setTextColor(Color.WHITE)
             isFocusable = true
-            isFocusableInTouchMode = true
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = cornerPx
