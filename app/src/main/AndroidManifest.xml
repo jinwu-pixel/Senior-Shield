@@ -28,6 +28,10 @@
     <!-- 수신 번호 캡처 (API 29+, BroadcastReceiver EXTRA_INCOMING_NUMBER) -->
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
 
+    <!-- 발신 번호 선캡처 (OutgoingCallReceiver, OFFHOOK 텔레뱅킹 즉시 감지) -->
+    <uses-permission android:name="android.permission.PROCESS_OUTGOING_CALLS"
+        tools:ignore="ProtectedPermissions" />
+
     <!-- 루팅 앱 패키지 존재 확인 (RealDeviceEnvironmentRiskMonitor, API 30+) -->
     <queries>
         <package android:name="com.topjohnwu.magisk" />
@@ -61,6 +65,15 @@
             android:name=".monitoring.service.MonitoringForegroundService"
             android:foregroundServiceType="specialUse"
             android:exported="false" />
+
+        <!-- 발신 번호 선캡처 (OFFHOOK 텔레뱅킹 즉시 감지) -->
+        <receiver
+            android:name=".monitoring.call.OutgoingCallReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.NEW_OUTGOING_CALL" />
+            </intent-filter>
+        </receiver>
 
     </application>
 </manifest>

@@ -94,6 +94,8 @@ private fun PermissionsContent(
         }
         add(Manifest.permission.READ_CONTACTS)
         add(Manifest.permission.READ_CALL_LOG)
+        @Suppress("DEPRECATION") // PROCESS_OUTGOING_CALLS — 텔레뱅킹 발신 번호 선캡처
+        add(Manifest.permission.PROCESS_OUTGOING_CALLS)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             add(Manifest.permission.POST_NOTIFICATIONS)
         }

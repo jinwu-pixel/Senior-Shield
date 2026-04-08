@@ -30,6 +30,9 @@ import javax.inject.Singleton
 
 private const val TAG = "SeniorShield-Cooldown"
 
+/** showInCallScreen() 후 dismiss 지연. 전화 앱이 foreground로 올라올 시간 확보. */
+private const val SHOW_IN_CALL_DELAY_MS = 500L
+
 /**
  * HIGH+ 위험 세션 중 뱅킹 앱이 포그라운드로 올라오면
  * 위험 수준에 따라 차등적으로 화면 전체를 막는 강제 대기 화면을 표시한다.
@@ -270,11 +273,14 @@ class BankingCooldownManager @Inject constructor(
                 countdownJob?.cancel()
                 countdownJob = null
                 if (callEndHelper.isInCall()) {
-                    Log.d(TAG, "opening dialer for manual call end")
+                    Log.d(TAG, "opening in-call screen")
                     val telecom = context.getSystemService(Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
                     telecom?.showInCallScreen(false)
+                    // 전화 앱이 foreground로 올라올 시간을 확보한 뒤 오버레이 제거
+                    mainHandler.postDelayed({ dismiss() }, SHOW_IN_CALL_DELAY_MS)
+                } else {
+                    dismiss()
                 }
-                dismiss()
             }
             setOnFocusChangeListener { _, hasFocus ->
                 background = GradientDrawable().apply {

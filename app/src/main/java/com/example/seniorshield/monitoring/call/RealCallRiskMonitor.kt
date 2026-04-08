@@ -177,8 +177,18 @@ class RealCallRiskMonitor @Inject constructor(
                             // OFFHOOK: 즉시 신호 방출 후 임계 시간 경과 시 LONG_CALL_DURATION 추가
                             // flatMapLatest가 IDLE 전환 시 이 flow를 즉시 취소하므로
                             // 짧은 통화에서는 LONG_CALL_DURATION이 발생하지 않는다.
-                            ctx.state == CallState.OFFHOOK && ctx.isOutgoing ->
-                                flowOf(CallSignalEvent(SignalPhase.LIVE, emptyList()))
+                            ctx.state == CallState.OFFHOOK && ctx.isOutgoing -> flow<CallSignalEvent> {
+                                emit(CallSignalEvent(SignalPhase.LIVE, emptyList()))
+                                if (isTelebankingWindow()) {
+                                    val number = OutgoingCallReceiver.consumeIfValid()
+                                    val matches = number != null && bankArsRegistry.matches(number)
+                                    Log.d(TAG, "OFFHOOK 텔레뱅킹 체크 (선캡처): number=$number, matches=$matches")
+                                    if (matches) {
+                                        Log.d(TAG, "텔레뱅킹 즉시 감지: number=$number")
+                                        emit(CallSignalEvent(SignalPhase.LIVE, listOf(RiskSignal.TELEBANKING_AFTER_SUSPICIOUS)))
+                                    }
+                                }
+                            }
 
                             ctx.state == CallState.OFFHOOK -> flow<CallSignalEvent> {
                                 // ── 수신 통화: 기존 로직 + 반복 호출 감지 ──
@@ -213,19 +223,23 @@ class RealCallRiskMonitor @Inject constructor(
                                     Log.d(TAG, "의심 통화 종료 기록: ${ctx.endedAtMillis}")
                                 }
 
-                                // ── 발신 종료 시 텔레뱅킹 감지 ──
-                                // CallLog는 통화 종료 후 기록되므로, IDLE 시점에 조회해야 정확
+                                // ── 발신 종료 시 텔레뱅킹 폴백 ──
+                                // OFFHOOK에서 선캡처로 이미 감지한 경우 distinctUntilChanged()가 중복 제거.
+                                // 선캡처 실패 시 CallLog로 폴백한다.
                                 if (ctx.isOutgoing && isTelebankingWindow() && ctx.startedAtMillis != null) {
-                                    val dialedNumber = queryOutgoingNumberWithRetry(
-                                        ctx.startedAtMillis, ctx.endedAtMillis,
-                                    )
-                                    val matches = dialedNumber != null && bankArsRegistry.matches(dialedNumber)
-                                    Log.d(TAG, "발신 종료 텔레뱅킹 체크: number=$dialedNumber, matches=$matches")
+                                    // 1차: 선캡처 번호
+                                    val preCapture = OutgoingCallReceiver.consumeIfValid()
+                                    val number = preCapture
+                                        ?: queryOutgoingNumberWithRetry(ctx.startedAtMillis, ctx.endedAtMillis)
+                                    val matches = number != null && bankArsRegistry.matches(number)
+                                    Log.d(TAG, "IDLE 텔레뱅킹 폴백: preCapture=$preCapture, callLog=${if (preCapture == null) number else "skip"}, matches=$matches")
                                     if (matches) {
-                                        Log.d(TAG, "텔레뱅킹 감지: number=$dialedNumber")
                                         emit(CallSignalEvent(SignalPhase.LIVE, listOf(RiskSignal.TELEBANKING_AFTER_SUSPICIOUS)))
                                     }
                                 }
+
+                                // 발신 통화 처리 완료 — 선캡처 번호 정리
+                                if (ctx.isOutgoing) OutgoingCallReceiver.clear()
 
                                 // 수신 통화만 mapper 적용 — 발신은 텔레뱅킹 감지만 해당
                                 if (!ctx.isOutgoing) {

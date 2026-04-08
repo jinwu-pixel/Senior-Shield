@@ -31,6 +31,9 @@ import javax.inject.Singleton
 
 private const val TAG = "SeniorShield-Overlay"
 
+/** showInCallScreen() 후 dismiss 지연. 전화 앱이 foreground로 올라올 시간 확보. */
+private const val SHOW_IN_CALL_DELAY_MS = 500L
+
 /** IDLE 감지 후 suppression 유지 시간. 다이얼러 InCallFragment 정리 시퀀스 완료 대기. */
 private const val POST_CALL_UI_STABILIZATION_MS = 1_000L
 
@@ -270,11 +273,14 @@ class RiskOverlayManager @Inject constructor(
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(60))
             setOnClickListener {
                 if (callEndHelper.isInCall()) {
-                    Log.d(TAG, "opening dialer for manual call end")
-                    val telecom = context.getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager
-                    telecom.showInCallScreen(false)
+                    Log.d(TAG, "opening in-call screen")
+                    val telecom = context.getSystemService(Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
+                    telecom?.showInCallScreen(false)
+                    // 전화 앱이 foreground로 올라올 시간을 확보한 뒤 오버레이 제거
+                    mainHandler.postDelayed({ dismiss() }, SHOW_IN_CALL_DELAY_MS)
+                } else {
+                    dismiss()
                 }
-                dismiss()
             }
             setOnFocusChangeListener { _, hasFocus ->
                 background = GradientDrawable().apply {

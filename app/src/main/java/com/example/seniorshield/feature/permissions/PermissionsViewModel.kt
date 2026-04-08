@@ -76,6 +76,13 @@ class PermissionsViewModel @Inject constructor(
             description = "최신 Android에서 수신 번호를 파악해 연락처 대조를 하기 위해 필요합니다.",
             granted = isGranted(Manifest.permission.READ_CALL_LOG),
         ),
+        @Suppress("DEPRECATION") // PROCESS_OUTGOING_CALLS — 텔레뱅킹 발신 번호 선캡처 용도
+        PermissionStatus(
+            type = PermissionType.OUTGOING_CALLS,
+            name = "발신 전화 감지",
+            description = "은행 ARS 발신을 즉시 감지해 텔레뱅킹 유도 사기를 경고하기 위해 필요합니다.",
+            granted = isGranted(Manifest.permission.PROCESS_OUTGOING_CALLS),
+        ),
     )
 
     private fun isGranted(permission: String): Boolean =
