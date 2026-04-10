@@ -126,6 +126,35 @@ class RiskSessionTracker @Inject constructor() {
         Log.d(TAG, "notifiedActiveThreats updated → $threats")
     }
 
+    /**
+     * 현재 tick의 raw signal에 없는 trigger를 [RiskSession.notifiedActiveThreats]에서 제거한다.
+     *
+     * ## 목적
+     * accumulatedSignals는 TTL 만료까지 누적만 되므로, 통보 완료된 trigger가
+     * 앱 종료로 signal에서 사라져도 notifiedActiveThreats에 영구히 남아
+     * 재진입 시 새 trigger로 인식되지 못한다. 이 메소드가 "사라진 trigger"를
+     * 통보 목록에서 제거하여 재진입 감지가 가능하도록 한다.
+     *
+     * ## debounce 안정성
+     * [RealAppUsageRiskMonitor]는 30초 window로 polling하므로, tick signal에 없다는 것은
+     * "최근 30초 이상 해당 앱이 포그라운드가 아니었다"는 의미다. 단일 tick 누락에
+     * 반응하지 않으므로 추가 debounce가 불필요하다.
+     *
+     * ## 호출 위치
+     * Coordinator의 tick 처리 초입(세션 업데이트 직후, 팝업/쿨다운 판단 전)에서 호출한다.
+     */
+    fun syncActiveThreats(currentTickSignals: Set<RiskSignal>): RiskSession? {
+        val current = session ?: return null
+        if (current.notifiedActiveThreats.isEmpty()) return current
+        val stillPresent = current.notifiedActiveThreats intersect currentTickSignals
+        if (stillPresent == current.notifiedActiveThreats) return current
+        val removed = current.notifiedActiveThreats - stillPresent
+        val updated = current.copy(notifiedActiveThreats = stillPresent)
+        session = updated
+        Log.d(TAG, "notifiedActiveThreats synced: removed=$removed (trigger 사라짐 → 재진입 대기)")
+        return updated
+    }
+
     fun markCooldownConsumed() {
         session = session?.copy(cooldownConsumedAt = clock())
         Log.d(TAG, "cooldownConsumedAt updated")

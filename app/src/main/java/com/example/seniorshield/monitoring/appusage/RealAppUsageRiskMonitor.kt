@@ -210,6 +210,30 @@ class RealAppUsageRiskMonitor @Inject constructor(
         }
     }
 
+    override fun latestBankingForegroundEventTimestamp(windowMs: Long): Long? {
+        val manager = usageStatsManager ?: return null
+        val now = System.currentTimeMillis()
+        val startTime = now - windowMs
+        return try {
+            val events = manager.queryEvents(startTime, now)
+            val event = UsageEvents.Event()
+            var latestTs: Long? = null
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND &&
+                    event.packageName in BANKING_PACKAGES
+                ) {
+                    val ts = event.timeStamp
+                    if (latestTs == null || ts > latestTs) latestTs = ts
+                }
+            }
+            latestTs
+        } catch (e: Exception) {
+            Log.w(TAG, "latestBankingForegroundEventTimestamp 실패: ${e.message}")
+            null
+        }
+    }
+
     companion object {
         /** 원격제어 앱과 연계 감지 대상인 뱅킹 앱 패키지명 목록 */
         private val BANKING_PACKAGES = setOf(

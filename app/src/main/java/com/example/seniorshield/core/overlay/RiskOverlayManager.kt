@@ -199,12 +199,12 @@ class RiskOverlayManager @Inject constructor(
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)
-            setPadding(dp(32), dp(56), dp(32), dp(0))
+            setPadding(dp(16), dp(24), dp(16), dp(0))
         }
 
         contentArea.addView(TextView(context).apply {
             text = "⚠"
-            textSize = 80f
+            textSize = 36f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)
@@ -212,7 +212,7 @@ class RiskOverlayManager @Inject constructor(
 
         contentArea.addView(TextView(context).apply {
             text = levelLabel
-            textSize = 18f
+            textSize = 16f
             setTextColor(bgColor)
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
@@ -221,13 +221,14 @@ class RiskOverlayManager @Inject constructor(
                 cornerRadius = dp(20).toFloat()
                 setColor(Color.WHITE)
             }
-            setPadding(dp(20), dp(6), dp(20), dp(6))
+            setPadding(dp(16), dp(4), dp(16), dp(4))
             layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
-                topMargin = dp(16)
+                topMargin = dp(8)
             }
         })
 
+        // 핵심 경고 제목 — 화면 폭에 가깝게 크게 표시
         contentArea.addView(TextView(context).apply {
             text = event.title
             textSize = 24f
@@ -235,17 +236,18 @@ class RiskOverlayManager @Inject constructor(
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
-                topMargin = dp(24)
+                topMargin = dp(12)
             }
         })
 
+        // 상세 설명
         contentArea.addView(TextView(context).apply {
             text = event.description
-            textSize = 16f
+            textSize = 18f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
-                topMargin = dp(12)
+                topMargin = dp(8)
             }
         })
 
@@ -253,7 +255,7 @@ class RiskOverlayManager @Inject constructor(
         val buttonArea = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)
-            setPadding(dp(24), dp(16), dp(24), dp(48))
+            setPadding(dp(24), dp(12), dp(24), dp(32))
         }
 
         // 주 버튼: 통화 중이면 "전화 앱으로 이동", 아니면 "확인했습니다"
@@ -270,7 +272,7 @@ class RiskOverlayManager @Inject constructor(
                 cornerRadius = cornerPx
                 setColor(Color.WHITE)
             }
-            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(60))
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(52))
             setOnClickListener {
                 if (callEndHelper.isInCall()) {
                     Log.d(TAG, "opening in-call screen")
@@ -296,7 +298,7 @@ class RiskOverlayManager @Inject constructor(
         // 보조 버튼: 보호자에게 도움 요청 (guardian이 설정된 경우에만 표시)
         if (guardian != null) {
             buttonArea.addView(Button(context).apply {
-                text = "보호자에게 도움 요청"
+                text = "등록된 보호자에게 문자 보내기"
                 textSize = 16f
                 setTextColor(Color.WHITE)
                 isFocusable = true
@@ -306,8 +308,8 @@ class RiskOverlayManager @Inject constructor(
                     setColor(Color.TRANSPARENT)
                     setStroke(dp(2), Color.WHITE)
                 }
-                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(56)).apply {
-                    topMargin = dp(12)
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(48)).apply {
+                    topMargin = dp(8)
                 }
                 setOnClickListener {
                     val smsUri = Uri.parse("smsto:${guardian.phoneNumber}")
@@ -345,8 +347,8 @@ class RiskOverlayManager @Inject constructor(
                 setColor(Color.TRANSPARENT)
                 setStroke(dp(2), Color.WHITE)
             }
-            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(56)).apply {
-                topMargin = dp(12)
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(48)).apply {
+                topMargin = dp(8)
             }
             setOnClickListener {
                 context.startActivity(
