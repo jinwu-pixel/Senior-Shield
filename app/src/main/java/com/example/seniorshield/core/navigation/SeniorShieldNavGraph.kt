@@ -43,6 +43,7 @@ fun SeniorShieldNavGraph() {
             onNavigatePolicy = { navController.navigate(SeniorShieldDestination.POLICY) },
             onNavigateSettings = { navController.navigate(SeniorShieldDestination.SETTINGS) },
             onNavigateSimulation = { navController.navigate(SeniorShieldDestination.SIMULATION_LIST) },
+            onNavigateGuardian = { navController.navigate(SeniorShieldDestination.GUARDIAN) },
         )
 
         historyScreen(onBack = { navController.popBackStack() })

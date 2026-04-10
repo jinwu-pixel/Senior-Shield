@@ -76,8 +76,8 @@ class HomeViewModel @Inject constructor(
             else -> null
         }
 
-        val smsGuardian: Guardian? =
-            if (alertState.ordinal >= AlertState.INTERRUPT.ordinal) guardians.firstOrNull()
+        val guardian: Guardian? =
+            if (alertState.ordinal >= AlertState.GUARDED.ordinal) guardians.firstOrNull()
             else null
 
         HomeUiState(
@@ -89,9 +89,9 @@ class HomeViewModel @Inject constructor(
             weeklyEventCount = weekly.eventCount,
             weeklyTip = weekly.tip,
             guardedCard = guardedCard,
-            showSmsHelpButton = smsGuardian != null,
-            smsGuardianName = smsGuardian?.name ?: "",
-            smsGuardianPhone = smsGuardian?.phoneNumber ?: "",
+            hasGuardian = guardian != null,
+            guardianName = guardian?.name ?: "",
+            guardianPhone = guardian?.phoneNumber ?: "",
         )
     }.stateIn(
         scope = viewModelScope,
@@ -141,6 +141,11 @@ class HomeViewModel @Inject constructor(
 
     fun refreshPermissions() {
         _hasCriticalPermissions.value = checkCriticalPermissions()
+    }
+
+    /** 사용자가 홈 화면에서 "안전 확인"을 선택하면 현재 위험 세션을 종료한다. */
+    fun confirmSafe() {
+        sessionTracker.reset()
     }
 
     private suspend fun loadWeeklySnapshot() {

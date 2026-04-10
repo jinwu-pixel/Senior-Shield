@@ -20,10 +20,10 @@ data class HomeUiState(
     val weeklyTip: String = "",
     /** GUARDED 세션 중 1회 표시되는 하단 안내 카드. null이면 미표시. */
     val guardedCard: GuardedCardInfo? = null,
-    /** INTERRUPT/CRITICAL 상태이고 보호자가 등록된 경우 SMS 도움 버튼 표시. */
-    val showSmsHelpButton: Boolean = false,
-    /** SMS 버튼에 표시할 보호자 이름. */
-    val smsGuardianName: String = "",
-    /** SMS intent 구성에 사용할 보호자 전화번호. */
-    val smsGuardianPhone: String = "",
+    /** GUARDED+ 상태에서 보호자가 등록되어 있는지 여부. */
+    val hasGuardian: Boolean = false,
+    /** 보호자 이름. */
+    val guardianName: String = "",
+    /** 보호자 전화번호 (전화/문자 intent 구성용). */
+    val guardianPhone: String = "",
 )

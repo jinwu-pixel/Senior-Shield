@@ -153,7 +153,7 @@ private fun WarningContent(
             Spacer(modifier = Modifier.height(32.dp))
             Checklist()
             Spacer(modifier = Modifier.height(24.dp))
-            PrimaryButton(text = "가족에게 전화하기", onClick = onFamilyCallClick)
+            PrimaryButton(text = "보호자에게 전화하기", onClick = onFamilyCallClick)
             if (uiState.smsMenuEnabled && uiState.guardians.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(12.dp))
                 SecondaryButton(text = "보호자에게 문자 보내기", onClick = onSmsClick)

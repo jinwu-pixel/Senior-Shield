@@ -22,6 +22,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -59,7 +62,9 @@ import com.example.seniorshield.core.designsystem.component.SecondaryButton
 import com.example.seniorshield.core.designsystem.component.SeniorShieldScaffold
 import com.example.seniorshield.core.designsystem.component.StatusCard
 import com.example.seniorshield.core.designsystem.theme.SeniorShieldTheme
+import com.example.seniorshield.core.designsystem.theme.StatusGreen
 import com.example.seniorshield.core.navigation.SeniorShieldDestination
+import com.example.seniorshield.core.util.ContactIntentHelper
 import com.example.seniorshield.domain.model.RiskLevel
 
 fun NavGraphBuilder.homeScreen(
@@ -69,6 +74,7 @@ fun NavGraphBuilder.homeScreen(
     onNavigatePolicy: () -> Unit,
     onNavigateSettings: () -> Unit,
     onNavigateSimulation: () -> Unit,
+    onNavigateGuardian: () -> Unit,
 ) {
     composable(route = SeniorShieldDestination.HOME) {
         val viewModel: HomeViewModel = hiltViewModel()
@@ -95,6 +101,8 @@ fun NavGraphBuilder.homeScreen(
             onNavigatePolicy = onNavigatePolicy,
             onNavigateSettings = onNavigateSettings,
             onNavigateSimulation = onNavigateSimulation,
+            onNavigateGuardian = onNavigateGuardian,
+            onConfirmSafe = { viewModel.confirmSafe() },
         )
     }
 }
@@ -108,9 +116,13 @@ private fun HomeContent(
     onNavigatePolicy: () -> Unit,
     onNavigateSettings: () -> Unit,
     onNavigateSimulation: () -> Unit,
+    onNavigateGuardian: () -> Unit,
+    onConfirmSafe: () -> Unit,
 ) {
     val hasActiveRisk = uiState.currentRiskLevel.ordinal >= RiskLevel.HIGH.ordinal
     val context = LocalContext.current
+    var showContactDialog by remember { mutableStateOf(false) }
+    val guardianPhone = uiState.guardianPhone
 
     SeniorShieldScaffold(title = "시니어쉴드") { padding ->
         LazyColumn(
@@ -133,6 +145,10 @@ private fun HomeContent(
                     Modifier
                         .padding(horizontal = 24.dp)
                         .dpadFocusHighlight(shape = RoundedCornerShape(12.dp))
+                        .then(
+                            if (hasActiveRisk) Modifier.clickable { onNavigateWarning() }
+                            else Modifier
+                        )
                         .focusable(),
                 ) {
                     StatusCard(
@@ -153,32 +169,18 @@ private fun HomeContent(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     if (hasActiveRisk) {
-                        PrimaryButton(text = "가족에게 바로 연락하기", onClick = onNavigateWarning)
-                    }
-                    if (uiState.showSmsHelpButton) {
-                        val guardianPhone = uiState.smsGuardianPhone
-                        val guardianName = uiState.smsGuardianName
-                        SecondaryButton(
-                            text = if (guardianName.isNotEmpty()) "${guardianName}에게 도움 요청" else "보호자에게 도움 요청",
-                            onClick = {
-                                val smsUri = Uri.parse("smsto:$guardianPhone")
-                                val smsIntent = Intent(Intent.ACTION_SENDTO, smsUri).apply {
-                                    putExtra(
-                                        "sms_body",
-                                        "[시니어쉴드] 위험 경고가 떠서 연락드립니다. 송금이나 인증 전에 같이 확인해주세요.",
-                                    )
-                                }
-                                if (smsIntent.resolveActivity(context.packageManager) != null) {
-                                    context.startActivity(smsIntent)
-                                } else {
-                                    Toast.makeText(
-                                        context,
-                                        "이 기기에서는 문자 전송을 지원하지 않습니다",
-                                        Toast.LENGTH_SHORT,
-                                    ).show()
-                                }
-                            },
-                        )
+                        PrimaryButton(text = "보호자에게 연락하기", onClick = { showContactDialog = true })
+                        Button(
+                            onClick = onConfirmSafe,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = StatusGreen),
+                        ) {
+                            Text(
+                                text = "안전 확인했어요",
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.padding(vertical = 8.dp),
+                            )
+                        }
                     }
                     if (uiState.recentEventCount > 0) {
                         SecondaryButton(text = "전체 감지 기록 보기", onClick = onNavigateHistory)
@@ -221,6 +223,55 @@ private fun HomeContent(
             }
         }
     }
+
+    if (showContactDialog) {
+        if (!uiState.hasGuardian) {
+            // 보호자 미등록 → 등록 화면으로 이동
+            showContactDialog = false
+            onNavigateGuardian()
+        } else {
+            GuardianContactDialog(
+                onDismiss = { showContactDialog = false },
+                onCall = {
+                    showContactDialog = false
+                    context.startActivity(ContactIntentHelper.dialIntent(guardianPhone))
+                },
+                onSms = {
+                    showContactDialog = false
+                    val intent = ContactIntentHelper.smsIntent(guardianPhone).apply {
+                        putExtra("sms_body", "[시니어쉴드] 위험 경고가 떠서 연락드립니다. 송금이나 인증 전에 같이 확인해주세요.")
+                    }
+                    if (intent.resolveActivity(context.packageManager) != null) {
+                        context.startActivity(intent)
+                    } else {
+                        Toast.makeText(context, "문자 앱을 찾을 수 없습니다", Toast.LENGTH_SHORT).show()
+                    }
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun GuardianContactDialog(
+    onDismiss: () -> Unit,
+    onCall: () -> Unit,
+    onSms: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("보호자에게 연락하기") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                PrimaryButton(text = "보호자에게 전화하기", onClick = onCall)
+                SecondaryButton(text = "보호자에게 문자 보내기", onClick = onSms)
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("닫기") }
+        },
+    )
 }
 
 @Composable
@@ -371,6 +422,8 @@ private fun HomeScreenPreview() {
             onNavigatePolicy = {},
             onNavigateSettings = {},
             onNavigateSimulation = {},
+            onNavigateGuardian = {},
+            onConfirmSafe = {},
         )
     }
 }
