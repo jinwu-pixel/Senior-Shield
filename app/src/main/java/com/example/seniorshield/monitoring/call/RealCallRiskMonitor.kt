@@ -180,7 +180,14 @@ class RealCallRiskMonitor @Inject constructor(
                             ctx.state == CallState.OFFHOOK && ctx.isOutgoing -> flow<CallSignalEvent> {
                                 emit(CallSignalEvent(SignalPhase.LIVE, emptyList()))
                                 if (isTelebankingWindow()) {
-                                    val number = OutgoingCallReceiver.consumeIfValid()
+                                    // ACTION_NEW_OUTGOING_CALL이 OFFHOOK보다 늦게 도착할 수 있으므로
+                                    // 선캡처 번호가 없으면 짧은 대기 후 재시도한다.
+                                    var number = OutgoingCallReceiver.consumeIfValid()
+                                    if (number == null) {
+                                        delay(OUTGOING_RECEIVER_WAIT_MS)
+                                        number = OutgoingCallReceiver.consumeIfValid()
+                                        Log.d(TAG, "OFFHOOK 텔레뱅킹 재시도: number=$number (${OUTGOING_RECEIVER_WAIT_MS}ms 대기 후)")
+                                    }
                                     val matches = number != null && bankArsRegistry.matches(number)
                                     Log.d(TAG, "OFFHOOK 텔레뱅킹 체크 (선캡처): number=$number, matches=$matches")
                                     if (matches) {
@@ -709,6 +716,7 @@ class RealCallRiskMonitor @Inject constructor(
         private const val CALL_LOG_END_TOLERANCE_MS = 3_000L      // (DATE+DURATION*1000) vs endedAtMillis 허용 오차
         private const val REPEATED_CALL_WINDOW_MS = 30 * 60 * 1000L // 반복 호출 판단 윈도우: 30분
         private const val PERMISSION_POLL_INTERVAL_MS = 3_000L   // 권한 폴링 간격: 3초
+        private const val OUTGOING_RECEIVER_WAIT_MS = 300L       // OutgoingCallReceiver 브로드캐스트 대기
     }
 }
 
