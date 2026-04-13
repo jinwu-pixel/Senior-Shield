@@ -39,10 +39,10 @@ private const val SHOW_IN_CALL_DELAY_MS = 500L
  * HIGH+ 위험 세션 중 뱅킹 앱이 포그라운드로 올라오면
  * 위험 수준에 따라 차등적으로 화면 전체를 막는 강제 대기 화면을 표시한다.
  *
- * - HIGH:     30초 카운트다운 + "전화 끊기" 버튼
- * - CRITICAL: 60초 카운트다운 + "전화 끊기" 버튼
+ * - HIGH:     30초 카운트다운 + 주 버튼(통화 중: "전화 앱으로 이동" / 아니면: "일단 닫기") + 보조 "안전 확인했어요"
+ * - CRITICAL: 60초 카운트다운 + 주 버튼(통화 중: "전화 앱으로 이동" / 아니면: "일단 닫기") + 보조 "안전 확인했어요"
  *
- * 해제 버튼 없음 — 타이머 종료 시 자동으로 닫힌다.
+ * 카운트다운 종료 시 자동 dismiss. 사용자는 보조 "안전 확인했어요"로 세션 리셋, 주 버튼으로 early dismiss 가능.
  */
 @Singleton
 class BankingCooldownManager @Inject constructor(
@@ -91,7 +91,7 @@ class BankingCooldownManager @Inject constructor(
      * 이미 표시 중이거나 SYSTEM_ALERT_WINDOW 권한이 없으면 생략한다.
      *
      * @param reason 쿨다운 이유 설명 — 현재 세션 컨텍스트에 맞는 사용자 설명형 문구.
-     * @param isCallActive true이면 "전화 끊기" CTA 포함, false이면 "확인했습니다" CTA로 다운그레이드.
+     * @param isCallActive true이면 주 버튼 "전화 앱으로 이동"(showInCallScreen 경로), false이면 "일단 닫기"(dismiss).
      */
     fun triggerIfNotActive(level: RiskLevel, reason: String? = null, isCallActive: Boolean = true) {
         if (isShowing()) {
@@ -286,9 +286,9 @@ class BankingCooldownManager @Inject constructor(
 
         val cornerPx = dp(8).toFloat()
         // 통화 중: "전화 앱으로 이동" — 사용자가 직접 종료
-        // 통화 종료 후: "확인했습니다" — 즉시 dismiss
+        // 통화 종료 후: "일단 닫기" — 즉시 dismiss (세션 종료는 하단 "안전 확인했어요" 버튼이 담당)
         val actionBtn = Button(context).apply {
-            text = if (isCallActive) "전화 앱으로 이동" else "확인했습니다"
+            text = if (isCallActive) "전화 앱으로 이동" else "일단 닫기"
             textSize = 18f
             setTextColor(bg)
             setTypeface(null, Typeface.BOLD)

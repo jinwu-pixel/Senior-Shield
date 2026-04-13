@@ -58,9 +58,9 @@ class PermissionsViewModel @Inject constructor(
         ),
         PermissionStatus(
             type = PermissionType.ANSWER_CALLS,
-            name = "전화 끊기",
-            description = "위험 경고 팝업에서 '지금 전화 끊기' 버튼으로 통화를 즉시 종료하기 위해 필요합니다. " +
-                    "일부 기기에서는 허용해도 동작하지 않을 수 있습니다 — 그 경우 수동으로 통화를 끊어 주세요.",
+            name = "전화 상태 제어(예약)",
+            description = "향후 통화 직접 제어 기능을 위해 예약된 권한입니다. " +
+                    "현재 앱은 위험 통화 시 '전화 앱으로 이동' 경로로 동작하며, 이 권한 없이도 팝업은 정상 표시됩니다.",
             granted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
                 isGranted(Manifest.permission.ANSWER_PHONE_CALLS) else true,
         ),

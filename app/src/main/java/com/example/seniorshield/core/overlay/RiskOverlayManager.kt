@@ -46,8 +46,10 @@ private const val MAX_END_CALL_SUPPRESSION_MS = 3_000L
  * TYPE_APPLICATION_OVERLAY + MATCH_PARENT 높이로 다른 앱 위, 통화 중에도 표시된다.
  * SYSTEM_ALERT_WINDOW 권한이 없으면 조용히 생략한다.
  *
- * 주 버튼은 "지금 전화 끊기" — 피해자에게 가장 먼저 필요한 행동을 직접 실행한다.
- * ANSWER_PHONE_CALLS 권한이 없으면 버튼 탭 시 자동 종료 없이 팝업만 닫힌다.
+ * 주 버튼은 통화 중이면 "전화 앱으로 이동"(showInCallScreen + dismiss),
+ * 아니면 "일단 닫기"(dismiss만, 세션 유지). 세션 종료는 홈/쿨다운 하단의
+ * "안전 확인했어요" 경로가 담당한다 — snooze 메커니즘 이전까지 팝업에
+ * reset 경로를 올리지 않는다 (respawn 방지).
  */
 @Singleton
 class RiskOverlayManager @Inject constructor(
@@ -124,9 +126,9 @@ class RiskOverlayManager @Inject constructor(
     fun isEndCallSuppressed(): Boolean = endCallSuppressionActive
 
     /**
-     * "지금 전화 끊기" 버튼 탭 시 호출.
+     * 통화 종료 동작을 유도한 직후 호출되어 팝업 재표시를 억제한다.
      * 안전 타임아웃을 건 뒤, IDLE 감지 또는 타임아웃 도래 시 해제된다.
-     * BankingCooldownManager에서도 동일 보호가 필요하므로 internal.
+     * (현재 호출부 없음 — 팝업 주 버튼이 showInCallScreen 경로로 바뀌면서 유휴 상태.)
      */
     internal fun startEndCallSuppression(onReleased: (() -> Unit)? = null) {
         endCallSuppressionActive = true
@@ -258,11 +260,12 @@ class RiskOverlayManager @Inject constructor(
             setPadding(dp(24), dp(12), dp(24), dp(32))
         }
 
-        // 주 버튼: 통화 중이면 "전화 앱으로 이동", 아니면 "확인했습니다"
+        // 주 버튼: 통화 중이면 "전화 앱으로 이동"(showInCallScreen + dismiss),
+        // 아니면 "일단 닫기"(dismiss만, 세션 유지 — 안전 확인은 홈/쿨다운에서).
         val cornerPx = dp(8).toFloat()
         val inCall = callEndHelper.isInCall()
         val primaryBtn = Button(context).apply {
-            text = if (inCall) "전화 앱으로 이동" else "확인했습니다"
+            text = if (inCall) "전화 앱으로 이동" else "일단 닫기"
             textSize = 18f
             setTextColor(bgColor)
             setTypeface(null, Typeface.BOLD)
