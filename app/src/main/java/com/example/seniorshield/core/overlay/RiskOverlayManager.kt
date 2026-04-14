@@ -25,6 +25,8 @@ import com.example.seniorshield.core.util.CallEndHelper
 import com.example.seniorshield.domain.model.Guardian
 import com.example.seniorshield.domain.model.RiskEvent
 import com.example.seniorshield.domain.model.RiskLevel
+import com.example.seniorshield.monitoring.call.CallRiskMonitor
+import com.example.seniorshield.monitoring.session.RiskSessionTracker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -47,14 +49,22 @@ private const val MAX_END_CALL_SUPPRESSION_MS = 3_000L
  * SYSTEM_ALERT_WINDOW 권한이 없으면 조용히 생략한다.
  *
  * 주 버튼은 통화 중이면 "전화 앱으로 이동"(showInCallScreen + dismiss),
- * 아니면 "일단 닫기"(dismiss만, 세션 유지). 세션 종료는 홈/쿨다운 하단의
- * "안전 확인했어요" 경로가 담당한다 — snooze 메커니즘 이전까지 팝업에
- * reset 경로를 올리지 않는다 (respawn 방지).
+ * 아니면 "일단 닫기"(dismiss만, 세션 유지).
+ *
+ * 보조 CTA는 통화 여부에 따라 문구와 의미가 분리된다:
+ * - 통화 중: "이 통화는 안전해요" — `reset()` + `snoozeForCall(callId)` + dismiss.
+ *   같은 통화에서 오는 call-derived signal은 Coordinator의 pre-update 필터에서 제거되어
+ *   session respawn이 차단된다. callId가 null로 변한 경우에는 snooze 없이 reset+dismiss로 fallback.
+ * - 비통화: "위험 경고 해제" — `reset()` + dismiss. 세션을 즉시 종료.
+ *
+ * snooze는 IDLE 전이 / 통화 전환 / TTL 15분 / 상위 trigger(REMOTE_CONTROL 등) 출현 시 자동 해제된다.
  */
 @Singleton
 class RiskOverlayManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val callEndHelper: CallEndHelper,
+    private val callRiskMonitor: CallRiskMonitor,
+    private val sessionTracker: RiskSessionTracker,
 ) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -297,6 +307,46 @@ class RiskOverlayManager @Inject constructor(
             }
         }
         buttonArea.addView(primaryBtn)
+
+        // 보조 CTA: 통화 여부에 따라 문구와 동작이 분리된다.
+        // - 통화 중: "이 통화는 안전해요" — reset + snoozeForCall (respawn 차단)
+        // - 비통화: "위험 경고 해제" — reset만 (세션 즉시 종료)
+        val safeCtaText = if (inCall) "이 통화는 안전해요" else "위험 경고 해제"
+        buttonArea.addView(Button(context).apply {
+            text = safeCtaText
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            isFocusable = true
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = cornerPx
+                setColor(Color.TRANSPARENT)
+                setStroke(dp(2), Color.WHITE)
+            }
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(48)).apply {
+                topMargin = dp(8)
+            }
+            setOnClickListener {
+                // 클릭 시점에 callId 재조회 — 빌드 이후 통화 상태가 바뀌었을 수 있다.
+                val liveCallId = callRiskMonitor.currentCallId()
+                sessionTracker.reset()
+                if (liveCallId != null) {
+                    sessionTracker.snoozeForCall(liveCallId)
+                    Log.d(TAG, "이 통화는 안전해요 → reset + snooze (callId=$liveCallId)")
+                } else {
+                    Log.d(TAG, "safe CTA → reset only (callId=null, fallback)")
+                }
+                dismiss()
+            }
+            setOnFocusChangeListener { _, hasFocus ->
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = cornerPx
+                    setColor(Color.TRANSPARENT)
+                    setStroke(dp(if (hasFocus) 4 else 2), if (hasFocus) Color.YELLOW else Color.WHITE)
+                }
+            }
+        })
 
         // 보조 버튼: 보호자에게 도움 요청 (guardian이 설정된 경우에만 표시)
         if (guardian != null) {

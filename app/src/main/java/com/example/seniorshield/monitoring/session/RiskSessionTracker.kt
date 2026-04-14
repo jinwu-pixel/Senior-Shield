@@ -52,6 +52,13 @@ class RiskSessionTracker @Inject constructor() {
         get() = _sessionState.value
         set(value) { _sessionState.value = value }
 
+    // ── snooze state (팝업 call-scoped 억제) ────────────────────────
+    // "이 통화는 안전해요" 클릭 시 session reset과 함께 snooze를 건다.
+    // 같은 통화 ID의 call-derived signal은 Coordinator의 pre-update 필터에서 제거되어
+    // session respawn을 차단한다. IDLE 전이, 새 통화, TTL 만료, 상위 trigger 출현 시 자동 해제.
+    @Volatile private var snoozedCallId: Long? = null
+    @Volatile private var snoozedAt: Long = 0L
+
     fun update(callSignals: List<RiskSignal>, appSignals: List<RiskSignal>): RiskSession? {
         val newSignals: Set<RiskSignal> = (callSignals + appSignals).toSet()
         val now = clock()
@@ -87,6 +94,7 @@ class RiskSessionTracker @Inject constructor() {
                     added.isEmpty() && now - current.lastSignalAt > currentTimeout(current) -> {
                         val duration = (now - current.startedAt) / 1000L
                         Log.d(TAG, "session expired [${current.id}] after ${duration}s (ttl=${if (current.hasTrigger) "60" else "30"}min)")
+                        clearSnooze("session expired")
                         null
                     }
 
@@ -155,15 +163,44 @@ class RiskSessionTracker @Inject constructor() {
         return updated
     }
 
-    fun markCooldownConsumed() {
-        session = session?.copy(cooldownConsumedAt = clock())
-        Log.d(TAG, "cooldownConsumedAt updated")
+    // ── snooze API ─────────────────────────────────────────────────────
+
+    /**
+     * "이 통화는 안전해요" 탭 시 호출. 현재 [callId]에 바인딩된 snooze를 설정한다.
+     * Coordinator는 이후 tick에서 같은 callId로 들어오는 call-derived signal을
+     * `update()` 전에 필터링하여 세션 respawn을 차단한다.
+     */
+    fun snoozeForCall(callId: Long) {
+        snoozedCallId = callId
+        snoozedAt = clock()
+        Log.d(TAG, "snooze set callId=$callId")
     }
+
+    /** snooze 해제. IDLE 전이 / 통화 전환 / TTL 만료 / 상위 trigger / 세션 종료에서 호출. */
+    fun clearSnooze(reason: String) {
+        if (snoozedCallId == null) return
+        Log.d(TAG, "snooze cleared (wasCallId=$snoozedCallId): $reason")
+        snoozedCallId = null
+        snoozedAt = 0L
+    }
+
+    /** snooze 활성 여부 — 단순 bool 체크. */
+    fun isSnoozeActive(): Boolean = snoozedCallId != null
+
+    /** 현재 snooze 대상 통화 ID. null = snooze 비활성. */
+    fun snoozedCallIdOrNull(): Long? = snoozedCallId
+
+    /** 특정 [callId]에 snooze가 걸려있는지. */
+    fun isSnoozedForCall(callId: Long): Boolean = snoozedCallId == callId
+
+    /** snooze가 설정된 시각(epoch ms). null = snooze 비활성. TTL 판정용. */
+    fun snoozedAtOrNull(): Long? = if (snoozedCallId != null) snoozedAt else null
 
     /** 사용자 "안전 확인" — 세션 즉시 종료. */
     fun reset() {
         val id = session?.id
         session = null
+        clearSnooze("session reset")
         Log.d(TAG, "session reset [id=$id]")
     }
 

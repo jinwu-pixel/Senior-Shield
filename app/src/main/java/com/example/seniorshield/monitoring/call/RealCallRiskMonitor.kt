@@ -94,6 +94,13 @@ class RealCallRiskMonitor @Inject constructor(
 
     @Volatile private var lastSuspiciousCallEndedAt: Long? = null
 
+    /**
+     * 현재 활성 통화의 식별자. OFFHOOK 진입 시각(offhookAtMillis) 기준.
+     * OFFHOOK 전이 시 설정되고 IDLE 전이 시 null로 해제된다.
+     * 팝업 snooze의 call-scope 바인딩에 사용된다.
+     */
+    @Volatile private var currentCallIdState: Long? = null
+
     /** 최근 30분 이내 미확인/미검증 수신 호출 타임스탬프 버퍼 */
     private val recentUnknownCalls: MutableList<Long> = CopyOnWriteArrayList()
 
@@ -152,6 +159,8 @@ class RealCallRiskMonitor @Inject constructor(
     }
 
     override fun observeCallContext(): Flow<CallMonitorState> = sharedCallContext
+
+    override fun currentCallId(): Long? = currentCallIdState
 
     // ── observeCallSignals ──────────────────────────────────────────────────────
 
@@ -350,6 +359,17 @@ class RealCallRiskMonitor @Inject constructor(
                     onOutgoingUpdated = { isOutgoing = it },
                 )
                 previousState = newState
+                when (newState) {
+                    CallState.OFFHOOK -> {
+                        currentCallIdState = offhookAtMillis
+                        Log.d(TAG, "currentCallId set → $currentCallIdState")
+                    }
+                    CallState.IDLE -> {
+                        currentCallIdState = null
+                        Log.d(TAG, "currentCallId cleared (IDLE)")
+                    }
+                    else -> {}
+                }
                 if (newState == CallState.IDLE) {
                     capturedPhoneNumber = null
                     isUnknownCaller = null
@@ -387,11 +407,16 @@ class RealCallRiskMonitor @Inject constructor(
                 onOutgoingUpdated = { isOutgoing = it },
             )
             previousState = currentCallState
+            if (currentCallState == CallState.OFFHOOK) {
+                currentCallIdState = offhookAtMillis
+                Log.d(TAG, "currentCallId seeded → $currentCallIdState")
+            }
             if (seedCtx != null) {
                 trySend(seedCtx)
                 Log.d(TAG, "seeded in-progress call: state=$currentCallState")
             }
         } else {
+            currentCallIdState = null
             trySend(null) // Initial idle
         }
 
@@ -453,6 +478,18 @@ class RealCallRiskMonitor @Inject constructor(
                     onOutgoingUpdated = { isOutgoing = it },
                 )
                 previousState = newState
+
+                when (newState) {
+                    CallState.OFFHOOK -> {
+                        currentCallIdState = offhookAtMillis
+                        Log.d(TAG, "currentCallId set → $currentCallIdState")
+                    }
+                    CallState.IDLE -> {
+                        currentCallIdState = null
+                        Log.d(TAG, "currentCallId cleared (IDLE)")
+                    }
+                    else -> {}
+                }
 
                 // IDLE 전환 후 리셋 (buildContext가 먼저 값을 사용한 뒤 초기화)
                 if (newState == CallState.IDLE) {

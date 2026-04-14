@@ -30,6 +30,31 @@ import javax.inject.Singleton
 
 private const val TAG = "SeniorShield-Coordinator"
 
+/** snooze 자동 만료: 설정 후 15분 경과 시 해제. */
+private const val SNOOZE_TTL_MS = 15 * 60 * 1000L
+
+/**
+ * same-call snooze가 활성인 동안 `sessionTracker.update()` 전에 제거되는 call-derived signal.
+ * TELEBANKING_AFTER_SUSPICIOUS는 여기 포함되지 않는다 — 상위 trigger로 분류되어 snooze를 해제한다.
+ */
+private val CALL_DERIVED_SIGNALS: Set<RiskSignal> = setOf(
+    RiskSignal.UNKNOWN_CALLER,
+    RiskSignal.LONG_CALL_DURATION,
+    RiskSignal.UNVERIFIED_CALLER,
+    RiskSignal.REPEATED_UNKNOWN_CALLER,
+    RiskSignal.REPEATED_CALL_THEN_LONG_TALK,
+)
+
+/**
+ * 같은 tick에 하나라도 관측되면 snooze를 즉시 해제하고 정상 평가로 복귀한다.
+ * 여기 포함된 신호는 pre-update 필터 대상이 아니다.
+ */
+private val UPGRADE_TRIGGERS: Set<RiskSignal> = setOf(
+    RiskSignal.REMOTE_CONTROL_APP_OPENED,
+    RiskSignal.BANKING_APP_OPENED_AFTER_REMOTE_APP,
+    RiskSignal.TELEBANKING_AFTER_SUSPICIOUS,
+)
+
 /**
  * 통화·앱 사용 신호를 세션 단위로 누적 평가하고 알림·인터럽터를 조율한다.
  *
@@ -70,6 +95,12 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
     private var job: Job? = null
     @Volatile private var previousBankingForeground = false
 
+    /**
+     * 이번 세션에서 쿨다운이 이미 소비된 세션 ID. 같은 session.id에서는 재발동 금지.
+     * 세션 변경(id 다름) 또는 세션 소멸(null 반환) 시 tick 초입에서 자동 clear.
+     */
+    @Volatile private var cooldownConsumedSessionId: String? = null
+
     private suspend fun firstGuardian(): Guardian? =
         guardianRepository.observeGuardians().first().firstOrNull()
 
@@ -87,26 +118,75 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                 CombinedSignals(callSignals, appSignals, bankingForeground, installSignals, deviceEnvSignals)
             }
                 .collect { (callSignals, appSignals, bankingForeground, installSignals, deviceEnvSignals) ->
-                    Log.d(TAG, "combine fired — call=$callSignals, app=$appSignals, banking=$bankingForeground, install=$installSignals, deviceEnv=$deviceEnvSignals")
+                    Log.d(TAG, "combine fired — rawCall=$callSignals, app=$appSignals, banking=$bankingForeground, install=$installSignals, deviceEnv=$deviceEnvSignals")
 
                     // ── end-call suppression: IDLE 감지 시 안정화 타이머 시작 ──
+                    // raw callSignals 기준 — snooze filter와 무관한 실제 통화 상태 반영.
                     if (overlayManager.isEndCallSuppressed() && callSignals.isEmpty()) {
                         overlayManager.scheduleSuppressionRelease()
                         Log.d(TAG, "call became IDLE during suppression, stabilization scheduled")
                     }
 
-                    val session = sessionTracker.update(callSignals, appSignals + installSignals + deviceEnvSignals) ?: run {
+                    // ── 1단계: pre-update snooze stage ───────────────────────
+                    // sessionTracker.update() 전에 snooze를 평가하고 call-derived signal을 필터링한다.
+                    // 목적: same call respawn 차단. 같은 통화에서 반복 수신되는 PASSIVE 신호가
+                    //       세션에 누적되어 score/alertState가 상승하거나 재알림이 발생하는 것을 막는다.
+                    val liveCallId = callMonitor.currentCallId()
+                    val nonCallSignals = appSignals + installSignals + deviceEnvSignals
+                    val upgradeTriggerPresent =
+                        callSignals.any { it in UPGRADE_TRIGGERS } ||
+                            nonCallSignals.any { it in UPGRADE_TRIGGERS }
+
+                    if (sessionTracker.isSnoozeActive()) {
+                        val snoozedId = sessionTracker.snoozedCallIdOrNull()
+                        val snoozedAt = sessionTracker.snoozedAtOrNull() ?: 0L
+                        val now = System.currentTimeMillis()
+                        when {
+                            liveCallId == null ->
+                                sessionTracker.clearSnooze("IDLE (wasCallId=$snoozedId)")
+                            liveCallId != snoozedId ->
+                                sessionTracker.clearSnooze("new call: live=$liveCallId snoozed=$snoozedId")
+                            now - snoozedAt > SNOOZE_TTL_MS ->
+                                sessionTracker.clearSnooze("TTL 15min elapsed (wasCallId=$snoozedId)")
+                            upgradeTriggerPresent ->
+                                sessionTracker.clearSnooze("upgrade trigger present in raw signals")
+                            else -> { /* 유지 */ }
+                        }
+                    }
+
+                    // snooze가 여전히 활성이고 liveCallId와 일치하면 call-derived signal 필터링.
+                    val filteredCallSignals: List<RiskSignal> =
+                        if (liveCallId != null && sessionTracker.isSnoozedForCall(liveCallId)) {
+                            val filtered = callSignals.filterNot { it in CALL_DERIVED_SIGNALS }
+                            Log.d(TAG, "snooze filter applied (callId=$liveCallId): rawCall=$callSignals → filteredCall=$filtered")
+                            filtered
+                        } else {
+                            callSignals
+                        }
+
+                    // ── update: filter 적용된 신호로 세션 평가 ───────────────
+                    val session = sessionTracker.update(filteredCallSignals, nonCallSignals) ?: run {
                         Log.d(TAG, "no active session — dismiss overlay/cooldown if showing")
                         overlayManager.dismiss()
                         cooldownManager.dismissIfShowing()
                         eventSink.clearCurrentRiskEvent()
+                        if (cooldownConsumedSessionId != null) {
+                            Log.d(TAG, "cooldownConsumedSessionId cleared: session disappeared (was=$cooldownConsumedSessionId)")
+                            cooldownConsumedSessionId = null
+                        }
                         previousBankingForeground = bankingForeground
                         return@collect
                     }
 
+                    // ── 2단계: 세션 변경 감지 → cooldownConsumedSessionId 자동 clear ──
+                    if (cooldownConsumedSessionId != null && cooldownConsumedSessionId != session.id) {
+                        Log.d(TAG, "cooldownConsumedSessionId cleared: session changed (was=$cooldownConsumedSessionId, now=${session.id})")
+                        cooldownConsumedSessionId = null
+                    }
+
                     val score = evaluator.evaluate(session.accumulatedSignals.toList())
                     val alertState = alertStateResolver.resolve(session)
-                    Log.d(TAG, "session score: total=${score.total}, level=${score.level}, alertState=$alertState")
+                    Log.d(TAG, "session score: total=${score.total}, level=${score.level}, alertState=$alertState, sessionId=${session.id}")
 
                     if (alertState == AlertState.OBSERVE) {
                         previousBankingForeground = bankingForeground
@@ -121,24 +201,27 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                     }
 
                     // ── trigger 라이프사이클 동기화 ────────────────────────────
-                    // 현재 tick의 raw signal에 없는 notified trigger를 제거한다.
-                    // RealAppUsageRiskMonitor의 30초 window가 debounce 역할을 하므로
-                    // "tick signal에 없음" = "30초 이상 해당 앱 포그라운드 아님" = "trigger 떠남".
-                    // 이후 재감지 시 new trigger로 팝업/쿨다운 재발동이 가능해진다.
+                    // rawTickSignals는 필터링된 call signal을 사용한다 — snooze로 걸러진 PASSIVE 신호는
+                    // 세션에도 반영되지 않았으므로 sync 입력에서도 빠져야 일관된다.
+                    // (CALL_DERIVED_SIGNALS는 모두 PASSIVE라 notifiedActiveThreats에 들어갈 일이 없어
+                    //  실무상 영향은 없지만 의미상 raw 대신 filtered를 사용한다.)
                     val rawTickSignals: Set<RiskSignal> =
-                        (callSignals + appSignals + installSignals + deviceEnvSignals).toSet()
+                        (filteredCallSignals + nonCallSignals).toSet()
                     var syncedSession = sessionTracker.syncActiveThreats(rawTickSignals) ?: session
 
-                    // 세션 누적 trigger(score/reason 계산용)과 현재 tick의 활성 trigger(팝업 판단용)를 분리한다.
-                    // accumulatedSignals는 session TTL 만료까지 누적되므로 팝업 판단에 쓰면 "신호가 사라져도
-                    // 계속 new trigger로 인식"되어 뒤늦은 팝업이 반복 발생한다.
                     val triggers = syncedSession.accumulatedSignals.filter { it.category == SignalCategory.TRIGGER }.toSet()
                     val activeTriggers = rawTickSignals.filter { it.category == SignalCategory.TRIGGER }.toSet()
 
+                    // snooze가 살아남았다면 (same call + no upgrade) 이번 tick에서 popup/notification/cooldown을 모두 스킵.
+                    val snoozeActive = sessionTracker.isSnoozeActive()
+                    if (snoozeActive) {
+                        Log.d(TAG, "snooze still active — skip popup/notification/cooldown this tick (callId=$liveCallId)")
+                        previousBankingForeground = bankingForeground
+                        return@collect
+                    }
+
                     // 팝업이 표시될 수 없는 상태(뱅킹 포그라운드 또는 쿨다운 표시 중)에서는
                     // 쿨다운/뱅킹 UI가 경고를 담당하므로 현재 활성 trigger를 자동 통보 처리한다.
-                    // 이를 통해 쿨다운 종료 후 "뱅킹 포그라운드 중 추가된 trigger가 뒤늦은 팝업으로 발현"되는
-                    // 버그를 방지한다.
                     if ((bankingForeground || cooldownManager.isShowing()) && activeTriggers.isNotEmpty()) {
                         val merged = syncedSession.notifiedActiveThreats + activeTriggers
                         if (merged != syncedSession.notifiedActiveThreats) {
@@ -147,7 +230,55 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                         }
                     }
 
+                    // ── 4단계: 쿨다운 발동 여부를 팝업보다 먼저 판정 ──────────
+                    // 같은 tick에서 쿨다운이 발동하면 팝업은 생략한다(modal surface 1개 원칙).
+                    var cooldownFiredThisTick = false
+                    val isCallActive = liveCallId != null
+
+                    val bankingJustOpened = bankingForeground && !previousBankingForeground
+                    if (bankingJustOpened && alertState.ordinal >= AlertState.GUARDED.ordinal
+                        && !isCooldownGhostTransition()
+                    ) {
+                        val isCallBased = session.accumulatedSignals.any { it in AlertStateResolver.CALL_SIGNALS }
+                        if (!isCallBased) {
+                            Log.d(TAG, "뱅킹 쿨다운 생략: call-based 세션 아님")
+                        } else if (cooldownConsumedSessionId == session.id) {
+                            Log.d(TAG, "뱅킹 쿨다운 생략: 세션당 1회 정책 (sessionId=${session.id}, alertState=$alertState)")
+                        } else {
+                            val reason = buildCooldownReason(session.accumulatedSignals)
+                            cooldownManager.triggerIfNotActive(score.level, reason, isCallActive)
+                            cooldownConsumedSessionId = session.id
+                            Log.d(TAG, "cooldownConsumedSessionId set=${session.id}: banking cooldown fired (level=${score.level}, isCallActive=$isCallActive)")
+                            sessionTracker.markActiveThreatsNotified(triggers)
+                            cooldownFiredThisTick = true
+                            Log.d(TAG, "뱅킹 쿨다운 발동: level=${score.level}, alertState=$alertState, reason=$reason")
+                        }
+                    }
+
+                    // ── telebanking cooldown: CRITICAL 세션에서 텔레뱅킹 발신 시 쿨다운 ──
+                    if (!cooldownFiredThisTick &&
+                        alertState == AlertState.CRITICAL &&
+                        RiskSignal.TELEBANKING_AFTER_SUSPICIOUS in filteredCallSignals &&
+                        !cooldownManager.isShowing()
+                    ) {
+                        if (cooldownConsumedSessionId == session.id) {
+                            Log.d(TAG, "텔레뱅킹 쿨다운 생략: 세션당 1회 정책 (sessionId=${session.id})")
+                        } else {
+                            cooldownManager.triggerIfNotActive(
+                                score.level,
+                                "은행 ARS 전화가 감지되었습니다.\n잠시 멈추고 다시 생각해 보세요.",
+                                isCallActive,
+                            )
+                            cooldownConsumedSessionId = session.id
+                            Log.d(TAG, "cooldownConsumedSessionId set=${session.id}: telebanking cooldown fired (level=${score.level})")
+                            sessionTracker.markActiveThreatsNotified(triggers)
+                            cooldownFiredThisTick = true
+                            Log.d(TAG, "텔레뱅킹 쿨다운 발동: level=${score.level}")
+                        }
+                    }
+
                     // ── notification: AlertState 전이 또는 RiskLevel 상승 시 ────
+                    // 팝업은 쿨다운이 같은 tick에 발동했으면 생략(4단계). notification은 유지.
                     var popupShownThisTick = false
                     val prevAlertOrdinal = session.notifiedAlertState?.ordinal ?: -1
                     val prevLevelOrdinal = session.notifiedLevel?.ordinal ?: -1
@@ -162,25 +293,20 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
 
                         notificationManager.notify(event)
 
-                        // popup: INTERRUPT/CRITICAL 전이 시 — 뱅킹 미포그라운드 + 쿨다운 미표시
                         if (alertState.ordinal >= AlertState.INTERRUPT.ordinal &&
-                            !bankingForeground && !cooldownManager.isShowing()
+                            !bankingForeground && !cooldownManager.isShowing() && !cooldownFiredThisTick
                         ) {
                             overlayManager.show(event, firstGuardian())
                             sessionTracker.markActiveThreatsNotified(triggers)
                             popupShownThisTick = true
                             Log.d(TAG, "popup shown on state transition → $alertState")
+                        } else if (cooldownFiredThisTick && alertState.ordinal >= AlertState.INTERRUPT.ordinal) {
+                            Log.d(TAG, "popup suppressed: cooldown fired this tick")
                         }
                     }
 
                     // ── 새 trigger 재알림: 에스컬레이션 없이도 새 trigger 감지 시 팝업 ──
-                    // popupShownThisTick 가드: 같은 사이클에서 에스컬레이션 팝업과 중복 방지.
-                    // activeTriggers 기준: 현재 tick에 실제로 raw signal에 존재하는 trigger만.
-                    // accumulatedSignals(triggers) 기준으로 하면 신호가 사라져도 "new trigger"로
-                    // 인식되어 뒤늦은 팝업이 반복 발생한다.
-                    // notifiedActiveThreats는 syncedSession 기준(사라진 trigger는 사전 제거됨).
-                    // 같은 trigger가 종료 후 재감지되면 newTriggers에 다시 포함된다.
-                    if (!popupShownThisTick &&
+                    if (!popupShownThisTick && !cooldownFiredThisTick &&
                         alertState.ordinal >= AlertState.INTERRUPT.ordinal && activeTriggers.isNotEmpty()
                     ) {
                         val newTriggers = activeTriggers - syncedSession.notifiedActiveThreats
@@ -192,48 +318,6 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                             sessionTracker.markActiveThreatsNotified(syncedSession.notifiedActiveThreats + newTriggers)
                             Log.d(TAG, "새 trigger 팝업: new=$newTriggers")
                         }
-                    }
-
-                    // ── banking cooldown: call-based 세션에서만 발동 ──────────
-                    val bankingJustOpened = bankingForeground && !previousBankingForeground
-                    if (bankingJustOpened && alertState.ordinal >= AlertState.GUARDED.ordinal
-                        && !isCooldownGhostTransition()
-                    ) {
-                        val isCallBased = session.accumulatedSignals.any { it in AlertStateResolver.CALL_SIGNALS }
-                        if (isCallBased) {
-                            // CRITICAL: 금융앱 재진입마다 쿨다운 재발동 (dedupe 우회)
-                            // GUARDED/INTERRUPT: 새 신호 없이 banking 재진입만으로 반복하지 않음
-                            val consumed = session.cooldownConsumedAt
-                            val hasNewSignals = consumed == null || session.lastSignalAt > consumed
-                            if (hasNewSignals || alertState == AlertState.CRITICAL) {
-                                val reason = buildCooldownReason(session.accumulatedSignals)
-                                val isCallActive = callSignals.isNotEmpty()
-                                cooldownManager.triggerIfNotActive(score.level, reason, isCallActive)
-                                sessionTracker.markCooldownConsumed()
-                                // 쿨다운이 팝업을 대체하므로 trigger도 통보 완료 처리.
-                                // 이렇게 하지 않으면 뱅킹 앱 종료 시 미통보 trigger로 팝업이 뒤늦게 발생.
-                                sessionTracker.markActiveThreatsNotified(triggers)
-                                Log.d(TAG, "뱅킹 쿨다운 발동: level=${score.level}, alertState=$alertState, isCallActive=$isCallActive, reason=$reason")
-                            } else {
-                                Log.d(TAG, "뱅킹 쿨다운 생략: 동일 세션 내 재발동 (새 신호 없음)")
-                            }
-                        } else {
-                            Log.d(TAG, "뱅킹 쿨다운 생략: call-based 세션 아님")
-                        }
-                    }
-
-                    // ── telebanking cooldown: CRITICAL 세션에서 텔레뱅킹 재발신 시 쿨다운 ──
-                    if (alertState == AlertState.CRITICAL &&
-                        RiskSignal.TELEBANKING_AFTER_SUSPICIOUS in callSignals &&
-                        !cooldownManager.isShowing()
-                    ) {
-                        val isCallActive = callSignals.isNotEmpty()
-                        cooldownManager.triggerIfNotActive(
-                            score.level,
-                            "은행 ARS 전화가 감지되었습니다.\n잠시 멈추고 다시 생각해 보세요.",
-                            isCallActive,
-                        )
-                        Log.d(TAG, "텔레뱅킹 쿨다운 발동: level=${score.level}")
                     }
 
                     previousBankingForeground = bankingForeground

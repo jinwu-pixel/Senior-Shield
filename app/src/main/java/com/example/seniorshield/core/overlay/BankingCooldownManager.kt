@@ -48,8 +48,6 @@ private const val SHOW_IN_CALL_DELAY_MS = 500L
 class BankingCooldownManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val callEndHelper: CallEndHelper,
-    private val overlayManager: RiskOverlayManager,
-    private val sessionTracker: com.example.seniorshield.monitoring.session.RiskSessionTracker,
 ) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -322,48 +320,6 @@ class BankingCooldownManager @Inject constructor(
             }
         }
         buttonArea.addView(actionBtn)
-
-        // "안전 확인했어요" — 세션 종료 + 쿨다운 해제
-        val safeConfirmBtn = Button(context).apply {
-            text = "안전 확인했어요"
-            textSize = 16f
-            setTextColor(Color.WHITE)
-            isFocusable = true
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = cornerPx
-                setColor(Color.TRANSPARENT)
-                setStroke(dp(2), Color.WHITE)
-            }
-            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(48)).apply {
-                topMargin = dp(8)
-            }
-            setOnClickListener {
-                Log.d(TAG, "안전 확인 — 세션 종료 + 쿨다운 해제")
-                sessionTracker.reset()
-                dismiss()
-            }
-            setOnFocusChangeListener { _, hasFocus ->
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    cornerRadius = cornerPx
-                    setColor(Color.TRANSPARENT)
-                    setStroke(dp(if (hasFocus) 4 else 2), if (hasFocus) Color.YELLOW else Color.WHITE)
-                }
-            }
-        }
-        buttonArea.addView(safeConfirmBtn)
-
-        // 안전 확인 부가 설명
-        buttonArea.addView(TextView(context).apply {
-            text = "현재 위험 세션을 종료합니다.\n통화가 끝난 상태라면 경고가 다시 표시되지 않습니다."
-            textSize = 12f
-            setTextColor(Color.parseColor("#FFCDD2"))
-            gravity = Gravity.CENTER
-            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
-                topMargin = dp(4)
-            }
-        })
 
         root.addView(buttonArea)
 
