@@ -1,0 +1,52 @@
+{
+  "run_id": "20260415-150240",
+  "decision_key": "SS-TTL-EXPIRY-POLICY",
+  "packet_version": 1,
+  "packet_path": "templates\\packets\\ss-ttl-expiry-policy.yaml",
+  "started_at": "2026-04-15T06:02:40.318966+00:00",
+  "finished_at": "2026-04-15T06:02:40.325245+00:00",
+  "elapsed_ms": 0,
+  "schema_validation_enabled": true,
+  "providers": [
+    {
+      "name": "claude-opus-4-6",
+      "reviewer_mode": "advisory_only",
+      "status": "ok",
+      "elapsed_ms": 0,
+      "cost_estimate": null,
+      "error": null,
+      "failure_reason": null,
+      "schema_errors": null
+    },
+    {
+      "name": "gpt-4o",
+      "reviewer_mode": "full_reviewer",
+      "status": "ok",
+      "elapsed_ms": 0,
+      "cost_estimate": null,
+      "error": null,
+      "failure_reason": null,
+      "schema_errors": null
+    },
+    {
+      "name": "gemini-1.5-pro",
+      "reviewer_mode": "full_reviewer",
+      "status": "partial",
+      "elapsed_ms": 0,
+      "cost_estimate": null,
+      "error": "<root>: 'agreement_points' is a required property; <root>: 'objections' is a required property; <root>: 'edge_cases' is a required property",
+      "failure_reason": "schema_mismatch",
+      "schema_errors": [
+        "<root>: 'agreement_points' is a required property",
+        "<root>: 'objections' is a required property",
+        "<root>: 'edge_cases' is a required property",
+        "<root>: 'recommended_option' is a required property",
+        "<root>: 'requires_human_decision' is a required property",
+        "<root>: 'blocking_questions' is a required property",
+        "<root>: 'recommended_option' is a required property",
+        "confidence: 9.9 is greater than the maximum of 1.0",
+        "verdict: 'maybe' is not one of ['adopt', 'revise', 'reject']"
+      ]
+    }
+  ]
+}

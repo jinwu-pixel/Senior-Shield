@@ -1,0 +1,31 @@
+{
+  "provider": "gpt-4o-mini",
+  "reviewer_mode": "full_reviewer",
+  "review_status": "partial",
+  "started_at": "2026-04-15T08:08:41.956614+00:00",
+  "finished_at": "2026-04-15T08:08:45.936380+00:00",
+  "elapsed_ms": 3968,
+  "error": "confidence: 'high' is not of type 'number'",
+  "failure_reason": "schema_mismatch",
+  "schema_errors": [
+    "confidence: 'high' is not of type 'number'"
+  ],
+  "response": {
+    "reviewer": "CROSS_CHECK Reviewer",
+    "reviewer_mode": "full_reviewer",
+    "review_status": "ok",
+    "verdict": "adopt",
+    "confidence": "high",
+    "agreement_points": [
+      "The proposal meets the schema requirements.",
+      "No alternative proposals are necessary for this smoke probe."
+    ],
+    "objections": [],
+    "edge_cases": [
+      "Potential issues with provider responsiveness may not be identified if schema compliance fails."
+    ],
+    "recommended_option": "ALT-1",
+    "requires_human_decision": false,
+    "blocking_questions": []
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "provider": "gemini-1.5-pro",
+  "reviewer_mode": "full_reviewer",
+  "review_status": "failed",
+  "started_at": "2026-04-15T06:11:19.098451+00:00",
+  "finished_at": "2026-04-15T06:11:19.098451+00:00",
+  "elapsed_ms": 0,
+  "error": "RuntimeError: simulated provider failure",
+  "response": null
+}

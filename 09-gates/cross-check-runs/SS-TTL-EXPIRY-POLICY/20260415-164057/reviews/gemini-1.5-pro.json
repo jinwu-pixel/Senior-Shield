@@ -1,0 +1,28 @@
+{
+  "provider": "gemini-1.5-pro",
+  "reviewer_mode": "full_reviewer",
+  "review_status": "partial",
+  "started_at": "2026-04-15T07:40:57.612887+00:00",
+  "finished_at": "2026-04-15T07:40:57.614888+00:00",
+  "elapsed_ms": 0,
+  "error": "<root>: 'agreement_points' is a required property; <root>: 'objections' is a required property; <root>: 'edge_cases' is a required property",
+  "failure_reason": "schema_mismatch",
+  "schema_errors": [
+    "<root>: 'agreement_points' is a required property",
+    "<root>: 'objections' is a required property",
+    "<root>: 'edge_cases' is a required property",
+    "<root>: 'recommended_option' is a required property",
+    "<root>: 'requires_human_decision' is a required property",
+    "<root>: 'blocking_questions' is a required property",
+    "<root>: 'recommended_option' is a required property",
+    "confidence: 9.9 is greater than the maximum of 1.0",
+    "verdict: 'maybe' is not one of ['adopt', 'revise', 'reject']"
+  ],
+  "response": {
+    "reviewer": "gemini-1.5-pro",
+    "reviewer_mode": "full_reviewer",
+    "review_status": "ok",
+    "verdict": "maybe",
+    "confidence": 9.9
+  }
+}

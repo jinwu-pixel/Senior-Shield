@@ -1,0 +1,31 @@
+{
+  "provider": "claude-opus-4-6",
+  "reviewer_mode": "advisory_only",
+  "review_status": "ok",
+  "started_at": "2026-04-15T08:10:03.579202+00:00",
+  "finished_at": "2026-04-15T08:10:09.738147+00:00",
+  "elapsed_ms": 6157,
+  "error": null,
+  "failure_reason": null,
+  "schema_errors": null,
+  "response": {
+    "reviewer": "claude",
+    "reviewer_mode": "advisory_only",
+    "review_status": "ok",
+    "verdict": "adopt",
+    "confidence": 0.95,
+    "agreement_points": [
+      "이 패킷은 smoke probe 목적이며 실제 제품 결정이 아니므로 verdict=adopt가 적절하다",
+      "스키마 준수 검증만이 목표이며 current_proposal이 해당 목적에 부합한다",
+      "invariants에 명시된 required_output.fields 스키마 준수를 본 응답이 충족한다"
+    ],
+    "objections": [],
+    "edge_cases": [
+      "provider 3사 중 일부가 timeout 또는 rate limit에 걸릴 경우 smoke probe 자체가 실패할 수 있음",
+      "smoke probe 통과가 실제 운영 환경에서의 안정성을 보장하지는 않음"
+    ],
+    "recommended_option": "current",
+    "requires_human_decision": false,
+    "blocking_questions": []
+  }
+}

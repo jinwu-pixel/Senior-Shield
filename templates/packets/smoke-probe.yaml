@@ -1,0 +1,57 @@
+# 실제 provider smoke 용 최소 패킷.
+# token 낭비를 줄이기 위해 매우 작게 유지한다.
+
+decision_key: SS-SMOKE-PROBE
+packet_version: 1
+supersedes_run_id: null
+
+domain: senior_shield
+change_type: state_machine_rule
+decision_required: "smoke probe — 실제 provider 3사 최소 호출 검증"
+
+context: |
+  CROSS_CHECK provider adapter 가 실제 호출 가능한지만 확인.
+  결정 내용 자체는 중요하지 않다. 응답 형식/스키마 준수만 검증한다.
+
+current_proposal: |
+  각 provider 가 스키마에 맞는 JSON 하나를 돌려주는지 확인한다.
+
+alternatives:
+  - id: ALT-1
+    description: "대안 없음 — smoke 목적"
+
+invariants:
+  - "응답은 required_output.fields 스키마를 따라야 한다"
+
+non_goals:
+  - "실제 제품 결정"
+
+risks_if_wrong:
+  - "provider wiring 문제 조기 발견 실패"
+
+evaluation_criteria:
+  - schema_compliance
+
+severity_guide:
+  critical: "invariants 위반"
+  high:     "핵심 로직 수정 필요"
+  medium:   "보완 권장"
+  low:      "스타일"
+
+review_questions:
+  - "이 packet 은 smoke probe 이다. `verdict=adopt` 로 답해도 되는가?"
+
+required_output:
+  format: json
+  fields:
+    - reviewer
+    - reviewer_mode
+    - review_status
+    - verdict
+    - confidence
+    - agreement_points
+    - objections
+    - edge_cases
+    - recommended_option
+    - requires_human_decision
+    - blocking_questions

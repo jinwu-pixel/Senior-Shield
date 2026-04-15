@@ -1,0 +1,80 @@
+# CROSS_CHECK Packet Template
+#
+# 하나의 의사결정 축 = 하나의 decision_key
+# packet 수정 시 packet_version 증가
+# 같은 decision_key 재실행 시 gate log에서 이력 추적 가능해야 함
+
+decision_key: SS-EXAMPLE-KEY              # 같은 의사결정 축에서 고정
+packet_version: 1                         # 패킷 수정 시 증가
+supersedes_run_id: null                   # 이 패킷이 갱신하는 이전 run_id (있으면)
+
+domain: senior_shield                     # senior_shield | writing_pipeline
+change_type: state_machine_rule           # state_machine_rule | policy_boundary | architecture | other
+decision_required: "한 문장으로 결정 대상 요약"
+
+context: |
+  현재 의사결정의 배경 요약.
+  왜 이 결정이 필요한지, 무엇이 걸려있는지 기록한다.
+
+current_proposal: |
+  현재 제안안. 구체적으로 무엇을 바꾸는지.
+
+alternatives:
+  - id: ALT-1
+    description: "대안 1 — 한 줄 요약"
+  - id: ALT-2
+    description: "대안 2 — 한 줄 요약"
+
+invariants:
+  - "절대 깨지면 안 되는 조건 1"
+  - "절대 깨지면 안 되는 조건 2"
+
+non_goals:
+  - "이번 변경에서 다루지 않는 것"
+
+risks_if_wrong:
+  - "잘못 결정했을 때 생길 문제"
+
+evaluation_criteria:
+  - false_positive_fatigue
+  - false_negative_risk
+  - duplicate_action_risk
+  - state_consistency
+  - explainability
+
+severity_guide:
+  critical: "invariants 위반, safety/policy/canon break"
+  high:     "핵심 로직 수정 필요, false negative 증가, duplicate action 가능성"
+  medium:   "보완 권장이나 현안도 동작 가능"
+  low:      "스타일/표현/선호 수준"
+
+# 도메인별 reviewer 질문 슬롯. packet 작성 시 도메인에 맞는 세트를 채운다.
+# Senior Shield 기본 세트:
+review_questions:
+  - "call-derived signal snooze와 app-derived signal 유지가 충돌하는가?"
+  - "TTL 만료 후 상태 하강이 duplicate guardian action을 유발하는가?"
+  - "실제 보이스피싱 시나리오에서 false negative가 증가하는가?"
+  - "오탐 상황에서 senior fatigue를 과도하게 늘리는가?"
+  - "기존 cooldown semantics가 깨지는 경로가 있는가?"
+
+# Writing Pipeline 세트 예시 (취향 질문 금지, 규약 위반 검출만):
+# review_questions:
+#   - "brief contract 위반이 있는가?"
+#   - "canon consistency가 깨지는가?"
+#   - "voice drift가 발생하는가?"
+#   - "설명 과잉으로 pressure가 죽는가?"
+#   - "scene-function이 약화되는가?"
+
+required_output:
+  format: json
+  fields:
+    - reviewer
+    - reviewer_mode          # advisory_only | full_reviewer
+    - verdict                # adopt | revise | reject
+    - confidence             # 0.0 ~ 1.0
+    - agreement_points
+    - objections             # [{point, severity}]  severity ∈ severity_guide
+    - edge_cases
+    - recommended_option     # current | ALT-1 | ALT-2 | ...
+    - requires_human_decision
+    - blocking_questions

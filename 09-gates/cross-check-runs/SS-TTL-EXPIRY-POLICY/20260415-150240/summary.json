@@ -1,0 +1,41 @@
+{
+  "run_id": "20260415-150240",
+  "decision_key": "SS-TTL-EXPIRY-POLICY",
+  "packet_version": 1,
+  "supersedes_run_id": null,
+  "suggested_action": "revise",
+  "agreement_state": "WEAK_CONSENSUS",
+  "degraded": true,
+  "user_decision_required": true,
+  "reviewer_statuses": {
+    "claude-opus-4-6": "ok",
+    "gpt-4o": "ok",
+    "gemini-1.5-pro": "partial"
+  },
+  "failed_reviewers": [
+    "gemini-1.5-pro"
+  ],
+  "consensus_points": [],
+  "divergence_points": [
+    {
+      "reviewer": "gpt-4o",
+      "verdict": "revise",
+      "objections": [
+        {
+          "point": "엣지케이스 TTL 만료와 call state 전환 순서 검토 필요",
+          "severity": "high"
+        }
+      ],
+      "recommended_option": "current"
+    }
+  ],
+  "blocking_issues": [
+    {
+      "source": "gpt-4o",
+      "point": "엣지케이스 TTL 만료와 call state 전환 순서 검토 필요",
+      "severity": "high"
+    }
+  ],
+  "note": "gemini-1.5-pro(partial); 1명의 full_reviewer + 1명의 advisory 로 축소 집계. suggested_action 은 참고값이며 user_decision_required 가 우선.",
+  "related_runs": []
+}

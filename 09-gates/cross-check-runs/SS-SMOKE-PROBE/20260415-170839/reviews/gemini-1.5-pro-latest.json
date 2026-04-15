@@ -1,0 +1,12 @@
+{
+  "provider": "gemini-1.5-pro-latest",
+  "reviewer_mode": "full_reviewer",
+  "review_status": "failed",
+  "started_at": "2026-04-15T08:08:41.957613+00:00",
+  "finished_at": "2026-04-15T08:08:42.230728+00:00",
+  "elapsed_ms": 265,
+  "error": "NotFound: 404 models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+  "failure_reason": "exception",
+  "schema_errors": null,
+  "response": null
+}

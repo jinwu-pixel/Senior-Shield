@@ -1,0 +1,12 @@
+{
+  "provider": "gpt-4o-mini",
+  "reviewer_mode": "full_reviewer",
+  "review_status": "failed",
+  "started_at": "2026-04-15T08:00:41.439994+00:00",
+  "finished_at": "2026-04-15T08:00:44.899026+00:00",
+  "elapsed_ms": 3469,
+  "error": "RateLimitError: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+  "failure_reason": "exception",
+  "schema_errors": null,
+  "response": null
+}

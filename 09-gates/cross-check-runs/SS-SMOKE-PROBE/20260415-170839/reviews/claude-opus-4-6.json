@@ -1,0 +1,32 @@
+{
+  "provider": "claude-opus-4-6",
+  "reviewer_mode": "advisory_only",
+  "review_status": "ok",
+  "started_at": "2026-04-15T08:08:41.955615+00:00",
+  "finished_at": "2026-04-15T08:08:50.405576+00:00",
+  "elapsed_ms": 8437,
+  "error": null,
+  "failure_reason": null,
+  "schema_errors": null,
+  "response": {
+    "reviewer": "claude",
+    "reviewer_mode": "advisory_only",
+    "review_status": "ok",
+    "verdict": "adopt",
+    "confidence": 0.95,
+    "agreement_points": [
+      "이 패킷은 smoke probe 목적으로 설계되었으며 실제 제품 결정이 아님을 명확히 명시하고 있다",
+      "스키마 준수 여부만 검증하는 것이 목적이므로 verdict=adopt가 적절하다",
+      "required_output.fields 스키마를 따르는 응답을 반환하면 provider wiring 정상 동작이 확인된다",
+      "invariants가 명확하게 정의되어 있어 검증 기준이 분명하다"
+    ],
+    "objections": [],
+    "edge_cases": [
+      "provider 응답 지연 시 timeout 처리 방식이 명시되어 있지 않으나 smoke probe 범위에서는 non-goal로 볼 수 있음",
+      "3사 중 일부만 응답할 경우 부분 성공 판정 기준이 없으나 smoke 목적상 개별 호출 성공 여부로 충분"
+    ],
+    "recommended_option": "ALT-1",
+    "requires_human_decision": false,
+    "blocking_questions": []
+  }
+}

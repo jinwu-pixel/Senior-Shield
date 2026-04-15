@@ -1,0 +1,60 @@
+{
+  "run_id": "20260415-163932",
+  "decision_key": "SS-TTL-EXPIRY-POLICY",
+  "packet_version": 1,
+  "supersedes_run_id": null,
+  "suggested_action": "revise",
+  "agreement_state": "MATERIAL_CONFLICT",
+  "degraded": false,
+  "user_decision_required": true,
+  "successful_full_reviewer_count": 2,
+  "successful_advisory_count": 1,
+  "failed_reviewer_count": 0,
+  "reviewer_statuses": {
+    "claude-opus-4-6": "ok",
+    "gpt-4o": "ok",
+    "gemini-1.5-pro": "ok"
+  },
+  "failed_reviewers": [],
+  "consensus_points": [
+    "SS-TTL-EXPIRY-POLICY 의 문제 정의에는 동의"
+  ],
+  "divergence_points": [
+    {
+      "reviewer": "gpt-4o",
+      "verdict": "revise",
+      "objections": [
+        {
+          "point": "엣지케이스 TTL 만료와 call state 전환 순서 검토 필요",
+          "severity": "high"
+        }
+      ],
+      "recommended_option": "current"
+    },
+    {
+      "reviewer": "gemini-1.5-pro",
+      "verdict": "adopt",
+      "objections": [
+        {
+          "point": "엣지케이스 TTL 만료와 call state 전환 순서 검토 필요",
+          "severity": "high"
+        }
+      ],
+      "recommended_option": "current"
+    }
+  ],
+  "blocking_issues": [
+    {
+      "source": "gpt-4o",
+      "point": "엣지케이스 TTL 만료와 call state 전환 순서 검토 필요",
+      "severity": "high"
+    },
+    {
+      "source": "gemini-1.5-pro",
+      "point": "엣지케이스 TTL 만료와 call state 전환 순서 검토 필요",
+      "severity": "high"
+    }
+  ],
+  "note": "",
+  "related_runs": []
+}

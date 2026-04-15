@@ -1,0 +1,16 @@
+{
+  "provider": "gemini-1.5-pro",
+  "reviewer_mode": "full_reviewer",
+  "review_status": "partial",
+  "started_at": "2026-04-15T06:02:40.323233+00:00",
+  "finished_at": "2026-04-15T06:02:40.324225+00:00",
+  "elapsed_ms": 0,
+  "error": "<root>: 'agreement_points' is a required property; <root>: 'objections' is a required property; <root>: 'edge_cases' is a required property",
+  "response": {
+    "reviewer": "gemini-1.5-pro",
+    "reviewer_mode": "full_reviewer",
+    "review_status": "ok",
+    "verdict": "maybe",
+    "confidence": 9.9
+  }
+}

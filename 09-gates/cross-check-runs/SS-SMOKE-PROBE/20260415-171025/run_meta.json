@@ -1,0 +1,34 @@
+{
+  "run_id": "20260415-171025",
+  "decision_key": "SS-SMOKE-PROBE",
+  "packet_version": 1,
+  "packet_path": "C:\\Users\\momen\\AndroidStudioProjects\\Senior_Shield\\templates\\packets\\smoke-probe.yaml",
+  "started_at": "2026-04-15T08:10:25.761538+00:00",
+  "finished_at": "2026-04-15T08:10:34.796861+00:00",
+  "elapsed_ms": 9030,
+  "schema_validation_enabled": true,
+  "provider_mode": "real",
+  "providers": [
+    {
+      "name": "claude-opus-4-6",
+      "model": "claude-opus-4-6",
+      "status": "ok",
+      "elapsed_ms": 6827,
+      "cost_estimate": null
+    },
+    {
+      "name": "gpt-4o-mini",
+      "model": "gpt-4o-mini",
+      "status": "ok",
+      "elapsed_ms": 2968,
+      "cost_estimate": null
+    },
+    {
+      "name": "gemini-2.5-flash",
+      "model": "gemini-2.5-flash",
+      "status": "ok",
+      "elapsed_ms": 4359,
+      "cost_estimate": null
+    }
+  ]
+}

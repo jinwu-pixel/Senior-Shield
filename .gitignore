@@ -16,3 +16,6 @@ local.properties
 .claude/
 *.log
 seniorshield_full_log.txt
+
+# CROSS_CHECK provider secrets
+.env

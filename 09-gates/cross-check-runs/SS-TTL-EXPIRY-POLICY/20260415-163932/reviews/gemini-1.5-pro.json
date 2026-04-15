@@ -1,0 +1,35 @@
+{
+  "provider": "gemini-1.5-pro",
+  "reviewer_mode": "full_reviewer",
+  "review_status": "ok",
+  "started_at": "2026-04-15T07:39:32.416408+00:00",
+  "finished_at": "2026-04-15T07:39:32.416408+00:00",
+  "elapsed_ms": 0,
+  "error": null,
+  "failure_reason": null,
+  "schema_errors": null,
+  "response": {
+    "reviewer": "gemini-1.5-pro",
+    "reviewer_mode": "full_reviewer",
+    "review_status": "ok",
+    "verdict": "adopt",
+    "confidence": 0.6,
+    "agreement_points": [
+      "SS-TTL-EXPIRY-POLICY 의 문제 정의에는 동의"
+    ],
+    "objections": [
+      {
+        "point": "엣지케이스 TTL 만료와 call state 전환 순서 검토 필요",
+        "severity": "high"
+      }
+    ],
+    "edge_cases": [
+      "TTL 만료 직후 수신 콜이 들어오면 상태 머신이 모호해질 수 있음"
+    ],
+    "recommended_option": "current",
+    "requires_human_decision": true,
+    "blocking_questions": [
+      "duplicate guardian action 예방 로직이 current_proposal에 포함되어 있는가?"
+    ]
+  }
+}

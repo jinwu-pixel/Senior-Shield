@@ -140,6 +140,85 @@ Tech: Min SDK 26, Target SDK 34, Kotlin 1.9.24, JVM 17, Compose + Material3, Nav
 5. 중단해야 할 위험 조건
 
 ---
+
+## GATE: CROSS_CHECK
+
+기존 gate chain 안의 **선택적 단계**로 동작한다.
+단일 모델 편향을 줄이고 누락 엣지케이스를 드러내기 위한 장치이며,
+**자동 승인 장치가 아니라 사람 판단을 돕는 요약 장치**다.
+
+> **현재 상태 (2026-04-15): stub 기반 구조 검증 완료.**
+> 실제 Claude / GPT / Gemini provider adapter 는 아직 연동되지 않았다.
+> runner 의 BaseProvider 인터페이스, 병렬 실행, 스키마 검증, degrade,
+> gate log append 까지는 `tools/crosscheck_runner.py` 의 Stub provider 로
+> end-to-end 검증됐다. 실제 provider 연동 전까지는 **"완료"가 아니라
+> "구조 검증 완료"** 로 간주한다.
+
+### A. 성격 정의
+- CROSS_CHECK는 자동 승인 게이트가 아니다.
+- 본안에 대한 외부 모델 검토를 수집해 **사람이 판단하기 쉽게 요약**하는 단계다.
+- 이 단계만으로 다음 gate로 자동 진행하지 않는다.
+- 최종 진행 여부는 사용자 승인 후 확정한다.
+
+### B. Trigger / Exclude
+- Trigger: 상태머신 규칙 변경, 정책/권한 경계 이동, 원칙 충돌 가능성이 있는 의사결정
+- Exclude: 단순 버그 수정, 문구 변경, 내부 리팩터링
+- CROSS_CHECK는 비용이 높은 단계이므로 **핵심 구조 변경에만 적용**한다.
+- 패킷이 모호하면 검토를 돌리지 말고 먼저 패킷을 수정한다.
+
+### C. Judge 규칙 (요약자)
+- Judge는 `final_verdict`를 단정하지 않는다.
+- Judge는 다음만 생성한다:
+  - `suggested_action` ∈ {`adopt`, `revise`, `reject`, `needs_human_decision`}
+  - `agreement_state` ∈ {`STRONG_CONSENSUS`, `WEAK_CONSENSUS`, `MATERIAL_CONFLICT`, `INSUFFICIENT`}
+  - `degraded` (bool) — 하나 이상의 reviewer 가 실패해 축소 집계된 경우 true
+  - `blocking_issues`
+  - `consensus_points`
+  - `divergence_points`
+  - `user_decision_required`
+- `suggested_action`은 권고일 뿐이며 자동 승인 근거로 사용하지 않는다.
+- `agreement_state` 의미:
+  - `STRONG_CONSENSUS` — full_reviewer 전원 `adopt` + objection 없음
+  - `WEAK_CONSENSUS` — full_reviewer 전원 같은 verdict 지만 objection 존재하거나 verdict ≠ adopt
+  - `MATERIAL_CONFLICT` — full_reviewer 의 verdict 가 갈림
+  - `INSUFFICIENT` — 성공 full_reviewer 가 0명, 또는 전체 성공 리뷰어가 1명 이하
+- `degraded=true` 인 경우 `suggested_action` 은 **참고값**일 뿐이며, `user_decision_required=true` 가 항상 우선한다.
+
+### D. Claude reviewer 역할 제한
+- Claude reviewer는 본안 작성 모델과 계열 편향이 있을 수 있으므로 **advisory-only**로 취급한다.
+- Claude reviewer의 주 역할:
+  - 기존 승인안과의 정합성
+  - invariants 위반 여부
+  - canon / baseline consistency
+- Claude reviewer의 verdict는 사람 참고용이며, GPT/Gemini와 동일 가중 자동 판정에 직접 사용하지 않는다.
+
+### E. Failure degrade 규칙
+- provider 1개 실패는 즉시 전체 escalation 사유가 아니다.
+- 실패 provider 는 `review_status = failed` (예외/타임아웃) 또는 `partial` (스키마 불일치)로 로그에 기록한다.
+- 실패/부분응답은 objection severity 로 승격 금지. 항상 status 축으로만 관리한다.
+
+**Degrade 카운트 기준 (2026-04-15 확정)**
+
+요약 생성 가능 조건과 `degraded` 판정은 아래 카운트로 고정한다.
+
+| 조건 | 처리 |
+|---|---|
+| 성공 리뷰어 총합 `< 2` | `INSUFFICIENT` / `needs_human_decision`, 중단 |
+| 성공 `full_reviewer == 0` (advisory 만 성공) | `INSUFFICIENT` / `needs_human_decision`, 중단 |
+| 성공 `full_reviewer == 1` + advisory ≥ 1 | 요약 생성 O, `degraded=true`, `user_decision_required=true` |
+| 성공 `full_reviewer ≥ 2` + 실패/partial 없음 | 정상 요약, `degraded=false` |
+| 성공 `full_reviewer ≥ 2` + 실패/partial 존재 | 요약 생성 O, `degraded=true`, `user_decision_required=true` |
+
+- "성공 리뷰어 총합" 에는 advisory_only 도 카운트에 포함한다.
+- 단, `suggested_action` 계산의 주축은 full_reviewer 이며, advisory 는 여전히 가중치 없이 invariants/canon 용도로만 반영한다.
+- `degraded=false` 는 **성공 full_reviewer 가 2명 이상** 이고 실패/부분응답이 0 일 때만 성립한다.
+- summary.json 은 항상 `successful_full_reviewer_count`, `successful_advisory_count`, `failed_reviewer_count` 를 포함한다.
+
+### F. Writing Pipeline 제한
+- Writing Pipeline 교차검증은 문장 미화나 취향 투표에 사용하지 않는다.
+- `brief contract`, `canon`, `voice drift`, `exposition creep`, `pressure/scene-function failure` 검출에만 사용한다.
+
+---
 # CLAUDE.md 추가 지침 v2 (2026-03-31 리뷰 반영)
 
 기존 CLAUDE.md의 "고위험 작업" 섹션 뒤에 삽입한다.

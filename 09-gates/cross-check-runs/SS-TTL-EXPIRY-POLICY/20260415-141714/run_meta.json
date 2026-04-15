@@ -1,0 +1,35 @@
+{
+  "run_id": "20260415-141714",
+  "decision_key": "SS-TTL-EXPIRY-POLICY",
+  "packet_version": 1,
+  "packet_path": "templates\\packets\\ss-ttl-expiry-policy.yaml",
+  "started_at": "2026-04-15T05:17:14.802162+00:00",
+  "finished_at": "2026-04-15T05:17:14.807153+00:00",
+  "elapsed_ms": 0,
+  "providers": [
+    {
+      "name": "claude-opus-4-6",
+      "reviewer_mode": "advisory_only",
+      "status": "ok",
+      "elapsed_ms": 0,
+      "cost_estimate": null,
+      "error": null
+    },
+    {
+      "name": "gpt-4o",
+      "reviewer_mode": "full_reviewer",
+      "status": "ok",
+      "elapsed_ms": 0,
+      "cost_estimate": null,
+      "error": null
+    },
+    {
+      "name": "gemini-1.5-pro",
+      "reviewer_mode": "full_reviewer",
+      "status": "ok",
+      "elapsed_ms": 0,
+      "cost_estimate": null,
+      "error": null
+    }
+  ]
+}

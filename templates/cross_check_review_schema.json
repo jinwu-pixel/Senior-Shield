@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://senior-shield.local/cross_check_review_schema.json",
+  "title": "CrossCheckReview",
+  "description": "단일 reviewer가 하나의 패킷에 대해 돌려주는 구조화된 응답. Claude는 advisory_only, GPT/Gemini는 full_reviewer.",
+  "type": "object",
+  "required": [
+    "reviewer",
+    "reviewer_mode",
+    "review_status",
+    "verdict",
+    "confidence",
+    "agreement_points",
+    "objections",
+    "edge_cases",
+    "recommended_option",
+    "requires_human_decision",
+    "blocking_questions"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "reviewer": {
+      "type": "string",
+      "description": "리뷰어 식별자. 예: claude-opus-4-6, gpt-4o, gemini-1.5-pro",
+      "minLength": 1
+    },
+    "reviewer_mode": {
+      "type": "string",
+      "enum": ["advisory_only", "full_reviewer"],
+      "description": "Claude=advisory_only, GPT/Gemini=full_reviewer. 집계에서 가중치가 다르다."
+    },
+    "review_status": {
+      "type": "string",
+      "enum": ["ok", "failed", "partial"],
+      "description": "provider 호출 성공/실패. failed인 경우 objection severity로 승격 금지."
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["adopt", "revise", "reject"],
+      "description": "리뷰어 개인 의견. 최종 판정 아님."
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "agreement_points": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "current_proposal에서 동의하는 지점."
+    },
+    "objections": {
+      "type": "array",
+      "description": "반대/우려 지점. severity는 packet.severity_guide에 정의된 값만 허용.",
+      "items": {
+        "type": "object",
+        "required": ["point", "severity"],
+        "additionalProperties": false,
+        "properties": {
+          "point": { "type": "string", "minLength": 1 },
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "high", "medium", "low"]
+          },
+          "evidence": { "type": "string" },
+          "suggested_fix": { "type": "string" }
+        }
+      }
+    },
+    "edge_cases": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "현재 안이 놓쳤을 수 있는 엣지케이스."
+    },
+    "recommended_option": {
+      "type": "string",
+      "description": "current | ALT-1 | ALT-2 | ... (packet.alternatives의 id)",
+      "minLength": 1
+    },
+    "requires_human_decision": {
+      "type": "boolean",
+      "description": "이 리뷰어 판단만으로 진행해선 안 된다고 보는지."
+    },
+    "blocking_questions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "사람이 답해야 진행 가능한 질문들."
+    },
+    "failure_reason": {
+      "type": "string",
+      "description": "review_status != ok일 때 원인. timeout / quota / schema_error / exception 등."
+    },
+    "raw_error": {
+      "type": "string",
+      "description": "디버깅용 원본 에러 메시지 (선택)."
+    }
+  },
+  "allOf": [
+    {
+      "description": "review_status=ok이면 verdict/objections 등 본문 필드가 의미를 가져야 한다.",
+      "if": { "properties": { "review_status": { "const": "ok" } }, "required": ["review_status"] },
+      "then": { "required": ["verdict", "confidence", "recommended_option"] }
+    },
+    {
+      "description": "review_status=failed이면 failure_reason은 필수.",
+      "if": { "properties": { "review_status": { "const": "failed" } }, "required": ["review_status"] },
+      "then": { "required": ["failure_reason"] }
+    },
+    {
+      "description": "Claude reviewer는 reviewer_mode=advisory_only 고정.",
+      "if": {
+        "properties": { "reviewer": { "pattern": "^(claude|anthropic)" } },
+        "required": ["reviewer"]
+      },
+      "then": {
+        "properties": { "reviewer_mode": { "const": "advisory_only" } }
+      }
+    }
+  ]
+}

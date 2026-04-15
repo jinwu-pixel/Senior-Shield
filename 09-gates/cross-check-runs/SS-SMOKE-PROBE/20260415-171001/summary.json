@@ -1,0 +1,26 @@
+{
+  "run_id": "20260415-171001",
+  "decision_key": "SS-SMOKE-PROBE",
+  "packet_version": 1,
+  "supersedes_run_id": null,
+  "suggested_action": "adopt",
+  "agreement_state": "STRONG_CONSENSUS",
+  "degraded": true,
+  "user_decision_required": true,
+  "successful_full_reviewer_count": 1,
+  "successful_advisory_count": 1,
+  "failed_reviewer_count": 1,
+  "reviewer_statuses": {
+    "claude-opus-4-6": "ok",
+    "gpt-4o-mini": "ok",
+    "gemini-2.5-pro": "failed"
+  },
+  "failed_reviewers": [
+    "gemini-2.5-pro"
+  ],
+  "consensus_points": [],
+  "divergence_points": [],
+  "blocking_issues": [],
+  "note": "gemini-2.5-pro(failed); full_reviewer=1, advisory=1 로 축소 집계. suggested_action 은 참고값이며 user_decision_required 가 우선.",
+  "related_runs": []
+}
