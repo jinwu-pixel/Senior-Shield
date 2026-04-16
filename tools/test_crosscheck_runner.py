@@ -59,15 +59,28 @@ def test_cli_normal_stubs(tmp_path):
 
     meta = _read_run_meta(run_dir)
     assert meta["provider_mode"] == "stubs"
-    # Providers 엔트리는 5개 필드만.
+    # Providers 엔트리는 최소 필드만: name/model/status/elapsed_ms/usage/cost_estimate.
     for entry in meta["providers"]:
         assert set(entry.keys()) == {
             "name",
             "model",
             "status",
             "elapsed_ms",
+            "usage",
             "cost_estimate",
         }
+    # Stub provider 는 usage 를 채우지 않으므로 None 이어야 한다.
+    assert all(entry["usage"] is None for entry in meta["providers"])
+    assert all(entry["cost_estimate"] is None for entry in meta["providers"])
+    # totals 필드가 존재하고, stub 경로에서는 전부 None / 0.
+    assert "totals" in meta
+    assert meta["totals"]["input_tokens"] is None
+    assert meta["totals"]["cost_usd"] is None
+    assert meta["totals"]["providers_with_usage"] == 0
+    assert meta["totals"]["providers_with_cost"] == 0
+    # 비용 추정치의 출처 투명성
+    assert meta["totals"]["pricing_version"] is not None
+    assert meta["totals"]["pricing_last_updated"] is not None
     # raw response / schema_errors 는 run_meta 에는 없어야 한다.
     assert "schema_errors" not in json.dumps(meta)
 

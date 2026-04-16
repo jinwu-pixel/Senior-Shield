@@ -63,6 +63,11 @@ if str(_THIS_DIR) not in sys.path:
 
 from providers.base import BaseProvider  # noqa: E402
 from providers import load_providers_from_env  # noqa: E402
+from providers.pricing import (  # noqa: E402
+    estimate_cost_usd,
+    PRICING_VERSION,
+    PRICING_LAST_UPDATED,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -144,7 +149,8 @@ class ReviewResult:
     started_at: str
     finished_at: str
     elapsed_ms: int
-    cost_estimate: float | None = None  # provider가 알면 채우고 모르면 None
+    usage: dict | None = None                # {input_tokens, output_tokens, total_tokens}
+    cost_estimate: float | None = None       # USD, None 이면 미계측
     failure_reason: str | None = None   # parse_error | schema_mismatch | timeout | exception
     schema_errors: list[str] | None = None  # 스키마 불일치 메시지 (partial 일 때)
 
@@ -277,8 +283,39 @@ def run_reviewers(
     results: list[ReviewResult] = []
 
     def _call(p: BaseProvider) -> ReviewResult:
+        # 이전 run 잔재 제거 (같은 인스턴스 재사용될 때 대비).
+        if hasattr(p, "last_usage"):
+            try:
+                p.last_usage = None
+            except Exception:
+                pass
         started = time.monotonic()
         started_iso = _now_iso()
+
+        def _collect_usage() -> tuple[dict | None, float | None]:
+            usage = getattr(p, "last_usage", None)
+            if not isinstance(usage, dict):
+                return None, None
+            cost = estimate_cost_usd(
+                getattr(p, "model", p.name),
+                int(usage.get("input_tokens") or 0),
+                int(usage.get("output_tokens") or 0),
+            )
+            return usage, cost
+
+        def _make(**overrides) -> ReviewResult:
+            usage, cost = _collect_usage()
+            fields = dict(
+                provider=p.name,
+                reviewer_mode=p.reviewer_mode,
+                started_at=started_iso,
+                finished_at=_now_iso(),
+                usage=usage,
+                cost_estimate=cost,
+            )
+            fields.update(overrides)
+            return ReviewResult(**fields)
+
         try:
             raw = p.review(packet)
             elapsed_ms = int((time.monotonic() - started) * 1000)
@@ -286,14 +323,10 @@ def run_reviewers(
             parsed, failure_reason, schema_errors = parse_and_validate_review(raw)
 
             if failure_reason == "parse_error":
-                return ReviewResult(
-                    provider=p.name,
-                    reviewer_mode=p.reviewer_mode,
+                return _make(
                     status="failed",
                     response=None,
                     error="; ".join(schema_errors) or "parse error",
-                    started_at=started_iso,
-                    finished_at=_now_iso(),
                     elapsed_ms=elapsed_ms,
                     failure_reason="parse_error",
                     schema_errors=schema_errors,
@@ -301,42 +334,34 @@ def run_reviewers(
             if failure_reason == "schema_mismatch":
                 # partial — 파싱은 됐으나 스키마 불일치.
                 # 집계에서는 objection 으로 승격 금지, 실패 메타로 기록.
-                return ReviewResult(
-                    provider=p.name,
-                    reviewer_mode=p.reviewer_mode,
+                return _make(
                     status="partial",
                     response=parsed,
                     error="; ".join(schema_errors[:3]),
-                    started_at=started_iso,
-                    finished_at=_now_iso(),
                     elapsed_ms=elapsed_ms,
                     failure_reason="schema_mismatch",
                     schema_errors=schema_errors,
                 )
 
             # OK — 파싱/검증 모두 통과.
+            # reviewer 필드를 canonical 값으로 정규화 — 모델 자기식별값 불신.
+            if isinstance(parsed, dict):
+                parsed["reviewer"] = p.name
+                parsed["reviewer_mode"] = p.reviewer_mode
             # provider 가 review_status 를 명시했으면 존중 (ok/failed/partial).
             status = (parsed or {}).get("review_status", "ok")
-            return ReviewResult(
-                provider=p.name,
-                reviewer_mode=p.reviewer_mode,
+            return _make(
                 status=status,
                 response=parsed,
                 error=None,
-                started_at=started_iso,
-                finished_at=_now_iso(),
                 elapsed_ms=elapsed_ms,
             )
         except Exception as exc:  # pragma: no cover — provider 실제 호출 경로
             elapsed_ms = int((time.monotonic() - started) * 1000)
-            return ReviewResult(
-                provider=p.name,
-                reviewer_mode=p.reviewer_mode,
+            return _make(
                 status="failed",
                 response=None,
                 error=f"{type(exc).__name__}: {exc}",
-                started_at=started_iso,
-                finished_at=_now_iso(),
                 elapsed_ms=elapsed_ms,
                 failure_reason="exception",
             )
@@ -553,6 +578,45 @@ def _blocking_issues(
 # ---------------------------------------------------------------------------
 # Output writing
 # ---------------------------------------------------------------------------
+
+
+def _aggregate_totals(provider_entries: list[dict]) -> dict:
+    """run_meta 최상위 totals 계산.
+
+    - input_tokens / output_tokens / total_tokens: 측정된 provider 의 합.
+      아무도 측정값이 없으면 None (0 과 구분) 으로 둔다.
+    - cost_usd: estimate_cost_usd 로 가격표에 있는 모델만 합산. 모두 None 이면 None.
+    - providers_with_usage / providers_with_cost: 집계 대상이 몇 명이었는지 투명성 제공.
+    """
+    input_sum = 0
+    output_sum = 0
+    total_sum = 0
+    usage_count = 0
+    cost_sum = 0.0
+    cost_count = 0
+    for entry in provider_entries:
+        usage = entry.get("usage")
+        if isinstance(usage, dict):
+            input_sum += int(usage.get("input_tokens") or 0)
+            output_sum += int(usage.get("output_tokens") or 0)
+            total_sum += int(usage.get("total_tokens") or 0)
+            usage_count += 1
+        cost = entry.get("cost_estimate")
+        if isinstance(cost, (int, float)):
+            cost_sum += float(cost)
+            cost_count += 1
+    return {
+        "input_tokens": input_sum if usage_count else None,
+        "output_tokens": output_sum if usage_count else None,
+        # total_tokens 는 provider SDK 가 반환한 값의 합이다. 일부 provider 는
+        # thinking/candidate expansion token 을 포함해 input+output 보다 클 수 있다.
+        "total_tokens": total_sum if usage_count else None,
+        "cost_usd": round(cost_sum, 6) if cost_count else None,
+        "pricing_version": PRICING_VERSION,
+        "pricing_last_updated": PRICING_LAST_UPDATED,
+        "providers_with_usage": usage_count,
+        "providers_with_cost": cost_count,
+    }
 
 
 def write_outputs(
@@ -796,6 +860,18 @@ def main(argv: list[str] | None = None) -> int:
     # raw 응답/키 관련 정보 일체 금지. 디버깅용 failure_reason / schema_errors 는
     # reviews/<provider>.json 에 분리 기록돼 있다.
     provider_meta_map: dict[str, str] = {p.name: getattr(p, "model", p.name) for p in providers}
+    provider_entries = [
+        {
+            "name": r.provider,
+            "model": provider_meta_map.get(r.provider, r.provider),
+            "status": r.status,
+            "elapsed_ms": r.elapsed_ms,
+            "usage": r.usage,
+            "cost_estimate": r.cost_estimate,
+        }
+        for r in results
+    ]
+    totals = _aggregate_totals(provider_entries)
     run_meta = {
         "run_id": run_id,
         "decision_key": packet.get("decision_key"),
@@ -806,16 +882,8 @@ def main(argv: list[str] | None = None) -> int:
         "elapsed_ms": int((time.monotonic() - started) * 1000),
         "schema_validation_enabled": jsonschema is not None,
         "provider_mode": args.provider_mode,
-        "providers": [
-            {
-                "name": r.provider,
-                "model": provider_meta_map.get(r.provider, r.provider),
-                "status": r.status,
-                "elapsed_ms": r.elapsed_ms,
-                "cost_estimate": r.cost_estimate,
-            }
-            for r in results
-        ],
+        "providers": provider_entries,
+        "totals": totals,
     }
 
     run_dir = args.out / packet.get("decision_key", "UNKNOWN") / run_id

@@ -18,7 +18,7 @@ from typing import Callable
 
 from .base import (
     BaseProvider,
-    SYSTEM_PROMPT,
+    build_system_prompt,
     build_user_prompt,
     strip_json_fence,
     env_float,
@@ -83,7 +83,7 @@ def load_providers_from_env(
 
 __all__ = [
     "BaseProvider",
-    "SYSTEM_PROMPT",
+    "build_system_prompt",
     "build_user_prompt",
     "strip_json_fence",
     "env_float",

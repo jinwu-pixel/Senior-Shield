@@ -1,0 +1,31 @@
+{
+  "provider": "claude-opus-4-6",
+  "reviewer_mode": "advisory_only",
+  "review_status": "ok",
+  "started_at": "2026-04-16T01:22:51.337998+00:00",
+  "finished_at": "2026-04-16T01:22:57.386258+00:00",
+  "elapsed_ms": 6047,
+  "error": null,
+  "failure_reason": null,
+  "schema_errors": null,
+  "response": {
+    "reviewer": "CROSS_CHECK",
+    "reviewer_mode": "advisory_only",
+    "review_status": "ok",
+    "verdict": "adopt",
+    "confidence": 0.95,
+    "agreement_points": [
+      "This is a smoke probe packet; the sole purpose is to verify schema compliance and provider wiring.",
+      "No real product decision is at stake, so adopting the current proposal carries negligible risk.",
+      "Responding with verdict=adopt is appropriate for a smoke probe that only checks response format."
+    ],
+    "objections": [],
+    "edge_cases": [
+      "If any of the 3 providers returns a non-JSON or schema-violating response, the smoke probe should surface a clear error rather than silently passing.",
+      "Timeout or transient network failures during smoke probes could be mistaken for wiring issues."
+    ],
+    "recommended_option": "current",
+    "requires_human_decision": false,
+    "blocking_questions": []
+  }
+}

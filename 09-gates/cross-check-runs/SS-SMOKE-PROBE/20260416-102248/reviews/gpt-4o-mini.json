@@ -1,0 +1,24 @@
+{
+  "provider": "gpt-4o-mini",
+  "reviewer_mode": "full_reviewer",
+  "review_status": "ok",
+  "started_at": "2026-04-16T01:22:51.340008+00:00",
+  "finished_at": "2026-04-16T01:22:54.652787+00:00",
+  "elapsed_ms": 3313,
+  "error": null,
+  "failure_reason": null,
+  "schema_errors": null,
+  "response": {
+    "reviewer": "auto-reviewer",
+    "reviewer_mode": "full_reviewer",
+    "review_status": "ok",
+    "verdict": "adopt",
+    "confidence": 0.9,
+    "agreement_points": [],
+    "objections": [],
+    "edge_cases": [],
+    "recommended_option": "current",
+    "requires_human_decision": false,
+    "blocking_questions": []
+  }
+}

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from .base import (
     BaseProvider,
-    SYSTEM_PROMPT,
+    build_system_prompt,
     build_user_prompt,
     env_float,
     env_str,
@@ -30,12 +30,24 @@ class AnthropicProvider(BaseProvider):
         self._client = anthropic.Anthropic(timeout=self.timeout_seconds)
 
     def review(self, packet: dict) -> str:
+        self.last_usage = None
         msg = self._client.messages.create(
             model=self.model,
             max_tokens=1500,
-            system=SYSTEM_PROMPT,
+            system=build_system_prompt(self.reviewer_mode),
             messages=[{"role": "user", "content": build_user_prompt(packet)}],
         )
+
+        usage_obj = getattr(msg, "usage", None)
+        if usage_obj is not None:
+            input_tokens = int(getattr(usage_obj, "input_tokens", 0) or 0)
+            output_tokens = int(getattr(usage_obj, "output_tokens", 0) or 0)
+            self.last_usage = {
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": input_tokens + output_tokens,
+            }
+
         # response.content is a list of ContentBlock; pick text blocks only.
         parts: list[str] = []
         for block in getattr(msg, "content", []) or []:

@@ -147,12 +147,14 @@ Tech: Min SDK 26, Target SDK 34, Kotlin 1.9.24, JVM 17, Compose + Material3, Nav
 단일 모델 편향을 줄이고 누락 엣지케이스를 드러내기 위한 장치이며,
 **자동 승인 장치가 아니라 사람 판단을 돕는 요약 장치**다.
 
-> **현재 상태 (2026-04-15): stub 기반 구조 검증 완료.**
-> 실제 Claude / GPT / Gemini provider adapter 는 아직 연동되지 않았다.
-> runner 의 BaseProvider 인터페이스, 병렬 실행, 스키마 검증, degrade,
-> gate log append 까지는 `tools/crosscheck_runner.py` 의 Stub provider 로
-> end-to-end 검증됐다. 실제 provider 연동 전까지는 **"완료"가 아니라
-> "구조 검증 완료"** 로 간주한다.
+> **현재 상태 (2026-04-16): 실 provider SDK 연동 완료.**
+> Claude (advisory_only) / GPT / Gemini (full_reviewer) adapter 가
+> `tools/crosscheck_runner.py --real` 경로에서 end-to-end 검증됐다.
+> smoke probe 는 `tools/smoke_providers.py`. `run_meta.json` 에 provider 별
+> 토큰 사용량(`usage`)과 비용 추정치(`cost_estimate`, USD)를 기록한다.
+> Claude/Gemini 계열 바이어스 우려는 adapter-fixed `reviewer_mode` +
+> `build_system_prompt(reviewer_mode)` 로 집계 분리.
+> **잔여 이슈:** `google-generativeai` → `google-genai` SDK 마이그레이션 미수행.
 
 ### A. 성격 정의
 - CROSS_CHECK는 자동 승인 게이트가 아니다.

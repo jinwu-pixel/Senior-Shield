@@ -80,21 +80,34 @@ class _FakeAnthropicContent:
         self.text = text
 
 
+class _FakeAnthropicUsage:
+    def __init__(self, input_tokens: int, output_tokens: int) -> None:
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+
+
 class _FakeAnthropicMessage:
-    def __init__(self, text: str) -> None:
+    def __init__(self, text: str, usage: _FakeAnthropicUsage | None = None) -> None:
         self.content = [_FakeAnthropicContent(text)]
+        self.usage = usage
 
 
 class _FakeAnthropicClient:
-    def __init__(self, text: str, raise_exc: Exception | None = None) -> None:
+    def __init__(
+        self,
+        text: str,
+        raise_exc: Exception | None = None,
+        usage: _FakeAnthropicUsage | None = None,
+    ) -> None:
         self._text = text
         self._raise = raise_exc
+        self._usage = usage
         self.messages = self  # so that client.messages.create(...) works
 
     def create(self, **kwargs):
         if self._raise:
             raise self._raise
-        return _FakeAnthropicMessage(self._text)
+        return _FakeAnthropicMessage(self._text, usage=self._usage)
 
 
 def test_anthropic_happy(tiny_packet):
@@ -135,26 +148,45 @@ class _FakeOpenAIChoice:
         self.message = _FakeOpenAIMessage(content)
 
 
+class _FakeOpenAIUsage:
+    def __init__(self, prompt_tokens: int, completion_tokens: int) -> None:
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+        self.total_tokens = prompt_tokens + completion_tokens
+
+
 class _FakeOpenAIResponse:
-    def __init__(self, content: str) -> None:
+    def __init__(self, content: str, usage: _FakeOpenAIUsage | None = None) -> None:
         self.choices = [_FakeOpenAIChoice(content)]
+        self.usage = usage
 
 
 class _FakeOpenAICompletions:
-    def __init__(self, content: str, raise_exc: Exception | None = None) -> None:
+    def __init__(
+        self,
+        content: str,
+        raise_exc: Exception | None = None,
+        usage: _FakeOpenAIUsage | None = None,
+    ) -> None:
         self._content = content
         self._raise = raise_exc
+        self._usage = usage
 
     def create(self, **kwargs):
         if self._raise:
             raise self._raise
-        return _FakeOpenAIResponse(self._content)
+        return _FakeOpenAIResponse(self._content, usage=self._usage)
 
 
 class _FakeOpenAIClient:
-    def __init__(self, content: str, raise_exc: Exception | None = None) -> None:
+    def __init__(
+        self,
+        content: str,
+        raise_exc: Exception | None = None,
+        usage: _FakeOpenAIUsage | None = None,
+    ) -> None:
         self.chat = self
-        self.completions = _FakeOpenAICompletions(content, raise_exc)
+        self.completions = _FakeOpenAICompletions(content, raise_exc, usage)
 
 
 def test_openai_happy(tiny_packet):
@@ -188,20 +220,38 @@ def test_openai_timeout_raises(tiny_packet):
 # ---------------------------------------------------------------------------
 
 
+class _FakeGeminiUsageMetadata:
+    def __init__(self, prompt_token_count: int, candidates_token_count: int) -> None:
+        self.prompt_token_count = prompt_token_count
+        self.candidates_token_count = candidates_token_count
+        self.total_token_count = prompt_token_count + candidates_token_count
+
+
 class _FakeGeminiResponse:
-    def __init__(self, text: str) -> None:
+    def __init__(
+        self,
+        text: str,
+        usage_metadata: _FakeGeminiUsageMetadata | None = None,
+    ) -> None:
         self.text = text
+        self.usage_metadata = usage_metadata
 
 
 class _FakeGeminiClient:
-    def __init__(self, text: str, raise_exc: Exception | None = None) -> None:
+    def __init__(
+        self,
+        text: str,
+        raise_exc: Exception | None = None,
+        usage_metadata: _FakeGeminiUsageMetadata | None = None,
+    ) -> None:
         self._text = text
         self._raise = raise_exc
+        self._usage_metadata = usage_metadata
 
     def generate_content(self, prompt, **kwargs):
         if self._raise:
             raise self._raise
-        return _FakeGeminiResponse(self._text)
+        return _FakeGeminiResponse(self._text, usage_metadata=self._usage_metadata)
 
 
 def test_gemini_happy(monkeypatch, tiny_packet):
@@ -323,3 +373,96 @@ def test_pipeline_all_full_failed_is_insufficient(tiny_packet):
     assert summary["agreement_state"] == "INSUFFICIENT"
     assert summary["suggested_action"] == "needs_human_decision"
     assert summary["user_decision_required"] is True
+
+
+# ---------------------------------------------------------------------------
+# Usage / pricing (A-4)
+# ---------------------------------------------------------------------------
+
+
+from providers.pricing import estimate_cost_usd  # noqa: E402
+
+
+def test_pricing_known_model():
+    cost = estimate_cost_usd("gpt-4o-mini", 1000, 500)
+    assert cost is not None
+    assert isinstance(cost, float)
+    assert cost > 0
+    # 1000 * 0.15/1M + 500 * 0.60/1M = 0.00015 + 0.0003 = 0.00045
+    assert abs(cost - 0.00045) < 1e-7
+
+
+def test_pricing_unknown_model():
+    assert estimate_cost_usd("no-such-model", 1000, 500) is None
+
+
+def test_pricing_prefix_match():
+    cost = estimate_cost_usd("gemini-2.5-flash-preview-04-17", 1000, 500)
+    assert cost is not None
+
+
+def test_anthropic_usage_extraction(tiny_packet):
+    usage = _FakeAnthropicUsage(input_tokens=500, output_tokens=200)
+    p = AnthropicProvider(client=_FakeAnthropicClient(_valid_json(), usage=usage))
+    p.review(tiny_packet)
+    assert p.last_usage is not None
+    assert p.last_usage["input_tokens"] == 500
+    assert p.last_usage["output_tokens"] == 200
+    assert p.last_usage["total_tokens"] == 700
+
+
+def test_openai_usage_extraction(tiny_packet):
+    usage = _FakeOpenAIUsage(prompt_tokens=300, completion_tokens=100)
+    p = OpenAIProvider(client=_FakeOpenAIClient(_valid_json(), usage=usage))
+    p.review(tiny_packet)
+    assert p.last_usage is not None
+    assert p.last_usage["input_tokens"] == 300
+    assert p.last_usage["output_tokens"] == 100
+    assert p.last_usage["total_tokens"] == 400
+
+
+def test_gemini_usage_extraction(tiny_packet):
+    usage = _FakeGeminiUsageMetadata(prompt_token_count=800, candidates_token_count=400)
+    p = GeminiProvider(client=_FakeGeminiClient(_valid_json(), usage_metadata=usage))
+    p.review(tiny_packet)
+    assert p.last_usage is not None
+    assert p.last_usage["input_tokens"] == 800
+    assert p.last_usage["output_tokens"] == 400
+    assert p.last_usage["total_tokens"] == 1200
+
+
+def test_no_usage_when_absent(tiny_packet):
+    p = AnthropicProvider(client=_FakeAnthropicClient(_valid_json()))
+    p.review(tiny_packet)
+    assert p.last_usage is None
+
+
+def test_pipeline_usage_in_review_result(tiny_packet):
+    """Provider 가 last_usage 를 채우면 runner 가 ReviewResult 에 usage/cost 를 기록해야 한다."""
+
+    class _UsageProvider(cr.BaseProvider):
+        def __init__(self, name: str, reviewer_mode: str, raw: str) -> None:
+            self.name = name
+            self.model = "gpt-4o-mini"
+            self.reviewer_mode = reviewer_mode
+            self.timeout_seconds = 5.0
+            self._raw = raw
+
+        def review(self, packet: dict):
+            self.last_usage = {
+                "input_tokens": 1000,
+                "output_tokens": 500,
+                "total_tokens": 1500,
+            }
+            return self._raw
+
+    providers = [
+        _UsageProvider("gpt", "full_reviewer", _make_review("adopt")),
+        _UsageProvider("gemini", "full_reviewer", _make_review("adopt")),
+    ]
+    results = cr.run_reviewers(providers, tiny_packet)
+    for r in results:
+        assert r.usage is not None
+        assert r.usage["total_tokens"] == 1500
+        assert r.cost_estimate is not None
+        assert r.cost_estimate > 0

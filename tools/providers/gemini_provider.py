@@ -11,7 +11,7 @@ import warnings
 
 from .base import (
     BaseProvider,
-    SYSTEM_PROMPT,
+    build_system_prompt,
     build_user_prompt,
     env_float,
     env_str,
@@ -41,7 +41,7 @@ class GeminiProvider(BaseProvider):
 
         self._client = genai.GenerativeModel(
             model_name=self.model,
-            system_instruction=SYSTEM_PROMPT,
+            system_instruction=build_system_prompt(self.reviewer_mode),
             generation_config={
                 "response_mime_type": "application/json",
                 "max_output_tokens": 1500,
@@ -49,8 +49,24 @@ class GeminiProvider(BaseProvider):
         )
 
     def review(self, packet: dict) -> str:
+        self.last_usage = None
         resp = self._client.generate_content(
             build_user_prompt(packet),
             request_options={"timeout": self.timeout_seconds},
         )
+
+        usage_obj = getattr(resp, "usage_metadata", None)
+        if usage_obj is not None:
+            input_tokens = int(getattr(usage_obj, "prompt_token_count", 0) or 0)
+            output_tokens = int(getattr(usage_obj, "candidates_token_count", 0) or 0)
+            total_tokens = int(
+                getattr(usage_obj, "total_token_count", input_tokens + output_tokens)
+                or (input_tokens + output_tokens)
+            )
+            self.last_usage = {
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": total_tokens,
+            }
+
         return getattr(resp, "text", "") or ""
