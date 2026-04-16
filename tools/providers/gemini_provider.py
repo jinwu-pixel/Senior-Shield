@@ -1,13 +1,12 @@
 """Gemini adapter — reviewer_mode=full_reviewer.
 
-Uses `google-generativeai`. The SDK emits a deprecation FutureWarning at import
-time; swallow it here so it doesn't pollute smoke output.
+Uses `google-genai` (unified SDK).
 """
 
 from __future__ import annotations
 
 import os
-import warnings
+from typing import Any
 
 from .base import (
     BaseProvider,
@@ -21,7 +20,7 @@ from .base import (
 class GeminiProvider(BaseProvider):
     reviewer_mode = "full_reviewer"
 
-    def __init__(self, client=None) -> None:
+    def __init__(self, client: Any = None) -> None:
         self.model = env_str("GEMINI_MODEL", "gemini-2.5-flash")
         self.name = self.model
         self.timeout_seconds = env_float("GEMINI_TIMEOUT_SEC", 60.0)
@@ -30,30 +29,48 @@ class GeminiProvider(BaseProvider):
             self._client = client
             return
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            import google.generativeai as genai  # type: ignore
+        from google import genai  # type: ignore
+        from google.genai import types  # type: ignore
 
         api_key = os.environ.get("GEMINI_API_KEY")
         if not api_key:
             raise RuntimeError("GEMINI_API_KEY not set")
-        genai.configure(api_key=api_key)
 
-        self._client = genai.GenerativeModel(
-            model_name=self.model,
+        self._client = genai.Client(api_key=api_key)
+        self._types = types
+
+    def _build_config(self):
+        types = self._types
+        return types.GenerateContentConfig(
             system_instruction=build_system_prompt(self.reviewer_mode),
-            generation_config={
-                "response_mime_type": "application/json",
-                "max_output_tokens": 1500,
-            },
+            response_mime_type="application/json",
+            max_output_tokens=1500,
+            http_options=types.HttpOptions(
+                timeout=int(self.timeout_seconds * 1000),
+            ),
         )
 
     def review(self, packet: dict) -> str:
         self.last_usage = None
-        resp = self._client.generate_content(
-            build_user_prompt(packet),
-            request_options={"timeout": self.timeout_seconds},
-        )
+
+        try:
+            if hasattr(self, "_types"):
+                resp = self._client.models.generate_content(
+                    model=self.model,
+                    contents=build_user_prompt(packet),
+                    config=self._build_config(),
+                )
+            else:
+                resp = self._client.generate_content(
+                    model=self.model,
+                    contents=build_user_prompt(packet),
+                )
+        except Exception as exc:
+            import httpx
+
+            if isinstance(exc, httpx.TimeoutException):
+                raise TimeoutError(str(exc)) from exc
+            raise
 
         usage_obj = getattr(resp, "usage_metadata", None)
         if usage_obj is not None:

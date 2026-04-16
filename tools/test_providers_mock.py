@@ -248,10 +248,14 @@ class _FakeGeminiClient:
         self._raise = raise_exc
         self._usage_metadata = usage_metadata
 
-    def generate_content(self, prompt, **kwargs):
+    def generate_content(self, *, model=None, contents=None, **kwargs):
         if self._raise:
             raise self._raise
         return _FakeGeminiResponse(self._text, usage_metadata=self._usage_metadata)
+
+    @property
+    def models(self):
+        return self
 
 
 def test_gemini_happy(monkeypatch, tiny_packet):
@@ -276,6 +280,17 @@ def test_gemini_schema_mismatch_via_runner(tiny_packet):
 def test_gemini_exception_raises(tiny_packet):
     p = GeminiProvider(client=_FakeGeminiClient("", raise_exc=RuntimeError("boom")))
     with pytest.raises(RuntimeError):
+        p.review(tiny_packet)
+
+
+def test_gemini_httpx_timeout_converted(tiny_packet):
+    """httpx.TimeoutException → standard TimeoutError 변환 확인."""
+    import httpx
+
+    p = GeminiProvider(
+        client=_FakeGeminiClient("", raise_exc=httpx.ReadTimeout("read timed out")),
+    )
+    with pytest.raises(TimeoutError, match="read timed out"):
         p.review(tiny_packet)
 
 

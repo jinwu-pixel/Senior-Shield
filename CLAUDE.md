@@ -154,7 +154,7 @@ Tech: Min SDK 26, Target SDK 34, Kotlin 1.9.24, JVM 17, Compose + Material3, Nav
 > 토큰 사용량(`usage`)과 비용 추정치(`cost_estimate`, USD)를 기록한다.
 > Claude/Gemini 계열 바이어스 우려는 adapter-fixed `reviewer_mode` +
 > `build_system_prompt(reviewer_mode)` 로 집계 분리.
-> **잔여 이슈:** `google-generativeai` → `google-genai` SDK 마이그레이션 미수행.
+> **잔여 이슈:** Gemini 2.5 Flash → Pro 유료 상향 검토 (리뷰 품질 필요 시).
 
 ### A. 성격 정의
 - CROSS_CHECK는 자동 승인 게이트가 아니다.
