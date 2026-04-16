@@ -11,6 +11,7 @@ import com.example.seniorshield.domain.model.Guardian
 import com.example.seniorshield.domain.model.RiskLevel
 import com.example.seniorshield.domain.model.RiskSignal
 import com.example.seniorshield.domain.repository.GuardianRepository
+import com.example.seniorshield.domain.repository.RiskEventSink
 import com.example.seniorshield.domain.repository.RiskRepository
 import com.example.seniorshield.monitoring.orchestrator.AlertStateResolver
 import com.example.seniorshield.monitoring.session.RiskSessionTracker
@@ -34,6 +35,7 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val riskRepository: RiskRepository,
+    private val eventSink: RiskEventSink,
     private val sessionTracker: RiskSessionTracker,
     private val alertStateResolver: AlertStateResolver,
     private val guardianRepository: GuardianRepository,
@@ -121,6 +123,9 @@ class HomeViewModel @Inject constructor(
     init {
         viewModelScope.launch { loadWeeklySnapshot() }
         viewModelScope.launch {
+            riskRepository.getRecentRiskEvents().collect { loadWeeklySnapshot() }
+        }
+        viewModelScope.launch {
             sessionTracker.sessionState.collect { session ->
                 val alertState = alertStateResolver.resolve(session)
                 if (alertState == AlertState.GUARDED && session != null
@@ -146,6 +151,10 @@ class HomeViewModel @Inject constructor(
     /** 사용자가 홈 화면에서 "안전 확인"을 선택하면 현재 위험 세션을 종료한다. */
     fun confirmSafe() {
         sessionTracker.reset()
+        viewModelScope.launch {
+            eventSink.clearCurrentRiskEvent()
+            loadWeeklySnapshot()
+        }
     }
 
     private suspend fun loadWeeklySnapshot() {
