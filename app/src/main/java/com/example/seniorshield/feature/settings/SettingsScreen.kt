@@ -129,6 +129,17 @@ private fun SettingsContent(
                     onTestModeToggle = onTestModeToggle,
                 )
             }
+
+            Spacer(Modifier.height(24.dp))
+            Text(
+                text = "시니어쉴드 v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
         }
     }
 }
