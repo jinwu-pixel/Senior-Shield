@@ -3,6 +3,7 @@ package com.example.seniorshield.core.navigation
 import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
+import com.example.seniorshield.feature.guardian.guardianAddScreen
 import com.example.seniorshield.feature.guardian.guardianScreen
 import com.example.seniorshield.feature.history.historyScreen
 import com.example.seniorshield.feature.home.homeScreen
@@ -42,6 +43,7 @@ fun SeniorShieldNavGraph() {
             onNavigatePolicy = { navController.navigate(SeniorShieldDestination.POLICY) },
             onNavigateSettings = { navController.navigate(SeniorShieldDestination.SETTINGS) },
             onNavigateSimulation = { navController.navigate(SeniorShieldDestination.SIMULATION_LIST) },
+            onNavigateGuardian = { navController.navigate(SeniorShieldDestination.GUARDIAN) },
         )
 
         historyScreen(onBack = { navController.popBackStack() })
@@ -59,7 +61,18 @@ fun SeniorShieldNavGraph() {
             },
         )
         policyScreen(onBack = { navController.popBackStack() })
-        guardianScreen(onBack = { navController.popBackStack() })
+        guardianScreen(
+            onBack = { navController.popBackStack() },
+            onNavigateAdd = {
+                navController.navigate(SeniorShieldDestination.GUARDIAN_ADD) {
+                    launchSingleTop = true
+                }
+            },
+        )
+        guardianAddScreen(
+            onBack = { navController.popBackStack() },
+            onSaved = { navController.popBackStack() },
+        )
         simulationListScreen(
             onBack = { navController.popBackStack() },
             onSelectScenario = { scenarioId ->

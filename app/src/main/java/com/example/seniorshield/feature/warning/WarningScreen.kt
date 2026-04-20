@@ -88,6 +88,8 @@ fun NavGraphBuilder.warningScreen(
             },
             onBack = onBack,
             onConfirmSafe = {
+                // 책임 분리: confirmSafe()는 상태 종료(세션 + anchor + currentEvent),
+                //            onBack()은 화면 종료(네비게이션 복귀). 둘은 별개 의도.
                 viewModel.confirmSafe()
                 onBack()
             },
@@ -153,7 +155,7 @@ private fun WarningContent(
             Spacer(modifier = Modifier.height(32.dp))
             Checklist()
             Spacer(modifier = Modifier.height(24.dp))
-            PrimaryButton(text = "가족에게 전화하기", onClick = onFamilyCallClick)
+            PrimaryButton(text = "보호자에게 전화하기", onClick = onFamilyCallClick)
             if (uiState.smsMenuEnabled && uiState.guardians.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(12.dp))
                 SecondaryButton(text = "보호자에게 문자 보내기", onClick = onSmsClick)

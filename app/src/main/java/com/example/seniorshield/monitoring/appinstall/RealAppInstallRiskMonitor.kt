@@ -8,15 +8,22 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import com.example.seniorshield.domain.model.RiskSignal
+import com.example.seniorshield.monitoring.registry.RemoteControlAppRegistry
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "SeniorShield-AppInstall"
+
+/** 신호 방출 후 리셋까지 유지 시간. combine이 즉시 수신하므로 5초면 충분. */
+private const val SIGNAL_HOLD_MS = 5_000L
 
 /**
  * 새 앱 설치를 감지하고, 사이드로딩(Play Store 외 출처)이면
@@ -27,9 +34,12 @@ private const val TAG = "SeniorShield-AppInstall"
 @Singleton
 class RealAppInstallRiskMonitor @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val remoteControlRegistry: RemoteControlAppRegistry,
 ) : AppInstallRiskMonitor {
 
     override fun observeInstallSignals(): Flow<List<RiskSignal>> = callbackFlow {
+        var resetJob: Job? = null
+
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context, intent: Intent) {
                 if (intent.action != Intent.ACTION_PACKAGE_ADDED) return
@@ -41,11 +51,25 @@ class RealAppInstallRiskMonitor @Inject constructor(
                 if (isSideloaded(packageName)) {
                     Log.w(TAG, "사이드로딩 앱 감지: $packageName")
                     trySend(listOf(RiskSignal.SUSPICIOUS_APP_INSTALLED))
+                    Log.d(TAG, "emit(SUSPICIOUS_APP_INSTALLED) at ${System.currentTimeMillis()}")
                 } else if (isKnownRemoteControlApp(packageName)) {
                     Log.w(TAG, "원격제어 앱 설치 감지: $packageName")
                     trySend(listOf(RiskSignal.SUSPICIOUS_APP_INSTALLED))
+                    Log.d(TAG, "emit(SUSPICIOUS_APP_INSTALLED) at ${System.currentTimeMillis()}")
                 } else {
                     Log.d(TAG, "Play Store 설치 앱 — 무시: $packageName")
+                    return
+                }
+
+                // 신호 방출 후 일정 시간 뒤 리셋 — stale 신호가 새 세션을 생성하는 것을 방지
+                resetJob?.let {
+                    it.cancel()
+                    Log.d(TAG, "resetJob cancel at ${System.currentTimeMillis()} (연속 설치 — 타이머 갱신)")
+                }
+                resetJob = launch {
+                    delay(SIGNAL_HOLD_MS)
+                    trySend(emptyList())
+                    Log.d(TAG, "emit(empty) — signal reset at ${System.currentTimeMillis()}")
                 }
             }
         }
@@ -65,8 +89,10 @@ class RealAppInstallRiskMonitor @Inject constructor(
         trySend(emptyList())
 
         awaitClose {
+            resetJob?.cancel()
+            resetJob = null
             context.unregisterReceiver(receiver)
-            Log.d(TAG, "앱 설치 모니터 중지")
+            Log.d(TAG, "앱 설치 모니터 중지 — resetJob cancelled")
         }
     }.distinctUntilChanged()
 
@@ -88,10 +114,8 @@ class RealAppInstallRiskMonitor @Inject constructor(
         }
     }
 
-    private fun isKnownRemoteControlApp(packageName: String): Boolean {
-        if (REMOTE_CONTROL_PACKAGES.contains(packageName)) return true
-        return REMOTE_CONTROL_PREFIXES.any { packageName.startsWith(it) }
-    }
+    private fun isKnownRemoteControlApp(packageName: String): Boolean =
+        remoteControlRegistry.matches(packageName)
 
     companion object {
         private val TRUSTED_INSTALLERS = setOf(
@@ -102,21 +126,6 @@ class RealAppInstallRiskMonitor @Inject constructor(
             "com.skt.skaf.A000Z00040",     // T Store
             "com.kt.olleh.storefront",     // KT
             "com.lguplus.appstore",        // LG U+
-        )
-
-        private val REMOTE_CONTROL_PREFIXES = setOf(
-            "com.teamviewer.",
-            "net.anydesk.",
-            "com.anydesk.",
-        )
-
-        private val REMOTE_CONTROL_PACKAGES = setOf(
-            "com.rsupport.rs.activity.rsupport",
-            "com.rsupport.rs.activity.rsupport.sec",
-            "com.rsupport.remotecall.rtc.host",
-            "com.logmein.rescuemobile",
-            "com.splashtop.remote.pad.v2",
-            "com.realvnc.viewer.android",
         )
     }
 }

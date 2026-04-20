@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
@@ -18,15 +19,30 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
+import com.example.seniorshield.BuildConfig
 import com.example.seniorshield.MainActivity
 import com.example.seniorshield.core.util.CallEndHelper
+import com.example.seniorshield.domain.model.Guardian
 import com.example.seniorshield.domain.model.RiskEvent
 import com.example.seniorshield.domain.model.RiskLevel
+import com.example.seniorshield.domain.repository.RiskEventSink
+import com.example.seniorshield.monitoring.call.CallRiskMonitor
+import com.example.seniorshield.monitoring.session.RiskSessionTracker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "SeniorShield-Overlay"
+
+/** showInCallScreen() 후 dismiss 지연. 전화 앱이 foreground로 올라올 시간 확보. */
+private const val SHOW_IN_CALL_DELAY_MS = 500L
+
+/** IDLE 감지 후 suppression 유지 시간. 다이얼러 InCallFragment 정리 시퀀스 완료 대기. */
+private const val POST_CALL_UI_STABILIZATION_MS = 1_000L
+
+/** IDLE이 감지되지 않을 경우 suppression 강제 해제 (안전 타임아웃). */
+private const val MAX_END_CALL_SUPPRESSION_MS = 3_000L
 
 /**
  * 위험 감지 시 화면 전체를 덮는 경고 팝업을 표시한다.
@@ -34,20 +50,51 @@ private const val TAG = "SeniorShield-Overlay"
  * TYPE_APPLICATION_OVERLAY + MATCH_PARENT 높이로 다른 앱 위, 통화 중에도 표시된다.
  * SYSTEM_ALERT_WINDOW 권한이 없으면 조용히 생략한다.
  *
- * 주 버튼은 "지금 전화 끊기" — 피해자에게 가장 먼저 필요한 행동을 직접 실행한다.
- * ANSWER_PHONE_CALLS 권한이 없으면 버튼 탭 시 자동 종료 없이 팝업만 닫힌다.
+ * 주 버튼은 통화 중이면 "전화 앱으로 이동"(showInCallScreen + dismiss),
+ * 아니면 "일단 닫기"(dismiss만, 세션 유지).
+ *
+ * 보조 CTA는 통화 여부에 따라 문구와 의미가 분리된다:
+ * - 통화 중 (B-3): "통화 경고 닫기" — 통일 종료 시퀀스 + `markCurrentCallConfirmedSafe(callId)` + `snoozeForCall(callId)`.
+ *   같은 통화에서 오는 call-derived signal은 Coordinator pre-update 필터에서 제거되어 respawn 차단.
+ *   `markCurrentCallConfirmedSafe`로 다음 IDLE에서 텔레뱅킹 anchor가 설정되지 않는다.
+ *   callId가 null인 race fallback에서는 markConfirmed/snooze가 생략되므로 완전 보호 경로 아님.
+ * - 비통화 (B-4): "위험 경고 해제" — 통일 종료 시퀀스만. 세션 즉시 종료.
+ *
+ * 통일 종료 시퀀스 (B-3/B-4 공통, A′ 호출 순서):
+ *   1. sessionTracker.reset()
+ *   2. callRiskMonitor.clearTelebankingAnchor()  (5분 텔레뱅킹 윈도우 무력화)
+ *   3. eventSink.clearCurrentRiskEvent()         (UI 즉시 반영)
+ *   4. (B-3만, callId != null) markCurrentCallConfirmedSafe + snoozeForCall
+ *   5. dismiss()
+ *
+ * snooze는 IDLE 전이 / 통화 전환 / TTL 15분 / 상위 trigger(REMOTE_CONTROL 등) 출현 시 자동 해제된다.
  */
 @Singleton
 class RiskOverlayManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val callEndHelper: CallEndHelper,
+    private val callRiskMonitor: CallRiskMonitor,
+    private val sessionTracker: RiskSessionTracker,
+    private val eventSink: RiskEventSink,
 ) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val mainHandler = Handler(Looper.getMainLooper())
 
     @Volatile private var overlayView: LinearLayout? = null
+    @Volatile private var isDismissing = false
+    private var currentParams: WindowManager.LayoutParams? = null
 
-    fun show(event: RiskEvent) {
+    // ── end-call suppression state ──────────────────────────────────
+    @Volatile private var endCallSuppressionActive = false
+    @Volatile private var idleStabilizationScheduled = false
+    private var suppressionReleaseRunnable: Runnable? = null
+    private var onSuppressionReleased: (() -> Unit)? = null
+
+    fun show(event: RiskEvent, guardian: Guardian? = null) {
+        if (endCallSuppressionActive) {
+            Log.d(TAG, "suppression active, skip risk popup")
+            return
+        }
         if (!Settings.canDrawOverlays(context)) {
             Log.w(TAG, "SYSTEM_ALERT_WINDOW 권한 없음 — 팝업 생략")
             return
@@ -57,12 +104,13 @@ class RiskOverlayManager @Inject constructor(
                 Log.d(TAG, "팝업 이미 표시 중 — 새 내용으로 갱신")
                 try {
                     windowManager.removeView(overlayView)
+                    overlayView = null
                 } catch (e: Exception) {
-                    Log.e(TAG, "기존 팝업 제거 실패: ${e.message}")
+                    Log.e(TAG, "기존 팝업 제거 실패, 갱신 중단: ${e.message}")
+                    return@post
                 }
-                overlayView = null
             }
-            val (view, primaryButton) = buildView(event)
+            val (view, primaryButton) = buildView(event, guardian)
             val params = WindowManager.LayoutParams(
                 MATCH_PARENT,
                 MATCH_PARENT,
@@ -73,6 +121,7 @@ class RiskOverlayManager @Inject constructor(
             try {
                 windowManager.addView(view, params)
                 overlayView = view
+                currentParams = params
                 primaryButton.requestFocus()
                 Log.d(TAG, "전체화면 팝업 표시: level=${event.level}, title=${event.title}")
             } catch (e: Exception) {
@@ -82,8 +131,12 @@ class RiskOverlayManager @Inject constructor(
     }
 
     fun dismiss() {
+        isDismissing = true
         mainHandler.post {
-            val view = overlayView ?: return@post
+            val view = overlayView ?: run {
+                isDismissing = false
+                return@post
+            }
             try {
                 windowManager.removeView(view)
                 Log.d(TAG, "팝업 닫힘")
@@ -91,8 +144,78 @@ class RiskOverlayManager @Inject constructor(
                 Log.e(TAG, "팝업 removeView 실패: ${e.message}")
             } finally {
                 overlayView = null
+                currentParams = null
+                isDismissing = false
             }
         }
+    }
+
+    fun ensureCriticalOnTop() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            if (BuildConfig.DEBUG) Log.w(TAG, "ensureCriticalOnTop called off-main, posting to main")
+            mainHandler.post { ensureCriticalOnTop() }
+            return
+        }
+        val view = overlayView ?: return
+        if (view.parent == null) return
+        if (isDismissing) return
+        val params = currentParams ?: return
+        try {
+            windowManager.removeView(view)
+            windowManager.addView(view, params)
+            Log.d(TAG, "팝업 z-order 최상위 재배치")
+        } catch (e: IllegalStateException) {
+            Log.w(TAG, "ensureCriticalOnTop race: ${e.message}")
+        }
+    }
+
+    // ── end-call suppression ───────────────────────────────────────
+
+    /** coordinator가 UI 억제 여부를 확인할 때 사용. */
+    fun isEndCallSuppressed(): Boolean = endCallSuppressionActive
+
+    /**
+     * 통화 종료 동작을 유도한 직후 호출되어 팝업 재표시를 억제한다.
+     * 안전 타임아웃을 건 뒤, IDLE 감지 또는 타임아웃 도래 시 해제된다.
+     * (현재 호출부 없음 — 팝업 주 버튼이 showInCallScreen 경로로 바뀌면서 유휴 상태.)
+     */
+    internal fun startEndCallSuppression(onReleased: (() -> Unit)? = null) {
+        endCallSuppressionActive = true
+        idleStabilizationScheduled = false
+        onSuppressionReleased = onReleased
+        suppressionReleaseRunnable?.let { mainHandler.removeCallbacks(it) }
+        val safetyRelease = Runnable {
+            endCallSuppressionActive = false
+            idleStabilizationScheduled = false
+            suppressionReleaseRunnable = null
+            Log.d(TAG, "suppression force-released (safety timeout)")
+            onSuppressionReleased?.invoke()
+            onSuppressionReleased = null
+        }
+        suppressionReleaseRunnable = safetyRelease
+        mainHandler.postDelayed(safetyRelease, MAX_END_CALL_SUPPRESSION_MS)
+        Log.d(TAG, "end-call suppression started")
+    }
+
+    /**
+     * coordinator가 IDLE(callSignals 비어짐)을 감지하면 호출.
+     * 안전 타임아웃을 취소하고 짧은 안정화 지연 후 suppression 해제.
+     */
+    fun scheduleSuppressionRelease() {
+        if (!endCallSuppressionActive || idleStabilizationScheduled) return
+        idleStabilizationScheduled = true
+        suppressionReleaseRunnable?.let { mainHandler.removeCallbacks(it) }
+        val release = Runnable {
+            endCallSuppressionActive = false
+            idleStabilizationScheduled = false
+            suppressionReleaseRunnable = null
+            Log.d(TAG, "suppression released after stabilization")
+            onSuppressionReleased?.invoke()
+            onSuppressionReleased = null
+        }
+        suppressionReleaseRunnable = release
+        mainHandler.postDelayed(release, POST_CALL_UI_STABILIZATION_MS)
+        Log.d(TAG, "call became IDLE, suppression release in ${POST_CALL_UI_STABILIZATION_MS}ms")
     }
 
     // ── 레이아웃 ─────────────────────────────────────────────────
@@ -102,7 +225,7 @@ class RiskOverlayManager @Inject constructor(
         val primaryButton: Button,
     )
 
-    private fun buildView(event: RiskEvent): OverlayViews {
+    private fun buildView(event: RiskEvent, guardian: Guardian? = null): OverlayViews {
         val bgColor = when (event.level) {
             RiskLevel.CRITICAL -> Color.parseColor("#B71C1C")
             RiskLevel.HIGH     -> Color.parseColor("#BF360C")
@@ -127,12 +250,12 @@ class RiskOverlayManager @Inject constructor(
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)
-            setPadding(dp(32), dp(56), dp(32), dp(0))
+            setPadding(dp(16), dp(24), dp(16), dp(0))
         }
 
         contentArea.addView(TextView(context).apply {
             text = "⚠"
-            textSize = 80f
+            textSize = 36f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)
@@ -140,7 +263,7 @@ class RiskOverlayManager @Inject constructor(
 
         contentArea.addView(TextView(context).apply {
             text = levelLabel
-            textSize = 18f
+            textSize = 16f
             setTextColor(bgColor)
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
@@ -149,13 +272,14 @@ class RiskOverlayManager @Inject constructor(
                 cornerRadius = dp(20).toFloat()
                 setColor(Color.WHITE)
             }
-            setPadding(dp(20), dp(6), dp(20), dp(6))
+            setPadding(dp(16), dp(4), dp(16), dp(4))
             layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
-                topMargin = dp(16)
+                topMargin = dp(8)
             }
         })
 
+        // 핵심 경고 제목 — 화면 폭에 가깝게 크게 표시
         contentArea.addView(TextView(context).apply {
             text = event.title
             textSize = 24f
@@ -163,17 +287,18 @@ class RiskOverlayManager @Inject constructor(
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
-                topMargin = dp(24)
+                topMargin = dp(12)
             }
         })
 
+        // 상세 설명
         contentArea.addView(TextView(context).apply {
             text = event.description
-            textSize = 16f
+            textSize = 18f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
-                topMargin = dp(12)
+                topMargin = dp(8)
             }
         })
 
@@ -181,27 +306,35 @@ class RiskOverlayManager @Inject constructor(
         val buttonArea = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)
-            setPadding(dp(24), dp(16), dp(24), dp(48))
+            setPadding(dp(24), dp(12), dp(24), dp(32))
         }
 
-        // 주 버튼: 지금 전화 끊기
+        // 주 버튼: 통화 중이면 "전화 앱으로 이동"(showInCallScreen + dismiss),
+        // 아니면 "일단 닫기"(dismiss만, 세션 유지 — 안전 확인은 홈/쿨다운에서).
         val cornerPx = dp(8).toFloat()
+        val inCall = callEndHelper.isInCall()
         val primaryBtn = Button(context).apply {
-            text = "지금 전화 끊기"
+            text = if (inCall) "전화 앱으로 이동" else "일단 닫기"
             textSize = 18f
             setTextColor(bgColor)
             setTypeface(null, Typeface.BOLD)
             isFocusable = true
-            isFocusableInTouchMode = true
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = cornerPx
                 setColor(Color.WHITE)
             }
-            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(60))
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(52))
             setOnClickListener {
-                callEndHelper.endCurrentCall()
-                dismiss()
+                if (callEndHelper.isInCall()) {
+                    Log.d(TAG, "opening in-call screen")
+                    val telecom = context.getSystemService(Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
+                    telecom?.showInCallScreen(false)
+                    // 전화 앱이 foreground로 올라올 시간을 확보한 뒤 오버레이 제거
+                    mainHandler.postDelayed({ dismiss() }, SHOW_IN_CALL_DELAY_MS)
+                } else {
+                    dismiss()
+                }
             }
             setOnFocusChangeListener { _, hasFocus ->
                 background = GradientDrawable().apply {
@@ -214,21 +347,107 @@ class RiskOverlayManager @Inject constructor(
         }
         buttonArea.addView(primaryBtn)
 
-        // 보조 버튼: 앱 열어서 확인하기
+        // 보조 CTA: 통화 여부에 따라 문구와 동작이 분리된다.
+        // - 통화 중: "통화 경고 닫기" — reset + snoozeForCall (respawn 차단)
+        // - 비통화: "위험 경고 해제" — reset만 (세션 즉시 종료)
+        val safeCtaText = if (inCall) "통화 경고 닫기" else "위험 경고 해제"
         buttonArea.addView(Button(context).apply {
-            text = "앱 열어서 확인하기"
+            text = safeCtaText
             textSize = 16f
             setTextColor(Color.WHITE)
             isFocusable = true
-            isFocusableInTouchMode = true
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = cornerPx
                 setColor(Color.TRANSPARENT)
                 setStroke(dp(2), Color.WHITE)
             }
-            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(56)).apply {
-                topMargin = dp(12)
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(48)).apply {
+                topMargin = dp(8)
+            }
+            setOnClickListener {
+                // 통일 종료 시퀀스 (A′): reset → clearTelebankingAnchor → clearCurrentRiskEvent
+                //   → (B-3만) markCurrentCallConfirmedSafe + snoozeForCall → dismiss
+                // 클릭 시점에 callId 재조회 — 빌드 이후 통화 상태가 바뀌었을 수 있다.
+                val liveCallId = callRiskMonitor.currentCallId()
+                sessionTracker.reset()
+                callRiskMonitor.clearTelebankingAnchor()
+                eventSink.clearCurrentRiskEvent()
+                if (liveCallId != null) {
+                    callRiskMonitor.markCurrentCallConfirmedSafe(liveCallId)
+                    sessionTracker.snoozeForCall(liveCallId)
+                    Log.d(TAG, "통화 경고 닫기 → 통일 종료 시퀀스 + markConfirmed + snooze (callId=$liveCallId)")
+                } else {
+                    // race fallback: liveCallId == null이면 markConfirmed/snooze 생략.
+                    // 동일 통화 기준 완전 보호 경로 아님 — 별도 ticket으로 추적.
+                    Log.d(TAG, "safe CTA → 통일 종료 시퀀스만 (callId=null, race fallback)")
+                }
+                dismiss()
+            }
+            setOnFocusChangeListener { _, hasFocus ->
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = cornerPx
+                    setColor(Color.TRANSPARENT)
+                    setStroke(dp(if (hasFocus) 4 else 2), if (hasFocus) Color.YELLOW else Color.WHITE)
+                }
+            }
+        })
+
+        // 보조 버튼: 보호자에게 도움 요청 (guardian이 설정된 경우에만 표시)
+        if (guardian != null) {
+            buttonArea.addView(Button(context).apply {
+                text = "등록된 보호자에게 문자 보내기"
+                textSize = 16f
+                setTextColor(Color.WHITE)
+                isFocusable = true
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = cornerPx
+                    setColor(Color.TRANSPARENT)
+                    setStroke(dp(2), Color.WHITE)
+                }
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(48)).apply {
+                    topMargin = dp(8)
+                }
+                setOnClickListener {
+                    val smsUri = Uri.parse("smsto:${guardian.phoneNumber}")
+                    val smsIntent = Intent(Intent.ACTION_SENDTO, smsUri).apply {
+                        putExtra("sms_body", "[시니어쉴드] 위험 경고가 떠서 연락드립니다. 송금이나 인증 전에 같이 확인해주세요.")
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    if (smsIntent.resolveActivity(context.packageManager) != null) {
+                        context.startActivity(smsIntent)
+                    } else {
+                        Toast.makeText(context, "이 기기에서는 문자 전송을 지원하지 않습니다", Toast.LENGTH_SHORT).show()
+                    }
+                    dismiss()
+                }
+                setOnFocusChangeListener { _, hasFocus ->
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.RECTANGLE
+                        cornerRadius = cornerPx
+                        setColor(Color.TRANSPARENT)
+                        setStroke(dp(if (hasFocus) 4 else 2), if (hasFocus) Color.YELLOW else Color.WHITE)
+                    }
+                }
+            })
+        }
+
+        // 보조 버튼: 앱 열어서 확인하기
+        buttonArea.addView(Button(context).apply {
+            text = "앱 열어서 확인하기"
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            isFocusable = true
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = cornerPx
+                setColor(Color.TRANSPARENT)
+                setStroke(dp(2), Color.WHITE)
+            }
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(48)).apply {
+                topMargin = dp(8)
             }
             setOnClickListener {
                 context.startActivity(

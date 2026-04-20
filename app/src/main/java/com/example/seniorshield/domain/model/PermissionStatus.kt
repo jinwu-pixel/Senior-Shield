@@ -8,6 +8,7 @@ enum class PermissionType {
     ANSWER_CALLS,
     READ_CONTACTS,
     READ_CALL_LOG,
+    OUTGOING_CALLS,
 }
 
 data class PermissionStatus(

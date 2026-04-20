@@ -6,8 +6,16 @@ import android.provider.Settings
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.seniorshield.domain.model.AlertState
+import com.example.seniorshield.domain.model.Guardian
 import com.example.seniorshield.domain.model.RiskLevel
+import com.example.seniorshield.domain.model.RiskSignal
+import com.example.seniorshield.domain.repository.GuardianRepository
+import com.example.seniorshield.domain.repository.RiskEventSink
 import com.example.seniorshield.domain.repository.RiskRepository
+import com.example.seniorshield.monitoring.call.CallRiskMonitor
+import com.example.seniorshield.monitoring.orchestrator.AlertStateResolver
+import com.example.seniorshield.monitoring.session.RiskSessionTracker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Calendar
@@ -28,6 +36,11 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val riskRepository: RiskRepository,
+    private val eventSink: RiskEventSink,
+    private val sessionTracker: RiskSessionTracker,
+    private val alertStateResolver: AlertStateResolver,
+    private val guardianRepository: GuardianRepository,
+    private val callRiskMonitor: CallRiskMonitor,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -40,15 +53,36 @@ class HomeViewModel @Inject constructor(
 
     private val _weeklySnapshot = MutableStateFlow(WeeklySnapshot())
 
+    /** GUARDED 카드를 이미 표시한 세션 ID. 세션당 1회만 노출. */
+    private val _guardedCardShownSessionId = MutableStateFlow<String?>(null)
+
     val uiState: StateFlow<HomeUiState> = combine(
         riskRepository.getCurrentRiskEvent(),
         riskRepository.getRecentRiskEvents(),
         _hasCriticalPermissions,
         _weeklySnapshot,
-    ) { current, recent, hasPermissions, weekly ->
+        combine(
+            sessionTracker.sessionState,
+            _guardedCardShownSessionId,
+            guardianRepository.observeGuardians(),
+        ) { s, id, guardians -> Triple(s, id, guardians) },
+    ) { current, recent, hasPermissions, weekly, sessionTriple ->
+        val (session, shownId, guardians) = sessionTriple
         val baseBody = current?.title ?: "안전합니다. 감지된 위험이 없습니다."
         val summary = "최근 24시간: ${recent.size}건 · 이번 주: ${weekly.eventCount}건"
         val body = "$baseBody\n$summary"
+
+        val alertState = alertStateResolver.resolve(session)
+        val guardedCard = when {
+            alertState == AlertState.GUARDED && session != null
+                    && shownId == session.id ->
+                buildGuardedCard(session.accumulatedSignals)
+            else -> null
+        }
+
+        val guardian: Guardian? =
+            if (alertState.ordinal >= AlertState.GUARDED.ordinal) guardians.firstOrNull()
+            else null
 
         HomeUiState(
             currentRiskTitle = if (current != null) "위험 감지" else "현재 보호 상태",
@@ -58,6 +92,10 @@ class HomeViewModel @Inject constructor(
             hasCriticalPermissions = hasPermissions,
             weeklyEventCount = weekly.eventCount,
             weeklyTip = weekly.tip,
+            guardedCard = guardedCard,
+            hasGuardian = guardian != null,
+            guardianName = guardian?.name ?: "",
+            guardianPhone = guardian?.phoneNumber ?: "",
         )
     }.stateIn(
         scope = viewModelScope,
@@ -65,12 +103,40 @@ class HomeViewModel @Inject constructor(
         initialValue = HomeUiState(),
     )
 
+    private fun buildGuardedCard(signals: Set<RiskSignal>): GuardedCardInfo {
+        val body = when {
+            RiskSignal.REPEATED_CALL_THEN_LONG_TALK in signals ||
+                    RiskSignal.REPEATED_UNKNOWN_CALLER in signals ->
+                "확인되지 않은 번호에서 반복 전화가 감지되었습니다. 금융 관련 요청에는 응하지 마세요."
+
+            RiskSignal.LONG_CALL_DURATION in signals ->
+                "낯선 번호와 장시간 통화가 감지되었습니다. 금융 관련 요청에는 주의하세요."
+
+            else ->
+                "의심스러운 활동이 감지되었습니다. 주의가 필요합니다."
+        }
+        return GuardedCardInfo(title = "주의 안내", body = body)
+    }
+
     // HIGH / CRITICAL 이벤트 감지 시 경고 화면으로 자동 이동하는 1회성 신호.
     private val _navigateToWarning = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val navigateToWarning = _navigateToWarning.asSharedFlow()
 
     init {
         viewModelScope.launch { loadWeeklySnapshot() }
+        viewModelScope.launch {
+            riskRepository.getRecentRiskEvents().collect { loadWeeklySnapshot() }
+        }
+        viewModelScope.launch {
+            sessionTracker.sessionState.collect { session ->
+                val alertState = alertStateResolver.resolve(session)
+                if (alertState == AlertState.GUARDED && session != null
+                    && _guardedCardShownSessionId.value != session.id
+                ) {
+                    _guardedCardShownSessionId.value = session.id
+                }
+            }
+        }
         viewModelScope.launch {
             riskRepository.getCurrentRiskEvent()
                 .filterNotNull()
@@ -82,6 +148,17 @@ class HomeViewModel @Inject constructor(
 
     fun refreshPermissions() {
         _hasCriticalPermissions.value = checkCriticalPermissions()
+    }
+
+    /**
+     * 사용자가 홈 화면에서 "안전 확인"을 선택하면 현재 위험 세션을 완전히 종료한다.
+     * 통일 종료 시퀀스 (A′): reset → clearTelebankingAnchor → clearCurrentRiskEvent → loadWeeklySnapshot.
+     */
+    fun confirmSafe() {
+        sessionTracker.reset()
+        callRiskMonitor.clearTelebankingAnchor()
+        eventSink.clearCurrentRiskEvent()
+        viewModelScope.launch { loadWeeklySnapshot() }
     }
 
     private suspend fun loadWeeklySnapshot() {

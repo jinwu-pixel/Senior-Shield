@@ -3,8 +3,10 @@ package com.example.seniorshield.feature.warning
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.seniorshield.domain.repository.GuardianRepository
+import com.example.seniorshield.domain.repository.RiskEventSink
 import com.example.seniorshield.domain.repository.RiskRepository
 import com.example.seniorshield.domain.repository.SettingsRepository
+import com.example.seniorshield.monitoring.call.CallRiskMonitor
 import com.example.seniorshield.monitoring.session.RiskSessionTracker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +22,8 @@ class WarningViewModel @Inject constructor(
     riskRepository: RiskRepository,
     settingsRepository: SettingsRepository,
     private val sessionTracker: RiskSessionTracker,
+    private val eventSink: RiskEventSink,
+    private val callRiskMonitor: CallRiskMonitor,
 ) : ViewModel() {
 
     private val _showGuardianPicker = MutableStateFlow(false)
@@ -61,8 +65,14 @@ class WarningViewModel @Inject constructor(
     fun showSmsPicker() { _showSmsPicker.value = true }
     fun dismissSmsPicker() { _showSmsPicker.value = false }
 
-    /** 사용자가 "안전 확인"을 선택하면 현재 위험 세션을 종료한다. */
+    /**
+     * 사용자가 "안전 확인"을 선택하면 현재 위험 세션을 완전히 종료한다.
+     * 통일 종료 시퀀스 (A′): reset → clearTelebankingAnchor → clearCurrentRiskEvent.
+     * 화면 복귀(onBack)는 호출자(Screen) 책임 — 상태 종료와 화면 종료는 분리된다.
+     */
     fun confirmSafe() {
         sessionTracker.reset()
+        callRiskMonitor.clearTelebankingAnchor()
+        eventSink.clearCurrentRiskEvent()
     }
 }

@@ -189,4 +189,98 @@ class RiskEvaluatorImplTest {
         assertEquals(110, result.total)
         assertEquals(RiskLevel.CRITICAL, result.level)
     }
+
+    // ── 커버리지 보완 ─────────────────────────────────────────────────
+
+    @Test
+    fun `UNVERIFIED_CALLER 단독 - 20점 LOW`() {
+        val result = evaluator.evaluate(listOf(RiskSignal.UNVERIFIED_CALLER))
+        assertEquals(20, result.total)
+        assertEquals(RiskLevel.LOW, result.level)
+    }
+
+    @Test
+    fun `HIGH_RISK_DEVICE_ENVIRONMENT 단독 - 20점 LOW`() {
+        val result = evaluator.evaluate(listOf(RiskSignal.HIGH_RISK_DEVICE_ENVIRONMENT))
+        assertEquals(20, result.total)
+        assertEquals(RiskLevel.LOW, result.level)
+    }
+
+    @Test
+    fun `SUSPICIOUS_APP_INSTALLED 단독 - 40점 MEDIUM`() {
+        val result = evaluator.evaluate(listOf(RiskSignal.SUSPICIOUS_APP_INSTALLED))
+        assertEquals(40, result.total)
+        assertEquals(RiskLevel.MEDIUM, result.level)
+    }
+
+    @Test
+    fun `점수 경계값 - 65점은 HIGH (강제 CRITICAL 조합 없음)`() {
+        // BANKING_APP_OPENED_AFTER_REMOTE_APP(40) + TELEBANKING_AFTER_SUSPICIOUS(25) = 65점
+        // call 신호 없음, REMOTE+BANKING 콤보 없음 → 순수 점수 기반 HIGH
+        val result = evaluator.evaluate(
+            listOf(
+                RiskSignal.BANKING_APP_OPENED_AFTER_REMOTE_APP,
+                RiskSignal.TELEBANKING_AFTER_SUSPICIOUS,
+            ),
+        )
+        assertEquals(65, result.total)
+        assertEquals(RiskLevel.HIGH, result.level)
+    }
+
+    @Test
+    fun `점수 경계값 - 80점은 CRITICAL (순수 점수, 강제 CRITICAL 조합 없음)`() {
+        // SUSPICIOUS_APP_INSTALLED(40) + BANKING_APP_OPENED_AFTER_REMOTE_APP(40) = 80점
+        // call 신호 없음, REMOTE_CONTROL_APP_OPENED 없으므로 REMOTE+BANKING 콤보 미적용
+        // 순수 점수만으로 CRITICAL(≥80) 도달
+        val result = evaluator.evaluate(
+            listOf(
+                RiskSignal.SUSPICIOUS_APP_INSTALLED,
+                RiskSignal.BANKING_APP_OPENED_AFTER_REMOTE_APP,
+            ),
+        )
+        assertEquals(80, result.total)
+        assertEquals(RiskLevel.CRITICAL, result.level)
+    }
+
+    @Test
+    fun `PASSIVE 신호만 누적해도 CRITICAL 불가 - 강제 상향 규칙 미적용 명시적 검증`() {
+        // REPEATED_UNKNOWN_CALLER(15) + UNKNOWN_CALLER(20) + LONG_CALL_DURATION(30) = 65점 → HIGH
+        // call 신호 존재 + TRIGGER 없음 → 복합 패턴 강제 CRITICAL 규칙 미적용
+        // PASSIVE/AMPLIFIER 누적만으로는 강제 CRITICAL 상향이 발동하지 않음을 검증한다.
+        val result = evaluator.evaluate(
+            listOf(
+                RiskSignal.REPEATED_UNKNOWN_CALLER,
+                RiskSignal.UNKNOWN_CALLER,
+                RiskSignal.LONG_CALL_DURATION,
+            ),
+        )
+        assertEquals(65, result.total)
+        // call 신호는 있지만 TRIGGER 없으므로 강제 CRITICAL 상향 미발동 → score 기반 HIGH
+        assertEquals(RiskLevel.HIGH, result.level)
+        // TRIGGER 신호가 없음을 검증
+        val triggerSignals = result.signals.filter {
+            it == RiskSignal.REMOTE_CONTROL_APP_OPENED ||
+                it == RiskSignal.BANKING_APP_OPENED_AFTER_REMOTE_APP ||
+                it == RiskSignal.TELEBANKING_AFTER_SUSPICIOUS ||
+                it == RiskSignal.SUSPICIOUS_APP_INSTALLED
+        }
+        assertTrue(triggerSignals.isEmpty())
+    }
+
+    @Test
+    fun `중복 신호 입력 시 result signals 개수 검증`() {
+        // UNKNOWN_CALLER 를 callSignals 에 중복으로 입력해도 distinct 처리되어 1개만 존재
+        val result = evaluator.evaluate(
+            listOf(
+                RiskSignal.UNKNOWN_CALLER,
+                RiskSignal.UNKNOWN_CALLER,
+                RiskSignal.LONG_CALL_DURATION,
+                RiskSignal.LONG_CALL_DURATION,
+            ),
+        )
+        // distinct 후 신호 2개만 존재
+        assertEquals(2, result.signals.size)
+        // 점수도 중복 계산 없이 50점
+        assertEquals(50, result.total)
+    }
 }
