@@ -5,13 +5,18 @@ import com.example.seniorshield.domain.model.RiskEvent
 import com.example.seniorshield.domain.model.RiskLevel
 import com.example.seniorshield.domain.model.RiskSignal
 import com.example.seniorshield.domain.repository.GuardianRepository
+import com.example.seniorshield.domain.repository.RiskEventSink
 import com.example.seniorshield.domain.repository.RiskRepository
 import com.example.seniorshield.domain.repository.SettingsRepository
+import com.example.seniorshield.monitoring.call.CallRiskMonitor
+import com.example.seniorshield.monitoring.model.CallMonitorState
 import com.example.seniorshield.monitoring.session.RiskSessionTracker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -35,6 +40,8 @@ class WarningViewModelTest {
     private lateinit var riskRepository: FakeRiskRepository
     private lateinit var settingsRepository: FakeSettingsRepository
     private lateinit var sessionTracker: RiskSessionTracker
+    private lateinit var eventSink: FakeRiskEventSink
+    private lateinit var callRiskMonitor: FakeCallRiskMonitor
     private lateinit var viewModel: WarningViewModel
 
     @Before
@@ -44,7 +51,16 @@ class WarningViewModelTest {
         riskRepository = FakeRiskRepository()
         settingsRepository = FakeSettingsRepository()
         sessionTracker = RiskSessionTracker()
-        viewModel = WarningViewModel(guardianRepository, riskRepository, settingsRepository, sessionTracker)
+        eventSink = FakeRiskEventSink()
+        callRiskMonitor = FakeCallRiskMonitor()
+        viewModel = WarningViewModel(
+            guardianRepository,
+            riskRepository,
+            settingsRepository,
+            sessionTracker,
+            eventSink,
+            callRiskMonitor,
+        )
     }
 
     @After
@@ -179,6 +195,41 @@ class WarningViewModelTest {
 
         assertNull(sessionTracker.sessionState.value)
     }
+
+    // -----------------------------------------------------------------------
+    // T-A7. confirmSafe 호출 시 통일 종료 시퀀스 모두 실행 (B-6)
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `T-A7 confirmSafe 호출 시 reset clearAnchor clearEvent 모두 호출`() = runTest {
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+
+        // 사전 상태: 세션 + currentEvent 존재
+        sessionTracker.update(listOf(RiskSignal.UNKNOWN_CALLER), emptyList())
+        eventSink.pushRiskEvent(
+            RiskEvent(
+                id = "event-1",
+                title = "test",
+                description = "test",
+                occurredAtMillis = 1L,
+                level = RiskLevel.HIGH,
+                signals = listOf(RiskSignal.UNKNOWN_CALLER),
+            )
+        )
+        assertNotNull(sessionTracker.sessionState.value)
+        assertNotNull(eventSink.currentEvent.value)
+        assertEquals(0, callRiskMonitor.clearTelebankingAnchorCallCount)
+
+        // 안전 확인
+        viewModel.confirmSafe()
+
+        // reset → session null
+        assertNull(sessionTracker.sessionState.value)
+        // clearTelebankingAnchor 호출
+        assertEquals(1, callRiskMonitor.clearTelebankingAnchorCallCount)
+        // clearCurrentRiskEvent → currentEvent null
+        assertNull(eventSink.currentEvent.value)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -224,6 +275,27 @@ private class FakeRiskRepository : RiskRepository {
     fun setCurrentEvent(event: RiskEvent?) {
         _currentEvent.value = event
     }
+}
+
+private class FakeRiskEventSink : RiskEventSink {
+    private val _currentEvent = MutableStateFlow<RiskEvent?>(null)
+    val currentEvent: StateFlow<RiskEvent?> = _currentEvent
+
+    override suspend fun pushRiskEvent(event: RiskEvent) { _currentEvent.value = event }
+    override suspend fun updateCurrentRiskEvent(event: RiskEvent) { _currentEvent.value = event }
+    override fun clearCurrentRiskEvent() { _currentEvent.value = null }
+    override suspend fun clearAll() { _currentEvent.value = null }
+}
+
+private class FakeCallRiskMonitor : CallRiskMonitor {
+    var clearTelebankingAnchorCallCount = 0
+    var lastSafeConfirmedCallId: Long? = null
+
+    override fun observeCallContext(): Flow<CallMonitorState> = flowOf(CallMonitorState.Idle)
+    override fun observeCallSignals(): Flow<List<RiskSignal>> = flowOf(emptyList())
+    override fun currentCallId(): Long? = null
+    override fun clearTelebankingAnchor() { clearTelebankingAnchorCallCount++ }
+    override fun markCurrentCallConfirmedSafe(callId: Long) { lastSafeConfirmedCallId = callId }
 }
 
 private class FakeSettingsRepository : SettingsRepository {

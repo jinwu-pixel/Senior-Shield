@@ -18,15 +18,11 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -42,7 +38,7 @@ import com.example.seniorshield.core.navigation.SeniorShieldDestination
 import com.example.seniorshield.core.util.ContactIntentHelper
 import com.example.seniorshield.domain.model.Guardian
 
-fun NavGraphBuilder.guardianScreen(onBack: () -> Unit) {
+fun NavGraphBuilder.guardianScreen(onBack: () -> Unit, onNavigateAdd: () -> Unit) {
     composable(route = SeniorShieldDestination.GUARDIAN) {
         val viewModel: GuardianViewModel = hiltViewModel()
         val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -50,9 +46,7 @@ fun NavGraphBuilder.guardianScreen(onBack: () -> Unit) {
 
         GuardianContent(
             uiState = uiState,
-            onAddClick = viewModel::showAddDialog,
-            onDismissDialog = viewModel::hideAddDialog,
-            onConfirmAdd = viewModel::addGuardian,
+            onAddClick = onNavigateAdd,
             onRemove = viewModel::removeGuardian,
             onBack = onBack,
             onSmsClick = {
@@ -94,8 +88,6 @@ fun NavGraphBuilder.guardianScreen(onBack: () -> Unit) {
 private fun GuardianContent(
     uiState: GuardianUiState,
     onAddClick: () -> Unit,
-    onDismissDialog: () -> Unit,
-    onConfirmAdd: (String, String, String) -> Unit,
     onRemove: (String) -> Unit,
     onBack: () -> Unit,
     onSmsClick: () -> Unit,
@@ -150,13 +142,6 @@ private fun GuardianContent(
                 }
             }
         }
-    }
-
-    if (uiState.showAddDialog) {
-        AddGuardianDialog(
-            onDismiss = onDismissDialog,
-            onConfirm = onConfirmAdd,
-        )
     }
 
     if (uiState.showSmsPicker) {
@@ -228,53 +213,3 @@ private fun SmsGuardianPickerDialog(
     )
 }
 
-@Composable
-private fun AddGuardianDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (String, String, String) -> Unit,
-) {
-    var name by remember { mutableStateOf("") }
-    var phone by remember { mutableStateOf("") }
-    var relationship by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("보호자 추가") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("이름") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = phone,
-                    onValueChange = { phone = it },
-                    label = { Text("전화번호") },
-                    placeholder = { Text("010-1234-5678") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = relationship,
-                    onValueChange = { relationship = it },
-                    label = { Text("관계 (선택)") },
-                    placeholder = { Text("예: 아들, 딸") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(name, phone, relationship) },
-                enabled = name.isNotBlank() && phone.isNotBlank(),
-            ) { Text("등록") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("취소") }
-        },
-    )
-}

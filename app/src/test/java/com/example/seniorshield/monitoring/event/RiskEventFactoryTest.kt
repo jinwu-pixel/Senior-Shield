@@ -21,9 +21,9 @@ class RiskEventFactoryTest {
     }
 
     @Test
-    fun `REMOTE_CONTROL_APP_OPENED + UNKNOWN_CALLER - 의심 통화 후 원격제어 메시지`() {
+    fun `REMOTE_CONTROL_APP_OPENED + UNKNOWN_CALLER - 원격제어 앱 실행 메시지`() {
         val event = factory.create(score(RiskSignal.REMOTE_CONTROL_APP_OPENED, RiskSignal.UNKNOWN_CALLER))
-        assertEquals("의심 통화 후 원격제어 앱 실행", event.title)
+        assertEquals("원격제어 앱 실행 감지", event.title)
     }
 
     @Test

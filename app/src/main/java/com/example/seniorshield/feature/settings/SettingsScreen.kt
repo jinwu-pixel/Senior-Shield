@@ -26,9 +26,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
@@ -61,6 +63,7 @@ fun NavGraphBuilder.settingsScreen(
         val score by debugVm.score.collectAsStateWithLifecycle()
         val testModeEnabled by debugVm.testModeEnabled.collectAsStateWithLifecycle()
         val smsMenuEnabled by debugVm.smsMenuEnabled.collectAsStateWithLifecycle()
+        val context = LocalContext.current
 
         SettingsContent(
             session = session,
@@ -70,7 +73,10 @@ fun NavGraphBuilder.settingsScreen(
             onNavigatePolicy = onNavigatePolicy,
             onNavigateGuardian = onNavigateGuardian,
             onBack = onBack,
-            onResetAll = debugVm::resetAll,
+            onResetAll = {
+                debugVm.resetAll()
+                Toast.makeText(context, "세션과 이력이 초기화되었습니다", Toast.LENGTH_SHORT).show()
+            },
             onShowTestOverlay = debugVm::showTestOverlay,
             onShowTestCooldown = debugVm::showTestCooldown,
             onSimulateTelebanking = debugVm::simulateTelebankingDetection,
@@ -123,6 +129,17 @@ private fun SettingsContent(
                     onTestModeToggle = onTestModeToggle,
                 )
             }
+
+            Spacer(Modifier.height(24.dp))
+            Text(
+                text = "시니어쉴드 v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
         }
     }
 }

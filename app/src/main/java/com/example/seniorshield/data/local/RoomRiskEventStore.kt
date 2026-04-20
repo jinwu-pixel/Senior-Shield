@@ -54,7 +54,7 @@ class RoomRiskEventStore @Inject constructor(
         _currentEvent.value = event
     }
 
-    override suspend fun clearCurrentRiskEvent() {
+    override fun clearCurrentRiskEvent() {
         _currentEvent.value = null
     }
 
