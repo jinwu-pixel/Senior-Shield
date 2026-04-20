@@ -13,6 +13,7 @@ import com.example.seniorshield.domain.model.RiskSignal
 import com.example.seniorshield.domain.repository.GuardianRepository
 import com.example.seniorshield.domain.repository.RiskEventSink
 import com.example.seniorshield.domain.repository.RiskRepository
+import com.example.seniorshield.monitoring.call.CallRiskMonitor
 import com.example.seniorshield.monitoring.orchestrator.AlertStateResolver
 import com.example.seniorshield.monitoring.session.RiskSessionTracker
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -39,6 +40,7 @@ class HomeViewModel @Inject constructor(
     private val sessionTracker: RiskSessionTracker,
     private val alertStateResolver: AlertStateResolver,
     private val guardianRepository: GuardianRepository,
+    private val callRiskMonitor: CallRiskMonitor,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -148,13 +150,15 @@ class HomeViewModel @Inject constructor(
         _hasCriticalPermissions.value = checkCriticalPermissions()
     }
 
-    /** 사용자가 홈 화면에서 "안전 확인"을 선택하면 현재 위험 세션을 종료한다. */
+    /**
+     * 사용자가 홈 화면에서 "안전 확인"을 선택하면 현재 위험 세션을 완전히 종료한다.
+     * 통일 종료 시퀀스 (A′): reset → clearTelebankingAnchor → clearCurrentRiskEvent → loadWeeklySnapshot.
+     */
     fun confirmSafe() {
         sessionTracker.reset()
-        viewModelScope.launch {
-            eventSink.clearCurrentRiskEvent()
-            loadWeeklySnapshot()
-        }
+        callRiskMonitor.clearTelebankingAnchor()
+        eventSink.clearCurrentRiskEvent()
+        viewModelScope.launch { loadWeeklySnapshot() }
     }
 
     private suspend fun loadWeeklySnapshot() {

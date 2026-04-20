@@ -247,6 +247,7 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                         } else {
                             val reason = buildCooldownReason(session.accumulatedSignals)
                             cooldownManager.triggerIfNotActive(score.level, reason, isCallActive)
+                            overlayManager.ensureCriticalOnTop()
                             cooldownConsumedSessionId = session.id
                             Log.d(TAG, "cooldownConsumedSessionId set=${session.id}: banking cooldown fired (level=${score.level}, isCallActive=$isCallActive)")
                             sessionTracker.markActiveThreatsNotified(triggers)
@@ -269,6 +270,7 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                                 "은행 ARS 전화가 감지되었습니다.\n잠시 멈추고 다시 생각해 보세요.",
                                 isCallActive,
                             )
+                            overlayManager.ensureCriticalOnTop()
                             cooldownConsumedSessionId = session.id
                             Log.d(TAG, "cooldownConsumedSessionId set=${session.id}: telebanking cooldown fired (level=${score.level})")
                             sessionTracker.markActiveThreatsNotified(triggers)

@@ -20,11 +20,13 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import com.example.seniorshield.BuildConfig
 import com.example.seniorshield.MainActivity
 import com.example.seniorshield.core.util.CallEndHelper
 import com.example.seniorshield.domain.model.Guardian
 import com.example.seniorshield.domain.model.RiskEvent
 import com.example.seniorshield.domain.model.RiskLevel
+import com.example.seniorshield.domain.repository.RiskEventSink
 import com.example.seniorshield.monitoring.call.CallRiskMonitor
 import com.example.seniorshield.monitoring.session.RiskSessionTracker
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -52,10 +54,18 @@ private const val MAX_END_CALL_SUPPRESSION_MS = 3_000L
  * 아니면 "일단 닫기"(dismiss만, 세션 유지).
  *
  * 보조 CTA는 통화 여부에 따라 문구와 의미가 분리된다:
- * - 통화 중: "이 통화는 안전해요" — `reset()` + `snoozeForCall(callId)` + dismiss.
- *   같은 통화에서 오는 call-derived signal은 Coordinator의 pre-update 필터에서 제거되어
- *   session respawn이 차단된다. callId가 null로 변한 경우에는 snooze 없이 reset+dismiss로 fallback.
- * - 비통화: "위험 경고 해제" — `reset()` + dismiss. 세션을 즉시 종료.
+ * - 통화 중 (B-3): "통화 경고 닫기" — 통일 종료 시퀀스 + `markCurrentCallConfirmedSafe(callId)` + `snoozeForCall(callId)`.
+ *   같은 통화에서 오는 call-derived signal은 Coordinator pre-update 필터에서 제거되어 respawn 차단.
+ *   `markCurrentCallConfirmedSafe`로 다음 IDLE에서 텔레뱅킹 anchor가 설정되지 않는다.
+ *   callId가 null인 race fallback에서는 markConfirmed/snooze가 생략되므로 완전 보호 경로 아님.
+ * - 비통화 (B-4): "위험 경고 해제" — 통일 종료 시퀀스만. 세션 즉시 종료.
+ *
+ * 통일 종료 시퀀스 (B-3/B-4 공통, A′ 호출 순서):
+ *   1. sessionTracker.reset()
+ *   2. callRiskMonitor.clearTelebankingAnchor()  (5분 텔레뱅킹 윈도우 무력화)
+ *   3. eventSink.clearCurrentRiskEvent()         (UI 즉시 반영)
+ *   4. (B-3만, callId != null) markCurrentCallConfirmedSafe + snoozeForCall
+ *   5. dismiss()
  *
  * snooze는 IDLE 전이 / 통화 전환 / TTL 15분 / 상위 trigger(REMOTE_CONTROL 등) 출현 시 자동 해제된다.
  */
@@ -65,11 +75,14 @@ class RiskOverlayManager @Inject constructor(
     private val callEndHelper: CallEndHelper,
     private val callRiskMonitor: CallRiskMonitor,
     private val sessionTracker: RiskSessionTracker,
+    private val eventSink: RiskEventSink,
 ) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val mainHandler = Handler(Looper.getMainLooper())
 
     @Volatile private var overlayView: LinearLayout? = null
+    @Volatile private var isDismissing = false
+    private var currentParams: WindowManager.LayoutParams? = null
 
     // ── end-call suppression state ──────────────────────────────────
     @Volatile private var endCallSuppressionActive = false
@@ -108,6 +121,7 @@ class RiskOverlayManager @Inject constructor(
             try {
                 windowManager.addView(view, params)
                 overlayView = view
+                currentParams = params
                 primaryButton.requestFocus()
                 Log.d(TAG, "전체화면 팝업 표시: level=${event.level}, title=${event.title}")
             } catch (e: Exception) {
@@ -117,8 +131,12 @@ class RiskOverlayManager @Inject constructor(
     }
 
     fun dismiss() {
+        isDismissing = true
         mainHandler.post {
-            val view = overlayView ?: return@post
+            val view = overlayView ?: run {
+                isDismissing = false
+                return@post
+            }
             try {
                 windowManager.removeView(view)
                 Log.d(TAG, "팝업 닫힘")
@@ -126,7 +144,28 @@ class RiskOverlayManager @Inject constructor(
                 Log.e(TAG, "팝업 removeView 실패: ${e.message}")
             } finally {
                 overlayView = null
+                currentParams = null
+                isDismissing = false
             }
+        }
+    }
+
+    fun ensureCriticalOnTop() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            if (BuildConfig.DEBUG) Log.w(TAG, "ensureCriticalOnTop called off-main, posting to main")
+            mainHandler.post { ensureCriticalOnTop() }
+            return
+        }
+        val view = overlayView ?: return
+        if (view.parent == null) return
+        if (isDismissing) return
+        val params = currentParams ?: return
+        try {
+            windowManager.removeView(view)
+            windowManager.addView(view, params)
+            Log.d(TAG, "팝업 z-order 최상위 재배치")
+        } catch (e: IllegalStateException) {
+            Log.w(TAG, "ensureCriticalOnTop race: ${e.message}")
         }
     }
 
@@ -309,9 +348,9 @@ class RiskOverlayManager @Inject constructor(
         buttonArea.addView(primaryBtn)
 
         // 보조 CTA: 통화 여부에 따라 문구와 동작이 분리된다.
-        // - 통화 중: "이 통화는 안전해요" — reset + snoozeForCall (respawn 차단)
+        // - 통화 중: "통화 경고 닫기" — reset + snoozeForCall (respawn 차단)
         // - 비통화: "위험 경고 해제" — reset만 (세션 즉시 종료)
-        val safeCtaText = if (inCall) "이 통화는 안전해요" else "위험 경고 해제"
+        val safeCtaText = if (inCall) "통화 경고 닫기" else "위험 경고 해제"
         buttonArea.addView(Button(context).apply {
             text = safeCtaText
             textSize = 16f
@@ -327,14 +366,21 @@ class RiskOverlayManager @Inject constructor(
                 topMargin = dp(8)
             }
             setOnClickListener {
+                // 통일 종료 시퀀스 (A′): reset → clearTelebankingAnchor → clearCurrentRiskEvent
+                //   → (B-3만) markCurrentCallConfirmedSafe + snoozeForCall → dismiss
                 // 클릭 시점에 callId 재조회 — 빌드 이후 통화 상태가 바뀌었을 수 있다.
                 val liveCallId = callRiskMonitor.currentCallId()
                 sessionTracker.reset()
+                callRiskMonitor.clearTelebankingAnchor()
+                eventSink.clearCurrentRiskEvent()
                 if (liveCallId != null) {
+                    callRiskMonitor.markCurrentCallConfirmedSafe(liveCallId)
                     sessionTracker.snoozeForCall(liveCallId)
-                    Log.d(TAG, "이 통화는 안전해요 → reset + snooze (callId=$liveCallId)")
+                    Log.d(TAG, "통화 경고 닫기 → 통일 종료 시퀀스 + markConfirmed + snooze (callId=$liveCallId)")
                 } else {
-                    Log.d(TAG, "safe CTA → reset only (callId=null, fallback)")
+                    // race fallback: liveCallId == null이면 markConfirmed/snooze 생략.
+                    // 동일 통화 기준 완전 보호 경로 아님 — 별도 ticket으로 추적.
+                    Log.d(TAG, "safe CTA → 통일 종료 시퀀스만 (callId=null, race fallback)")
                 }
                 dismiss()
             }

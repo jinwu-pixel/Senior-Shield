@@ -53,7 +53,7 @@ class RiskSessionTracker @Inject constructor() {
         set(value) { _sessionState.value = value }
 
     // ── snooze state (팝업 call-scoped 억제) ────────────────────────
-    // "이 통화는 안전해요" 클릭 시 session reset과 함께 snooze를 건다.
+    // "통화 경고 닫기" 클릭 시 session reset과 함께 snooze를 건다.
     // 같은 통화 ID의 call-derived signal은 Coordinator의 pre-update 필터에서 제거되어
     // session respawn을 차단한다. IDLE 전이, 새 통화, TTL 만료, 상위 trigger 출현 시 자동 해제.
     @Volatile private var snoozedCallId: Long? = null
@@ -166,7 +166,7 @@ class RiskSessionTracker @Inject constructor() {
     // ── snooze API ─────────────────────────────────────────────────────
 
     /**
-     * "이 통화는 안전해요" 탭 시 호출. 현재 [callId]에 바인딩된 snooze를 설정한다.
+     * "통화 경고 닫기" 탭 시 호출. 현재 [callId]에 바인딩된 snooze를 설정한다.
      * Coordinator는 이후 tick에서 같은 callId로 들어오는 call-derived signal을
      * `update()` 전에 필터링하여 세션 respawn을 차단한다.
      */

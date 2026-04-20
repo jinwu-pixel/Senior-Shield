@@ -101,6 +101,14 @@ class RealCallRiskMonitor @Inject constructor(
      */
     @Volatile private var currentCallIdState: Long? = null
 
+    /**
+     * 사용자가 안전 확인한 통화의 callId.
+     * 다음 IDLE 전이 시 lastSuspiciousCallEndedAt 설정을 1회 스킵한다.
+     * IDLE 처리 후 자동 클리어 — 다른 통화에 영향 없음.
+     * (B-3 공백 메우기. RealCallRiskMonitor 내부 상태로 국소화 — C-3 미확장.)
+     */
+    @Volatile private var safeConfirmedCallId: Long? = null
+
     /** 최근 30분 이내 미확인/미검증 수신 호출 타임스탬프 버퍼 */
     private val recentUnknownCalls: MutableList<Long> = CopyOnWriteArrayList()
 
@@ -161,6 +169,17 @@ class RealCallRiskMonitor @Inject constructor(
     override fun observeCallContext(): Flow<CallMonitorState> = sharedCallContext
 
     override fun currentCallId(): Long? = currentCallIdState
+
+    override fun clearTelebankingAnchor() {
+        if (lastSuspiciousCallEndedAt == null) return
+        Log.d(TAG, "telebanking anchor cleared (user-initiated safe-confirm)")
+        lastSuspiciousCallEndedAt = null
+    }
+
+    override fun markCurrentCallConfirmedSafe(callId: Long) {
+        safeConfirmedCallId = callId
+        Log.d(TAG, "current call marked safe-confirmed (callId=$callId): next IDLE anchor will be skipped")
+    }
 
     // ── observeCallSignals ──────────────────────────────────────────────────────
 
@@ -234,10 +253,18 @@ class RealCallRiskMonitor @Inject constructor(
 
                             // IDLE: 통화 종료 — FINAL phase로 방출 후 RESET으로 캐시 리셋
                             ctx.state == CallState.IDLE && ctx.endedAtMillis != null -> flow<CallSignalEvent> {
-                                if (ctx.isUnknownCaller == true || ctx.isVerifiedCaller == false) {
+                                // callId == OFFHOOK 진입 시각(offhookAtMillis) == ctx.startedAtMillis (IDLE-from-OFFHOOK).
+                                // currentCallIdState는 TelephonyCallback에서 이미 null로 클리어된 상태이므로,
+                                // ctx.startedAtMillis를 정답 callId로 사용한다. (RINGING→IDLE은 startedAtMillis=null로 매칭 불가 — B-3 적용 대상 아님.)
+                                val callIdAtIdle = ctx.startedAtMillis
+                                val confirmedSafe = (safeConfirmedCallId != null && callIdAtIdle != null && safeConfirmedCallId == callIdAtIdle)
+                                if ((ctx.isUnknownCaller == true || ctx.isVerifiedCaller == false) && !confirmedSafe) {
                                     lastSuspiciousCallEndedAt = ctx.endedAtMillis
                                     Log.d(TAG, "의심 통화 종료 기록: ${ctx.endedAtMillis}")
+                                } else if (confirmedSafe) {
+                                    Log.d(TAG, "의심 통화 종료지만 사용자 안전 확인 — anchor 스킵 (callId=$callIdAtIdle)")
                                 }
+                                if (callIdAtIdle != null && safeConfirmedCallId == callIdAtIdle) safeConfirmedCallId = null
 
                                 // ── 발신 종료 시 텔레뱅킹 폴백 ──
                                 // OFFHOOK에서 선캡처로 이미 감지한 경우 distinctUntilChanged()가 중복 제거.
@@ -633,11 +660,10 @@ class RealCallRiskMonitor @Inject constructor(
         Log.d(TAG, "미확인 호출 기록: count=${recentUnknownCalls.size}")
     }
 
-    /** 텔레뱅킹 윈도우: 세션 활성 + 의심 통화 종료 후 5분 이내. */
+    /** 텔레뱅킹 윈도우: 의심 통화 종료 후 5분 이내. anchor가 null이면 false. */
     private fun isTelebankingWindow(): Boolean {
         val lastSuspicious = lastSuspiciousCallEndedAt ?: return false
-        val sessionActive = sessionTracker.sessionState.value != null
-        return sessionActive && (System.currentTimeMillis() - lastSuspicious <= TELEBANKING_WINDOW_MS)
+        return System.currentTimeMillis() - lastSuspicious <= TELEBANKING_WINDOW_MS
     }
 
     /**

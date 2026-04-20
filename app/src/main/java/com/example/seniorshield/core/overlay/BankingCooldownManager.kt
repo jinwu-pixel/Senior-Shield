@@ -39,10 +39,10 @@ private const val SHOW_IN_CALL_DELAY_MS = 500L
  * HIGH+ 위험 세션 중 뱅킹 앱이 포그라운드로 올라오면
  * 위험 수준에 따라 차등적으로 화면 전체를 막는 강제 대기 화면을 표시한다.
  *
- * - HIGH:     30초 카운트다운 + 주 버튼(통화 중: "전화 앱으로 이동" / 아니면: "일단 닫기") + 보조 "안전 확인했어요"
- * - CRITICAL: 60초 카운트다운 + 주 버튼(통화 중: "전화 앱으로 이동" / 아니면: "일단 닫기") + 보조 "안전 확인했어요"
+ * - HIGH:     30초 카운트다운 + 주 버튼(통화 중: "전화 앱으로 이동" / 아니면: "일단 닫기")
+ * - CRITICAL: 60초 카운트다운 + 주 버튼(통화 중: "전화 앱으로 이동" / 아니면: "일단 닫기")
  *
- * 카운트다운 종료 시 자동 dismiss. 사용자는 보조 "안전 확인했어요"로 세션 리셋, 주 버튼으로 early dismiss 가능.
+ * 카운트다운 종료 시 자동 dismiss. 주 버튼으로 early dismiss 가능.
  */
 @Singleton
 class BankingCooldownManager @Inject constructor(

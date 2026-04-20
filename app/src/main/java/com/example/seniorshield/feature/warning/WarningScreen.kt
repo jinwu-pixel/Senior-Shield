@@ -88,6 +88,8 @@ fun NavGraphBuilder.warningScreen(
             },
             onBack = onBack,
             onConfirmSafe = {
+                // 책임 분리: confirmSafe()는 상태 종료(세션 + anchor + currentEvent),
+                //            onBack()은 화면 종료(네비게이션 복귀). 둘은 별개 의도.
                 viewModel.confirmSafe()
                 onBack()
             },

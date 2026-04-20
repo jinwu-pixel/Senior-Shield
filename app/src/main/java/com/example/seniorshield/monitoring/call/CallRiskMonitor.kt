@@ -22,4 +22,21 @@ interface CallRiskMonitor {
      * 팝업 snooze 바인딩에 사용된다 — 같은 통화 내에서만 snooze 유지.
      */
     fun currentCallId(): Long?
+
+    /**
+     * 텔레뱅킹 윈도우 anchor(lastSuspiciousCallEndedAt)를 즉시 무효화한다.
+     * 사용자가 위험 경고를 안전 종료할 때 호출되어, 종료 후 5분 내
+     * 정상 은행 ARS 발신이 텔레뱅킹으로 오발화하는 것을 막는다.
+     * 이미 anchor가 null이면 no-op.
+     */
+    fun clearTelebankingAnchor()
+
+    /**
+     * 현재 통화([callId])를 "사용자 안전 확인 완료" 상태로 마킹한다.
+     * 다음 IDLE 전이 시 lastSuspiciousCallEndedAt을 설정하지 않는다 (anchor 스킵).
+     * 통화 종료 후 자동으로 클리어된다 — 다른 통화에는 영향 없음.
+     *
+     * 호출 위치: B-3 (RiskOverlayManager 통화 중 "통화 경고 닫기").
+     */
+    fun markCurrentCallConfirmedSafe(callId: Long)
 }
