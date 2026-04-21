@@ -112,4 +112,60 @@ class DebugViewModel @Inject constructor(
             overlayManager.show(event)
         }
     }
+
+    /**
+     * 원격제어 앱 실행 (non-call) 시뮬레이션.
+     * α suppression 본체 검증용 — REMOTE_CONTROL_APP_OPENED 단독 주입.
+     *
+     * 시나리오: 1회 눌러 세션 생성 → "안전 확인" → 다시 누르면 α가 억제 (session null 유지).
+     * 억제 증거: logcat "non-call session respawn suppressed by α" + UI "현재 보호 상태" 유지.
+     */
+    fun simulateRemoteAppDetection() {
+        val session = sessionTracker.update(
+            callSignals = emptyList(),
+            appSignals = listOf(RiskSignal.REMOTE_CONTROL_APP_OPENED),
+        )
+        if (session != null) {
+            val score = evaluator.evaluate(session.accumulatedSignals.toList())
+            val event = RiskEvent(
+                id = "debug-remote-${System.currentTimeMillis()}",
+                title = "[테스트] 원격제어 앱 실행 감지",
+                description = "원격제어 앱 실행 (non-call) 시뮬레이션",
+                occurredAtMillis = System.currentTimeMillis(),
+                level = score.level,
+                signals = session.accumulatedSignals.toList(),
+            )
+            viewModelScope.launch { eventSink.pushRiskEvent(event) }
+            overlayManager.show(event)
+        }
+    }
+
+    /**
+     * 원격제어 + 금융앱 실행 (non-call UPGRADE) 시뮬레이션.
+     * α UPGRADE escape 검증용 — α armed 상태에서 호출 시 새 UPGRADE 신호로 억제 우회.
+     *
+     * 시나리오: simulateRemoteAppDetection → "안전 확인" → 본 API → 새 CRITICAL 세션 재생성.
+     */
+    fun simulateRemoteThenBanking() {
+        val session = sessionTracker.update(
+            callSignals = emptyList(),
+            appSignals = listOf(
+                RiskSignal.REMOTE_CONTROL_APP_OPENED,
+                RiskSignal.BANKING_APP_OPENED_AFTER_REMOTE_APP,
+            ),
+        )
+        if (session != null) {
+            val score = evaluator.evaluate(session.accumulatedSignals.toList())
+            val event = RiskEvent(
+                id = "debug-remote-banking-${System.currentTimeMillis()}",
+                title = "[테스트] 원격제어 후 금융앱 실행 감지",
+                description = "원격제어 직후 금융앱 실행 (UPGRADE) 시뮬레이션",
+                occurredAtMillis = System.currentTimeMillis(),
+                level = score.level,
+                signals = session.accumulatedSignals.toList(),
+            )
+            viewModelScope.launch { eventSink.pushRiskEvent(event) }
+            overlayManager.show(event)
+        }
+    }
 }

@@ -80,6 +80,8 @@ fun NavGraphBuilder.settingsScreen(
             onShowTestOverlay = debugVm::showTestOverlay,
             onShowTestCooldown = debugVm::showTestCooldown,
             onSimulateTelebanking = debugVm::simulateTelebankingDetection,
+            onSimulateRemoteApp = debugVm::simulateRemoteAppDetection,
+            onSimulateRemoteThenBanking = debugVm::simulateRemoteThenBanking,
             onTestModeToggle = debugVm::setTestModeEnabled,
             onSmsMenuToggle = debugVm::setSmsMenuEnabled,
         )
@@ -99,6 +101,8 @@ private fun SettingsContent(
     onShowTestOverlay: () -> Unit,
     onShowTestCooldown: () -> Unit,
     onSimulateTelebanking: () -> Unit,
+    onSimulateRemoteApp: () -> Unit,
+    onSimulateRemoteThenBanking: () -> Unit,
     onTestModeToggle: (Boolean) -> Unit,
     onSmsMenuToggle: (Boolean) -> Unit,
 ) {
@@ -126,6 +130,8 @@ private fun SettingsContent(
                     onShowTestOverlay = onShowTestOverlay,
                     onShowTestCooldown = onShowTestCooldown,
                     onSimulateTelebanking = onSimulateTelebanking,
+                    onSimulateRemoteApp = onSimulateRemoteApp,
+                    onSimulateRemoteThenBanking = onSimulateRemoteThenBanking,
                     onTestModeToggle = onTestModeToggle,
                 )
             }
@@ -155,6 +161,8 @@ private fun DebugPanel(
     onShowTestOverlay: () -> Unit,
     onShowTestCooldown: () -> Unit,
     onSimulateTelebanking: () -> Unit,
+    onSimulateRemoteApp: () -> Unit,
+    onSimulateRemoteThenBanking: () -> Unit,
     onTestModeToggle: (Boolean) -> Unit,
 ) {
     Column(
@@ -218,6 +226,22 @@ private fun DebugPanel(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("텔레뱅킹 유도 사기 시뮬레이션 (전체 파이프라인)")
+        }
+
+        // 원격제어 앱 실행 시뮬레이션 (non-call, α suppression 검증용)
+        OutlinedButton(
+            onClick = onSimulateRemoteApp,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("원격제어 앱 실행 시뮬레이션 (non-call)")
+        }
+
+        // 원격제어 + 금융앱 실행 시뮬레이션 (UPGRADE escape 검증용)
+        OutlinedButton(
+            onClick = onSimulateRemoteThenBanking,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("원격제어 + 금융앱 실행 시뮬레이션 (UPGRADE)")
         }
     }
 }
@@ -378,6 +402,8 @@ private fun SettingsScreenPreview() {
             onShowTestOverlay = {},
             onShowTestCooldown = {},
             onSimulateTelebanking = {},
+            onSimulateRemoteApp = {},
+            onSimulateRemoteThenBanking = {},
             onTestModeToggle = {},
             onSmsMenuToggle = {},
         )
