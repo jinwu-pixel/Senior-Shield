@@ -155,7 +155,7 @@ class HomeViewModel @Inject constructor(
      * 통일 종료 시퀀스 (A′): reset → clearTelebankingAnchor → clearCurrentRiskEvent → loadWeeklySnapshot.
      */
     fun confirmSafe() {
-        sessionTracker.reset()
+        sessionTracker.resetAfterUserConfirmedSafe()
         callRiskMonitor.clearTelebankingAnchor()
         eventSink.clearCurrentRiskEvent()
         viewModelScope.launch { loadWeeklySnapshot() }
