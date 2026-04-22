@@ -18,6 +18,18 @@ private const val TAG = "SeniorShield-Session"
 private const val DEFAULT_IDLE_TIMEOUT_MS = 30 * 60 * 1000L
 /** TRIGGER 발생 시 연장 TTL: 60분. */
 private const val TRIGGER_IDLE_TIMEOUT_MS = 60 * 60 * 1000L
+/** α 재발화 억제 TTL 초기값 (60s). 튜닝 대상은 상수만 변경한다. */
+private const val ALPHA_TTL_MS = 60_000L
+
+/**
+ * α 억제 escape 기준. `DefaultRiskDetectionCoordinator.kt`의 동일 이름 상수와 **내용 일치**를
+ * 유지해야 한다. 공용화는 별도 증분에서 검토.
+ */
+private val UPGRADE_TRIGGERS: Set<RiskSignal> = setOf(
+    RiskSignal.REMOTE_CONTROL_APP_OPENED,
+    RiskSignal.BANKING_APP_OPENED_AFTER_REMOTE_APP,
+    RiskSignal.TELEBANKING_AFTER_SUSPICIOUS,
+)
 
 /**
  * 위험 세션의 생명주기를 관리하고 신호를 누적한다.
@@ -59,10 +71,37 @@ class RiskSessionTracker @Inject constructor() {
     @Volatile private var snoozedCallId: Long? = null
     @Volatile private var snoozedAt: Long = 0L
 
+    // ── α arm state (user-confirmed-safe 직후 non-call shared-root 재발화 억제) ──
+    // `resetAfterUserConfirmedSafe()`로 직전 session의 accumulatedSignals 스냅샷과 시각을 기록한다.
+    // `update()` 진입부에서 `callSignals.isEmpty()` + `appSignals ⊆ lastResetSignals`
+    // + 신규 UPGRADE 없음 조건이면 새 session 생성을 억제한다. TTL 경과 시 자동 정리.
+    @Volatile private var lastResetAt: Long? = null
+    @Volatile private var lastResetSignals: Set<RiskSignal> = emptySet()
+
     fun update(callSignals: List<RiskSignal>, appSignals: List<RiskSignal>): RiskSession? {
         val newSignals: Set<RiskSignal> = (callSignals + appSignals).toSet()
         val now = clock()
         val current = session
+
+        // α: non-call shared-root 재발화 억제.
+        // current == null + callSignals 비어있음 + TTL 내 + appSignals ⊆ armed + 신규 UPGRADE 없음 → 새 session 생성 스킵.
+        if (current == null && callSignals.isEmpty()) {
+            val armedAt = lastResetAt
+            if (armedAt != null) {
+                if (now - armedAt > ALPHA_TTL_MS) {
+                    lastResetAt = null
+                    lastResetSignals = emptySet()
+                } else {
+                    val appSet = appSignals.toSet()
+                    val armedSignals = lastResetSignals
+                    val upgradeNew = appSet.filter { it in UPGRADE_TRIGGERS } - armedSignals
+                    if (appSet.isNotEmpty() && appSet.all { it in armedSignals } && upgradeNew.isEmpty()) {
+                        Log.d(TAG, "non-call session respawn suppressed by α (appSet=$appSet ⊆ armed=$armedSignals)")
+                        return null
+                    }
+                }
+            }
+        }
 
         session = when {
             // 세션 없음 + 신호 없음 → 아무 것도 없음
@@ -196,13 +235,46 @@ class RiskSessionTracker @Inject constructor() {
     /** snooze가 설정된 시각(epoch ms). null = snooze 비활성. TTL 판정용. */
     fun snoozedAtOrNull(): Long? = if (snoozedCallId != null) snoozedAt else null
 
-    /** 사용자 "안전 확인" — 세션 즉시 종료. */
+    /**
+     * 일반/debug reset — 세션 즉시 종료. α arm은 **하지 않는다.**
+     * 사용자 "안전 확인" 경로는 [resetAfterUserConfirmedSafe]를 사용한다.
+     */
     fun reset() {
         val id = session?.id
         session = null
         clearSnooze("session reset")
         Log.d(TAG, "session reset [id=$id]")
     }
+
+    /**
+     * 사용자 "안전 확인" 경로 전용 reset. session이 있던 경우 직전 accumulatedSignals 스냅샷과
+     * 현재 시각을 저장해 α(non-call shared-root 재발화 억제)를 arm한다.
+     *
+     * arm 조건: `session != null` && `accumulatedSignals.isNotEmpty()`.
+     * session-null race 또는 빈 snapshot은 arm하지 않는다 — 빈 set이 저장되면 모든 non-call 재발화가
+     * 구조적으로 억제되는 의도치 않은 동작을 초래한다.
+     *
+     * 호출부: B-3(RiskOverlayManager), B-5(HomeViewModel), B-6(WarningViewModel).
+     * debug/admin reset(DebugViewModel)은 [reset]을 그대로 사용한다.
+     */
+    fun resetAfterUserConfirmedSafe() {
+        val snapshot = session?.accumulatedSignals ?: emptySet()
+        if (snapshot.isNotEmpty()) {
+            lastResetAt = clock()
+            lastResetSignals = snapshot
+            Log.d(TAG, "α armed (lastResetSignals=$snapshot)")
+        }
+        val id = session?.id
+        session = null
+        clearSnooze("session reset (user-confirmed-safe)")
+        Log.d(TAG, "session reset [id=$id, reason=user-confirmed-safe]")
+    }
+
+    @VisibleForTesting
+    internal fun alphaArmedAt(): Long? = lastResetAt
+
+    @VisibleForTesting
+    internal fun alphaArmedSignals(): Set<RiskSignal> = lastResetSignals
 
     private fun currentTimeout(session: RiskSession): Long =
         if (session.hasTrigger) TRIGGER_IDLE_TIMEOUT_MS else DEFAULT_IDLE_TIMEOUT_MS

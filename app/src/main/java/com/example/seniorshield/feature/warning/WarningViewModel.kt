@@ -71,7 +71,7 @@ class WarningViewModel @Inject constructor(
      * 화면 복귀(onBack)는 호출자(Screen) 책임 — 상태 종료와 화면 종료는 분리된다.
      */
     fun confirmSafe() {
-        sessionTracker.reset()
+        sessionTracker.resetAfterUserConfirmedSafe()
         callRiskMonitor.clearTelebankingAnchor()
         eventSink.clearCurrentRiskEvent()
     }

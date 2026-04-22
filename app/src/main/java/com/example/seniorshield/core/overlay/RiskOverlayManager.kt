@@ -370,7 +370,7 @@ class RiskOverlayManager @Inject constructor(
                 //   → (B-3만) markCurrentCallConfirmedSafe + snoozeForCall → dismiss
                 // 클릭 시점에 callId 재조회 — 빌드 이후 통화 상태가 바뀌었을 수 있다.
                 val liveCallId = callRiskMonitor.currentCallId()
-                sessionTracker.reset()
+                sessionTracker.resetAfterUserConfirmedSafe()
                 callRiskMonitor.clearTelebankingAnchor()
                 eventSink.clearCurrentRiskEvent()
                 if (liveCallId != null) {
