@@ -17,8 +17,10 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.annotation.VisibleForTesting
 import com.example.seniorshield.core.util.CallEndHelper
 import com.example.seniorshield.domain.model.RiskLevel
+import com.example.seniorshield.monitoring.session.RiskSessionTracker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +36,9 @@ private const val TAG = "SeniorShield-Cooldown"
 /** showInCallScreen() 후 dismiss 지연. 전화 앱이 foreground로 올라올 시간 확보. */
 private const val SHOW_IN_CALL_DELAY_MS = 500L
 
+/** not-inCall 보조 CTA(`위험 경고 해제`) 활성화 전 대기 초. 반사적 탭 방지 + α 판단 여유. */
+private const val SECONDARY_CTA_GUARD_SEC = 5
+
 
 /**
  * HIGH+ 위험 세션 중 뱅킹 앱이 포그라운드로 올라오면
@@ -48,6 +53,7 @@ private const val SHOW_IN_CALL_DELAY_MS = 500L
 class BankingCooldownManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val callEndHelper: CallEndHelper,
+    private val sessionTracker: RiskSessionTracker,
 ) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -117,7 +123,7 @@ class BankingCooldownManager @Inject constructor(
             Log.d(TAG, "startCooldown 중복 방지 — 이미 표시 중")
             return
         }
-        val (root, countdownText, bottomText, endCallButton) = buildView(countdownSec, level, reason, isCallActive)
+        val (root, countdownText, bottomText, endCallButton, secondaryCta) = buildView(countdownSec, level, reason, isCallActive)
         val params = WindowManager.LayoutParams(
             MATCH_PARENT, MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
@@ -138,9 +144,20 @@ class BankingCooldownManager @Inject constructor(
 
         countdownJob = scope.launch {
             for (remaining in countdownSec downTo 1) {
+                val elapsed = countdownSec - remaining
+                val remainingGuardSec = (SECONDARY_CTA_GUARD_SEC - elapsed).coerceAtLeast(0)
+                val secondaryActivated = remainingGuardSec <= 0
                 mainHandler.post {
                     countdownText.text = remaining.toString()
                     bottomText.text = "${remaining}초 후 앱 사용 가능합니다"
+                    secondaryCta?.let { btn ->
+                        btn.text = secondaryCtaLabel(secondaryActivated, remainingGuardSec)
+                        if (secondaryActivated && !btn.isEnabled) {
+                            btn.isEnabled = true
+                            btn.alpha = 1f
+                            btn.setTextColor(Color.WHITE)
+                        }
+                    }
                 }
                 delay(1_000L)
             }
@@ -171,6 +188,8 @@ class BankingCooldownManager @Inject constructor(
         val countdownText: TextView,
         val bottomText: TextView,
         val endCallButton: Button,
+        /** not-inCall일 때만 non-null. isCallActive=true면 보조 CTA 숨김. */
+        val secondaryCtaButton: Button?,
     )
 
     private fun buildView(countdownSec: Int, level: RiskLevel, reason: String?, isCallActive: Boolean): CooldownViews {
@@ -321,9 +340,84 @@ class BankingCooldownManager @Inject constructor(
         }
         buttonArea.addView(actionBtn)
 
+        // ── 보조 CTA (not-inCall only) ──────────────────────────────
+        // inCall 상태에서는 노출하지 않는다 — 공격자가 "그 빨간 화면 끄세요"로 유도할 수 있음.
+        // not-inCall에서는 SECONDARY_CTA_GUARD_SEC 동안 disabled로 유지 후 활성화 (반사적 탭 방지).
+        val secondaryBtn: Button? = if (!isCallActive) {
+            Button(context).apply {
+                text = secondaryCtaLabel(activated = false, remainingGuardSec = SECONDARY_CTA_GUARD_SEC)
+                textSize = 15f
+                setTextColor(Color.parseColor("#B0BEC5"))
+                setTypeface(null, Typeface.NORMAL)
+                isEnabled = false
+                alpha = 0.5f
+                isFocusable = true
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = cornerPx
+                    setColor(Color.TRANSPARENT)
+                    setStroke(dp(1), Color.WHITE)
+                }
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(44)).apply {
+                    topMargin = dp(8)
+                }
+                setOnClickListener {
+                    secondaryCtaClickSequence(
+                        cancelJob = {
+                            countdownJob?.cancel()
+                            countdownJob = null
+                        },
+                        armAlpha = { sessionTracker.resetAfterUserConfirmedSafe() },
+                        removeOverlay = { dismiss() },
+                    )
+                    Log.d(TAG, "위험 경고 해제 — α arm + immediate dismiss")
+                }
+                setOnFocusChangeListener { _, hasFocus ->
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.RECTANGLE
+                        cornerRadius = cornerPx
+                        setColor(Color.TRANSPARENT)
+                        setStroke(
+                            if (hasFocus) dp(4) else dp(1),
+                            if (hasFocus) Color.YELLOW else Color.WHITE,
+                        )
+                    }
+                }
+            }.also { buttonArea.addView(it) }
+        } else null
+
         root.addView(buttonArea)
 
-        return CooldownViews(root, countdownText, bottomText, actionBtn)
+        return CooldownViews(root, countdownText, bottomText, actionBtn, secondaryBtn)
+    }
+
+    companion object {
+        /**
+         * not-inCall 보조 CTA 라벨. `countdownJob`이 1초마다 갱신.
+         * @param activated 가드 시간이 지나 활성화됐는지
+         * @param remainingGuardSec 활성화까지 남은 초 (activated=true면 무시)
+         */
+        @VisibleForTesting
+        internal fun secondaryCtaLabel(activated: Boolean, remainingGuardSec: Int): String =
+            if (activated) "위험 경고 해제"
+            else "위험 경고 해제 (${remainingGuardSec}초 후 가능)"
+
+        /**
+         * 보조 CTA 클릭 시 3단계 순서. cancel → arm → dismiss 순서가 비즈니스 규칙:
+         * - cancel 먼저: 남은 tick이 이미 해제된 view를 건드리지 못하게
+         * - arm 다음: α arm이 dismiss 전에 기록돼 다음 combine tick의 respawn을 차단
+         * - dismiss 마지막: overlay 제거
+         */
+        @VisibleForTesting
+        internal fun secondaryCtaClickSequence(
+            cancelJob: () -> Unit,
+            armAlpha: () -> Unit,
+            removeOverlay: () -> Unit,
+        ) {
+            cancelJob()
+            armAlpha()
+            removeOverlay()
+        }
     }
 
     private fun dp(value: Int): Int =
