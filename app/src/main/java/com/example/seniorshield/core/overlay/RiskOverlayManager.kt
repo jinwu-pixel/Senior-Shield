@@ -12,6 +12,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.view.WindowManager
@@ -23,6 +24,7 @@ import android.widget.Toast
 import androidx.annotation.VisibleForTesting
 import com.example.seniorshield.BuildConfig
 import com.example.seniorshield.MainActivity
+import com.example.seniorshield.core.navigation.NavigationEventBus
 import com.example.seniorshield.core.util.CallEndHelper
 import com.example.seniorshield.domain.model.Guardian
 import com.example.seniorshield.domain.model.RiskEvent
@@ -90,6 +92,7 @@ class RiskOverlayManager @Inject constructor(
     private val callRiskMonitor: CallRiskMonitor,
     private val sessionTracker: RiskSessionTracker,
     private val eventSink: RiskEventSink,
+    private val navigationEventBus: NavigationEventBus,
 ) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -253,7 +256,39 @@ class RiskOverlayManager @Inject constructor(
             RiskLevel.LOW      -> "ℹ 낮음"
         }
 
-        val root = LinearLayout(context).apply {
+        // 뒤로가기 키 처리를 위해 LinearLayout을 anonymous subclass로 확장.
+        // TYPE_APPLICATION_OVERLAY window는 Activity가 아니라서 뒤로가기 키를 기본 소비하지 않는다.
+        // 과거 증상: 오버레이 위에서 뒤로가기 → 이벤트가 아래 Warning Activity로 새어 Warning만 pop,
+        //          오버레이는 그대로 → "팝업이 안 사라짐"으로 보이거나 Warning + 오버레이가 중복 노출.
+        //
+        // 축 분리 원칙:
+        //   뒤로가기 = 창닫기 (UI recovery)
+        //   "안전 확인했어요" = 위험 종료 선언 (risk resolution)
+        //
+        // 뒤로가기 1회 동작:
+        //   1) 오버레이 dismiss
+        //   2) NavigationEventBus.popToHome() — Warning 등 하위 destination을 backstack에서 모두 pop
+        //
+        // 이 경로에서는 risk state를 절대 touch하지 않는다:
+        //   - currentRiskEvent clear 금지
+        //   - sessionTracker.resetAfterUserConfirmedSafe() 금지
+        //   - anchor clear (callRiskMonitor.clearTelebankingAnchor) 금지
+        //   - safe-confirm 관련 부수효과 일체 금지
+        // → Home 복귀 시 currentRiskEvent가 살아있어 카드는 "위험 감지"로 유지되고,
+        //    SAFE 전환은 홈의 "안전 확인했어요" 버튼이 담당한다.
+        val root = object : LinearLayout(context) {
+            override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+                // 디버그: 어떤 key event가 오버레이 root까지 도달하는지 가시화 (검증 후 제거 예정)
+                Log.d(TAG, "overlay dispatchKeyEvent: keyCode=${event.keyCode} action=${event.action}")
+                if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
+                    Log.d(TAG, "오버레이 뒤로가기 키 → UI recovery (dismiss + popToHome, risk state 보존)")
+                    navigationEventBus.popToHome()
+                    dismiss()
+                    return true
+                }
+                return super.dispatchKeyEvent(event)
+            }
+        }.apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(bgColor)
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)

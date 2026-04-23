@@ -7,18 +7,22 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.example.seniorshield.core.designsystem.theme.SeniorShieldTheme
+import com.example.seniorshield.core.navigation.NavigationEventBus
 import com.example.seniorshield.core.navigation.SeniorShieldNavGraph
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    @Inject lateinit var navigationEventBus: NavigationEventBus
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             SeniorShieldTheme {
                 Surface(modifier = Modifier) {
-                    SeniorShieldNavGraph()
+                    SeniorShieldNavGraph(navigationEventBus = navigationEventBus)
                 }
             }
         }
