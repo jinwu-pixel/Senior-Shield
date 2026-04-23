@@ -15,6 +15,7 @@ import com.example.seniorshield.domain.repository.RiskEventSink
 import com.example.seniorshield.domain.repository.RiskRepository
 import com.example.seniorshield.monitoring.call.CallRiskMonitor
 import com.example.seniorshield.monitoring.orchestrator.AlertStateResolver
+import com.example.seniorshield.monitoring.orchestrator.RiskDetectionCoordinator
 import com.example.seniorshield.monitoring.session.RiskSessionTracker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -41,6 +42,7 @@ class HomeViewModel @Inject constructor(
     private val alertStateResolver: AlertStateResolver,
     private val guardianRepository: GuardianRepository,
     private val callRiskMonitor: CallRiskMonitor,
+    private val coordinator: RiskDetectionCoordinator,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -56,6 +58,13 @@ class HomeViewModel @Inject constructor(
     /** GUARDED 카드를 이미 표시한 세션 ID. 세션당 1회만 노출. */
     private val _guardedCardShownSessionId = MutableStateFlow<String?>(null)
 
+    private data class SessionCombined(
+        val session: com.example.seniorshield.monitoring.session.RiskSession?,
+        val shownId: String?,
+        val guardians: List<Guardian>,
+        val anchorHot: Boolean,
+    )
+
     val uiState: StateFlow<HomeUiState> = combine(
         riskRepository.getCurrentRiskEvent(),
         riskRepository.getRecentRiskEvents(),
@@ -65,29 +74,34 @@ class HomeViewModel @Inject constructor(
             sessionTracker.sessionState,
             _guardedCardShownSessionId,
             guardianRepository.observeGuardians(),
-        ) { s, id, guardians -> Triple(s, id, guardians) },
-    ) { current, recent, hasPermissions, weekly, sessionTriple ->
-        val (session, shownId, guardians) = sessionTriple
-        val baseBody = current?.title ?: "안전합니다. 감지된 위험이 없습니다."
+            coordinator.anchorHotState,
+        ) { s, id, guardians, hot -> SessionCombined(s, id, guardians, hot) },
+    ) { current, recent, hasPermissions, weekly, sc ->
         val summary = "최근 24시간: ${recent.size}건 · 이번 주: ${weekly.eventCount}건"
-        val body = "$baseBody\n$summary"
+        val presentation = decideHomePresentation(
+            currentEventTitle = current?.title,
+            currentEventLevel = current?.level,
+            anchorHot = sc.anchorHot,
+        )
+        val body = "${presentation.baseBody}\n$summary"
 
-        val alertState = alertStateResolver.resolve(session)
+        val alertState = alertStateResolver.resolve(sc.session)
         val guardedCard = when {
-            alertState == AlertState.GUARDED && session != null
-                    && shownId == session.id ->
-                buildGuardedCard(session.accumulatedSignals)
+            alertState == AlertState.GUARDED && sc.session != null
+                    && sc.shownId == sc.session.id ->
+                buildGuardedCard(sc.session.accumulatedSignals)
             else -> null
         }
 
         val guardian: Guardian? =
-            if (alertState.ordinal >= AlertState.GUARDED.ordinal) guardians.firstOrNull()
+            if (alertState.ordinal >= AlertState.GUARDED.ordinal) sc.guardians.firstOrNull()
             else null
 
         HomeUiState(
-            currentRiskTitle = if (current != null) "위험 감지" else "현재 보호 상태",
+            currentRiskTitle = presentation.title,
             currentRiskBody = body,
-            currentRiskLevel = current?.level ?: RiskLevel.LOW,
+            currentRiskLevel = presentation.level,
+            homeStatus = presentation.status,
             recentEventCount = recent.size,
             hasCriticalPermissions = hasPermissions,
             weeklyEventCount = weekly.eventCount,
@@ -122,6 +136,11 @@ class HomeViewModel @Inject constructor(
     private val _navigateToWarning = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val navigateToWarning = _navigateToWarning.asSharedFlow()
 
+    // ViewModel 생성 시각. MainActivity가 재생성되면(뱅킹 쿨다운 OPAQUE 오버레이로 인한 window 재부착 등)
+    // HomeViewModel도 새로 만들어지고 StateFlow의 기존 currentRiskEvent가 replay된다.
+    // 이 replay 값으로 Warning 자동 네비가 재발화되는 것을 막기 위해 VM 생성 이전에 발생한 이벤트는 무시한다.
+    private val viewModelStartedAt = System.currentTimeMillis()
+
     init {
         viewModelScope.launch { loadWeeklySnapshot() }
         viewModelScope.launch {
@@ -141,6 +160,7 @@ class HomeViewModel @Inject constructor(
             riskRepository.getCurrentRiskEvent()
                 .filterNotNull()
                 .filter { it.level.ordinal >= RiskLevel.HIGH.ordinal }
+                .filter { it.occurredAtMillis >= viewModelStartedAt }
                 .distinctUntilChangedBy { it.id }
                 .collect { _navigateToWarning.tryEmit(Unit) }
         }
@@ -152,11 +172,21 @@ class HomeViewModel @Inject constructor(
 
     /**
      * 사용자가 홈 화면에서 "안전 확인"을 선택하면 현재 위험 세션을 완전히 종료한다.
-     * 통일 종료 시퀀스 (A′): reset → clearTelebankingAnchor → clearCurrentRiskEvent → loadWeeklySnapshot.
+     *
+     * 호출 순서 엄수:
+     *   1) sessionTracker.resetAfterUserConfirmedSafe()
+     *   2) callRiskMonitor.clearTelebankingAnchor()
+     *   3) coordinator.refreshAnchorHotNow()       ← mirror 즉시 false 동기화
+     *   4) eventSink.clearCurrentRiskEvent()       ← 항상 마지막
+     *
+     * 3과 4의 순서가 바뀌면 `currentRiskEvent=null && anchorHot=true` 중간 상태가 드러나
+     * Home이 GUARDED_ANCHOR를 짧게 다시 보여줘 UX가 어긋난다. 이 순서를 지키면 WARNING → SAFE로
+     * 직행한다.
      */
     fun confirmSafe() {
         sessionTracker.resetAfterUserConfirmedSafe()
         callRiskMonitor.clearTelebankingAnchor()
+        coordinator.refreshAnchorHotNow()
         eventSink.clearCurrentRiskEvent()
         viewModelScope.launch { loadWeeklySnapshot() }
     }

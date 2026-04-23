@@ -39,4 +39,12 @@ interface CallRiskMonitor {
      * 호출 위치: B-3 (RiskOverlayManager 통화 중 "통화 경고 닫기").
      */
     fun markCurrentCallConfirmedSafe(callId: Long)
+
+    /**
+     * 텔레뱅킹 anchor(lastSuspiciousCallEndedAt)가 5분 윈도우 내에 살아 있는지 동기 조회.
+     * Home의 GUARDED_ANCHOR 표시 판단용 (anchor는 TTL 만료가 시간 기반이라 Flow로 자연 emit되지 않음).
+     * Coordinator tick에서 이 값을 읽어 UI-facing mirror StateFlow로 반영한다.
+     * anchor가 null이거나 5분 경과 → false.
+     */
+    fun isTelebankingAnchorHot(): Boolean
 }

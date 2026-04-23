@@ -10,6 +10,7 @@ import com.example.seniorshield.domain.repository.RiskRepository
 import com.example.seniorshield.domain.repository.SettingsRepository
 import com.example.seniorshield.monitoring.call.CallRiskMonitor
 import com.example.seniorshield.monitoring.model.CallMonitorState
+import com.example.seniorshield.monitoring.orchestrator.RiskDetectionCoordinator
 import com.example.seniorshield.monitoring.session.RiskSessionTracker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -42,6 +43,7 @@ class WarningViewModelTest {
     private lateinit var sessionTracker: RiskSessionTracker
     private lateinit var eventSink: FakeRiskEventSink
     private lateinit var callRiskMonitor: FakeCallRiskMonitor
+    private lateinit var coordinator: FakeRiskDetectionCoordinator
     private lateinit var viewModel: WarningViewModel
 
     @Before
@@ -53,6 +55,7 @@ class WarningViewModelTest {
         sessionTracker = RiskSessionTracker()
         eventSink = FakeRiskEventSink()
         callRiskMonitor = FakeCallRiskMonitor()
+        coordinator = FakeRiskDetectionCoordinator()
         viewModel = WarningViewModel(
             guardianRepository,
             riskRepository,
@@ -60,6 +63,7 @@ class WarningViewModelTest {
             sessionTracker,
             eventSink,
             callRiskMonitor,
+            coordinator,
         )
     }
 
@@ -296,6 +300,15 @@ private class FakeCallRiskMonitor : CallRiskMonitor {
     override fun currentCallId(): Long? = null
     override fun clearTelebankingAnchor() { clearTelebankingAnchorCallCount++ }
     override fun markCurrentCallConfirmedSafe(callId: Long) { lastSafeConfirmedCallId = callId }
+    override fun isTelebankingAnchorHot(): Boolean = false
+}
+
+private class FakeRiskDetectionCoordinator : RiskDetectionCoordinator {
+    var refreshAnchorHotNowCallCount = 0
+    override fun start() {}
+    override fun stop() {}
+    override val anchorHotState: StateFlow<Boolean> = MutableStateFlow(false)
+    override fun refreshAnchorHotNow() { refreshAnchorHotNowCallCount++ }
 }
 
 private class FakeSettingsRepository : SettingsRepository {

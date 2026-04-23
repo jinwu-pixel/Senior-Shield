@@ -12,6 +12,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.view.WindowManager
@@ -20,14 +21,18 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.annotation.VisibleForTesting
 import com.example.seniorshield.BuildConfig
 import com.example.seniorshield.MainActivity
+import com.example.seniorshield.core.navigation.NavigationEventBus
 import com.example.seniorshield.core.util.CallEndHelper
 import com.example.seniorshield.domain.model.Guardian
 import com.example.seniorshield.domain.model.RiskEvent
 import com.example.seniorshield.domain.model.RiskLevel
+import com.example.seniorshield.domain.model.RiskSignal
 import com.example.seniorshield.domain.repository.RiskEventSink
 import com.example.seniorshield.monitoring.call.CallRiskMonitor
+import com.example.seniorshield.monitoring.orchestrator.AlertStateResolver
 import com.example.seniorshield.monitoring.session.RiskSessionTracker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -53,18 +58,29 @@ private const val MAX_END_CALL_SUPPRESSION_MS = 3_000L
  * 주 버튼은 통화 중이면 "전화 앱으로 이동"(showInCallScreen + dismiss),
  * 아니면 "일단 닫기"(dismiss만, 세션 유지).
  *
- * 보조 CTA는 통화 여부에 따라 문구와 의미가 분리된다:
- * - 통화 중 (B-3): "통화 경고 닫기" — 통일 종료 시퀀스 + `markCurrentCallConfirmedSafe(callId)` + `snoozeForCall(callId)`.
- *   같은 통화에서 오는 call-derived signal은 Coordinator pre-update 필터에서 제거되어 respawn 차단.
- *   `markCurrentCallConfirmedSafe`로 다음 IDLE에서 텔레뱅킹 anchor가 설정되지 않는다.
- *   callId가 null인 race fallback에서는 markConfirmed/snooze가 생략되므로 완전 보호 경로 아님.
- * - 비통화 (B-4): "위험 경고 해제" — 통일 종료 시퀀스만. 세션 즉시 종료.
+ * 보조 CTA 라벨은 렌더 시점 통화 여부에 따라 분기된다:
+ * - 통화 중: "통화 경고 닫기"
+ * - 비통화: "위험 경고 해제"
  *
- * 통일 종료 시퀀스 (B-3/B-4 공통, A′ 호출 순서):
- *   1. sessionTracker.reset()
- *   2. callRiskMonitor.clearTelebankingAnchor()  (5분 텔레뱅킹 윈도우 무력화)
- *   3. eventSink.clearCurrentRiskEvent()         (UI 즉시 반영)
- *   4. (B-3만, callId != null) markCurrentCallConfirmedSafe + snoozeForCall
+ * 클릭 시 부수효과는 **두 축**으로 분리된다:
+ *
+ * 1. **snooze (respawn 억제)** — `sessionTracker.snoozeForCall(liveCallId)`.
+ *    같은 callId의 call-derived signal을 Coordinator pre-update 필터에서 제거.
+ *    `liveCallId != null` 이면 **항상** 적용 (provenance 무관). 목적: 사용자가 방금 닫은
+ *    팝업이 call-derived signal 재감지만으로 즉시 respawn되는 UX 회귀 방지.
+ *
+ * 2. **anchor suppression** — `clearTelebankingAnchor` + `markCurrentCallConfirmedSafe`.
+ *    두 호출은 같은 목적(텔레뱅킹 감지용 `lastSuspiciousCallEndedAt` anchor의 즉시 삭제 + 다음 IDLE
+ *    시 재설정 차단)이라 **동일 predicate 아래 묶어서** 실행/스킵한다. 반쪽 실행 금지.
+ *    predicate는 [shouldApplyCallSafeEffects] — positive allowlist.
+ *    의미 계약: "현재 overlay를 닫는 행위가 해당 통화를 안전 확인하는 뜻으로 해석 가능한 경우에만" 적용.
+ *    app-derived(REMOTE_CONTROL 등) / TELEBANKING 포함 / mixed 는 모두 deny.
+ *
+ * 클릭 시 실행 순서 (pure function [performSafeCtaSideEffects] 에 추출됨):
+ *   1. sessionTracker.resetAfterUserConfirmedSafe()   (세션 즉시 종료 + α arm)
+ *   2. eventSink.clearCurrentRiskEvent()              (UI 반영)
+ *   3. (liveCallId != null) snoozeForCall(liveCallId) — 축 1
+ *   4. (callSafe == true && liveCallId != null) clearTelebankingAnchor + markCurrentCallConfirmedSafe — 축 2
  *   5. dismiss()
  *
  * snooze는 IDLE 전이 / 통화 전환 / TTL 15분 / 상위 trigger(REMOTE_CONTROL 등) 출현 시 자동 해제된다.
@@ -76,6 +92,7 @@ class RiskOverlayManager @Inject constructor(
     private val callRiskMonitor: CallRiskMonitor,
     private val sessionTracker: RiskSessionTracker,
     private val eventSink: RiskEventSink,
+    private val navigationEventBus: NavigationEventBus,
 ) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -239,7 +256,39 @@ class RiskOverlayManager @Inject constructor(
             RiskLevel.LOW      -> "ℹ 낮음"
         }
 
-        val root = LinearLayout(context).apply {
+        // 뒤로가기 키 처리를 위해 LinearLayout을 anonymous subclass로 확장.
+        // TYPE_APPLICATION_OVERLAY window는 Activity가 아니라서 뒤로가기 키를 기본 소비하지 않는다.
+        // 과거 증상: 오버레이 위에서 뒤로가기 → 이벤트가 아래 Warning Activity로 새어 Warning만 pop,
+        //          오버레이는 그대로 → "팝업이 안 사라짐"으로 보이거나 Warning + 오버레이가 중복 노출.
+        //
+        // 축 분리 원칙:
+        //   뒤로가기 = 창닫기 (UI recovery)
+        //   "안전 확인했어요" = 위험 종료 선언 (risk resolution)
+        //
+        // 뒤로가기 1회 동작:
+        //   1) 오버레이 dismiss
+        //   2) NavigationEventBus.popToHome() — Warning 등 하위 destination을 backstack에서 모두 pop
+        //
+        // 이 경로에서는 risk state를 절대 touch하지 않는다:
+        //   - currentRiskEvent clear 금지
+        //   - sessionTracker.resetAfterUserConfirmedSafe() 금지
+        //   - anchor clear (callRiskMonitor.clearTelebankingAnchor) 금지
+        //   - safe-confirm 관련 부수효과 일체 금지
+        // → Home 복귀 시 currentRiskEvent가 살아있어 카드는 "위험 감지"로 유지되고,
+        //    SAFE 전환은 홈의 "안전 확인했어요" 버튼이 담당한다.
+        val root = object : LinearLayout(context) {
+            override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+                // 디버그: 어떤 key event가 오버레이 root까지 도달하는지 가시화 (검증 후 제거 예정)
+                Log.d(TAG, "overlay dispatchKeyEvent: keyCode=${event.keyCode} action=${event.action}")
+                if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
+                    Log.d(TAG, "오버레이 뒤로가기 키 → UI recovery (dismiss + popToHome, risk state 보존)")
+                    navigationEventBus.popToHome()
+                    dismiss()
+                    return true
+                }
+                return super.dispatchKeyEvent(event)
+            }
+        }.apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(bgColor)
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
@@ -347,9 +396,8 @@ class RiskOverlayManager @Inject constructor(
         }
         buttonArea.addView(primaryBtn)
 
-        // 보조 CTA: 통화 여부에 따라 문구와 동작이 분리된다.
-        // - 통화 중: "통화 경고 닫기" — reset + snoozeForCall (respawn 차단)
-        // - 비통화: "위험 경고 해제" — reset만 (세션 즉시 종료)
+        // 보조 CTA 라벨은 렌더 시점 통화 여부로 분기. 실제 call-scope 부수효과 적용 여부는
+        // 클릭 시점 shouldApplyCallSafeEffects(...) predicate가 결정한다 (위 클래스 주석 참조).
         val safeCtaText = if (inCall) "통화 경고 닫기" else "위험 경고 해제"
         buttonArea.addView(Button(context).apply {
             text = safeCtaText
@@ -366,21 +414,31 @@ class RiskOverlayManager @Inject constructor(
                 topMargin = dp(8)
             }
             setOnClickListener {
-                // 통일 종료 시퀀스 (A′): reset → clearTelebankingAnchor → clearCurrentRiskEvent
-                //   → (B-3만) markCurrentCallConfirmedSafe + snoozeForCall → dismiss
-                // 클릭 시점에 callId 재조회 — 빌드 이후 통화 상태가 바뀌었을 수 있다.
+                // 클릭 시점에 callId + signals 재조회. 부수효과는 두 축으로 분리:
+                //   - snooze (respawn 억제): liveCallId != null 이면 항상 적용
+                //   - anchor suppression (clearTelebankingAnchor + markCurrentCallConfirmedSafe):
+                //     shouldApplyCallSafeEffects(...)가 true일 때만 적용 (provenance allowlist)
                 val liveCallId = callRiskMonitor.currentCallId()
-                sessionTracker.resetAfterUserConfirmedSafe()
-                callRiskMonitor.clearTelebankingAnchor()
-                eventSink.clearCurrentRiskEvent()
-                if (liveCallId != null) {
-                    callRiskMonitor.markCurrentCallConfirmedSafe(liveCallId)
-                    sessionTracker.snoozeForCall(liveCallId)
-                    Log.d(TAG, "통화 경고 닫기 → 통일 종료 시퀀스 + markConfirmed + snooze (callId=$liveCallId)")
-                } else {
-                    // race fallback: liveCallId == null이면 markConfirmed/snooze 생략.
-                    // 동일 통화 기준 완전 보호 경로 아님 — 별도 ticket으로 추적.
-                    Log.d(TAG, "safe CTA → 통일 종료 시퀀스만 (callId=null, race fallback)")
+                val callSafe = shouldApplyCallSafeEffects(
+                    inCall = liveCallId != null,
+                    signals = event.signals.toSet(),
+                )
+                performSafeCtaSideEffects(
+                    liveCallId = liveCallId,
+                    callSafe = callSafe,
+                    reset = { sessionTracker.resetAfterUserConfirmedSafe() },
+                    clearEvent = { eventSink.clearCurrentRiskEvent() },
+                    snooze = { sessionTracker.snoozeForCall(it) },
+                    clearAnchor = { callRiskMonitor.clearTelebankingAnchor() },
+                    markSafe = { callRiskMonitor.markCurrentCallConfirmedSafe(it) },
+                )
+                when {
+                    callSafe && liveCallId != null ->
+                        Log.d(TAG, "safe CTA → anchor suppression + snooze (callId=$liveCallId, signals=${event.signals})")
+                    liveCallId != null ->
+                        Log.d(TAG, "safe CTA → snooze only, anchor preserved (callId=$liveCallId, callSafe=$callSafe, signals=${event.signals})")
+                    else ->
+                        Log.d(TAG, "safe CTA → session reset only (inCall=false, signals=${event.signals})")
                 }
                 dismiss()
             }
@@ -478,4 +536,75 @@ class RiskOverlayManager @Inject constructor(
 
     private fun dp(value: Int): Int =
         (value * context.resources.displayMetrics.density).toInt()
+
+    companion object {
+        /**
+         * **텔레뱅킹 anchor 억제** 두 층위([CallRiskMonitor.clearTelebankingAnchor] +
+         * [CallRiskMonitor.markCurrentCallConfirmedSafe]) 적용 자격을 판단하는 predicate.
+         *
+         * 의미 계약: "현재 overlay를 닫는 행위가 해당 통화를 안전 확인하는 뜻으로
+         * 해석 가능한 경우에만" true.
+         *
+         * **[RiskSessionTracker.snoozeForCall]은 이 predicate와 무관하다** — respawn 억제 목적이라
+         * `liveCallId != null` 이면 항상 적용 ([performSafeCtaSideEffects] 참조).
+         *
+         * 정책: **positive allowlist**.
+         * - `inCall == true` 는 필요조건이지만 충분조건이 아니다
+         * - 세션의 모든 signal이 [AlertStateResolver.CALL_SIGNALS]에 속할 때만 허용
+         * - [AlertStateResolver.CALL_SIGNALS] 는 원래 call-based session 판별용 상수이지만
+         *   여기서는 "call-scope anchor 억제 허용 신호 집합"이라는 정책 의미도 가진다
+         *
+         * deny되는 케이스:
+         * - `inCall == false`
+         * - app-derived signal 포함 (예: `REMOTE_CONTROL_APP_OPENED`, `BANKING_APP_OPENED_AFTER_REMOTE_APP`)
+         * - `TELEBANKING_AFTER_SUSPICIOUS` 포함 (텔레뱅킹 자체가 해당 통화 — "이 통화 안전" 의미 모순)
+         * - mixed (call + app-derived 병존)
+         * - empty signals (방어 가드)
+         */
+        @VisibleForTesting
+        internal fun shouldApplyCallSafeEffects(
+            inCall: Boolean,
+            signals: Set<RiskSignal>,
+        ): Boolean {
+            if (!inCall) return false
+            if (signals.isEmpty()) return false
+            return signals.all { it in AlertStateResolver.CALL_SIGNALS }
+        }
+
+        /**
+         * 보조 CTA 클릭 시 부수효과 순서. 두 축 분리:
+         *
+         * - **snooze 축**: `liveCallId != null` 이면 [snooze] 호출 (respawn 억제 목적)
+         * - **anchor 억제 축**: `callSafe && liveCallId != null` 이면 [clearAnchor] + [markSafe]
+         *   (텔레뱅킹 anchor 억제 두 층위, 동일 조건으로 묶음 — 반쪽 실행 금지)
+         *
+         * 호출 순서 (비즈니스 규칙):
+         *   1. [reset]        (세션 종료 + α arm)
+         *   2. [clearEvent]   (UI 반영)
+         *   3. [snooze]       (해당 통화의 call-derived signal 필터, 축 1)
+         *   4. [clearAnchor] + [markSafe]   (축 2, 묶음)
+         *
+         * reset이 snooze보다 먼저여야 session reset 이후 등록된 snooze가 살아남는다.
+         */
+        @VisibleForTesting
+        internal fun performSafeCtaSideEffects(
+            liveCallId: Long?,
+            callSafe: Boolean,
+            reset: () -> Unit,
+            clearEvent: () -> Unit,
+            snooze: (Long) -> Unit,
+            clearAnchor: () -> Unit,
+            markSafe: (Long) -> Unit,
+        ) {
+            reset()
+            clearEvent()
+            if (liveCallId != null) {
+                snooze(liveCallId)
+            }
+            if (callSafe && liveCallId != null) {
+                clearAnchor()
+                markSafe(liveCallId)
+            }
+        }
+    }
 }

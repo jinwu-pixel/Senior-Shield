@@ -181,6 +181,8 @@ class RealCallRiskMonitor @Inject constructor(
         Log.d(TAG, "current call marked safe-confirmed (callId=$callId): next IDLE anchor will be skipped")
     }
 
+    override fun isTelebankingAnchorHot(): Boolean = isTelebankingWindow()
+
     // ── observeCallSignals ──────────────────────────────────────────────────────
 
     override fun observeCallSignals(): Flow<List<RiskSignal>> =

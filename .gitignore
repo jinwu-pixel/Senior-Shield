@@ -16,3 +16,5 @@ local.properties
 .claude/
 *.log
 seniorshield_full_log.txt
+.env
+/dist/

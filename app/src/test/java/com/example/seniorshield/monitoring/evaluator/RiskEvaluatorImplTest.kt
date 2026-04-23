@@ -131,10 +131,12 @@ class RiskEvaluatorImplTest {
     }
 
     @Test
-    fun `TELEBANKING_AFTER_SUSPICIOUS 단독 - 25점 MEDIUM`() {
+    fun `TELEBANKING_AFTER_SUSPICIOUS 단독 - 25점 CRITICAL (강제 상향)`() {
+        // 이 신호는 5분 anchor 윈도우 내에서만 방출되므로 "의심 맥락"이 선행 조건.
+        // 점수는 25점(MEDIUM 임계)이지만 finalLevel은 CRITICAL로 강제 상향된다.
         val result = evaluator.evaluate(listOf(RiskSignal.TELEBANKING_AFTER_SUSPICIOUS))
         assertEquals(25, result.total)
-        assertEquals(RiskLevel.MEDIUM, result.level)
+        assertEquals(RiskLevel.CRITICAL, result.level)
     }
 
     // ── 복합 패턴 CRITICAL 강제 상향 ─────────────────────────────────
@@ -214,9 +216,10 @@ class RiskEvaluatorImplTest {
     }
 
     @Test
-    fun `점수 경계값 - 65점은 HIGH (강제 CRITICAL 조합 없음)`() {
+    fun `점수 경계값 - BANKING + TELEBANKING 조합 - TELEBANKING 강제 CRITICAL`() {
         // BANKING_APP_OPENED_AFTER_REMOTE_APP(40) + TELEBANKING_AFTER_SUSPICIOUS(25) = 65점
-        // call 신호 없음, REMOTE+BANKING 콤보 없음 → 순수 점수 기반 HIGH
+        // call 신호 없음, REMOTE+BANKING 콤보 없음이지만
+        // TELEBANKING_AFTER_SUSPICIOUS 자체가 anchor 기반 강제 CRITICAL 신호 → CRITICAL
         val result = evaluator.evaluate(
             listOf(
                 RiskSignal.BANKING_APP_OPENED_AFTER_REMOTE_APP,
@@ -224,7 +227,30 @@ class RiskEvaluatorImplTest {
             ),
         )
         assertEquals(65, result.total)
-        assertEquals(RiskLevel.HIGH, result.level)
+        assertEquals(RiskLevel.CRITICAL, result.level)
+    }
+
+    @Test
+    fun `forced CRITICAL 한정 — TELEBANKING_AFTER_SUSPICIOUS 이외의 TRIGGER 단독은 기존 level 유지`() {
+        // 이번 변경으로 추가된 "signal 단독 forced CRITICAL"은 오직 TELEBANKING_AFTER_SUSPICIOUS에만 적용됨.
+        // 다른 TRIGGER 신호들이 단독으로 발생하면 점수 기반 level을 그대로 유지해야 한다
+        // (과도 확산 방지 — 일반 원격/뱅킹/앱 설치 신호까지 CRITICAL로 올려서는 안 됨).
+        val remote = evaluator.evaluate(listOf(RiskSignal.REMOTE_CONTROL_APP_OPENED))
+        assertEquals(30, remote.total)
+        assertEquals(RiskLevel.MEDIUM, remote.level)
+
+        val banking = evaluator.evaluate(listOf(RiskSignal.BANKING_APP_OPENED_AFTER_REMOTE_APP))
+        assertEquals(40, banking.total)
+        assertEquals(RiskLevel.MEDIUM, banking.level)
+
+        val install = evaluator.evaluate(listOf(RiskSignal.SUSPICIOUS_APP_INSTALLED))
+        assertEquals(40, install.total)
+        assertEquals(RiskLevel.MEDIUM, install.level)
+
+        // 대조군: TELEBANKING_AFTER_SUSPICIOUS만이 forced CRITICAL
+        val telebanking = evaluator.evaluate(listOf(RiskSignal.TELEBANKING_AFTER_SUSPICIOUS))
+        assertEquals(25, telebanking.total)
+        assertEquals(RiskLevel.CRITICAL, telebanking.level)
     }
 
     @Test

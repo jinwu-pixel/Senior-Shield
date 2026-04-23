@@ -22,8 +22,13 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -32,6 +37,28 @@ private const val TAG = "SeniorShield-Coordinator"
 
 /** snooze 자동 만료: 설정 후 15분 경과 시 해제. */
 private const val SNOOZE_TTL_MS = 15 * 60 * 1000L
+
+/**
+ * anchor-hot mirror 폴링 주기.
+ *
+ * **왜 polling이 필요한가**
+ * `CallRiskMonitor.isTelebankingAnchorHot()`은 `lastSuspiciousCallEndedAt` + 5분 TTL 기반이다.
+ * TTL 만료는 시간 경과로만 일어나며 새 상태 변화가 아니므로, 그 순간에 아무도 `observeCallSignals()`
+ * 또는 다른 combine 소스가 emit하지 않는다. 결과적으로 coordinator의 combine 블록이 깨어나지 않아
+ * `refreshAnchorHotMirror()`가 호출되지 않고, Home UI는 GUARDED_ANCHOR에 고정될 수 있다.
+ * (5분 내내 통화/앱/디바이스 이벤트가 없을 수 있음 — 실제로 "통화 종료 후 가만히 있는" 시나리오에서 흔함.)
+ *
+ * **왜 15초인가**
+ * - TTL 5분(300초) 대비 20× 조밀하여 사용자가 느끼는 stale 창이 충분히 짧다.
+ * - 최악의 경우 GUARDED_ANCHOR가 실제 TTL 만료 후 0~15초 동안 계속 표시될 수 있음 (수용 가능 지연).
+ * - CallRiskMonitor 조회는 단순 timestamp 비교라 CPU/배터리 부담 무시 가능.
+ * - combine emit 경로의 갱신이 우선이고 이 ticker는 "idle fallback"이므로 더 조밀할 필요 없음.
+ *
+ * **변경 시 주의**
+ * 이 값을 크게 늘리면 P2 실기 시나리오의 "5분 후 SAFE 자연 복귀"가 그만큼 늦게 보인다.
+ * 줄이면 배터리/CPU 대비 이득이 없다.
+ */
+private const val ANCHOR_MIRROR_INTERVAL_MS = 15 * 1000L
 
 /**
  * same-call snooze가 활성인 동안 `sessionTracker.update()` 전에 제거되는 call-derived signal.
@@ -93,6 +120,7 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
 
     private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
     private var job: Job? = null
+    private var anchorMirrorJob: Job? = null
     @Volatile private var previousBankingForeground = false
 
     /**
@@ -101,12 +129,24 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
      */
     @Volatile private var cooldownConsumedSessionId: String? = null
 
+    private val _anchorHotState = MutableStateFlow(false)
+    override val anchorHotState: StateFlow<Boolean> = _anchorHotState.asStateFlow()
+
     private suspend fun firstGuardian(): Guardian? =
         guardianRepository.observeGuardians().first().firstOrNull()
 
     override fun start() {
         if (job?.isActive == true) return
         Log.d(TAG, "coordinator started")
+        // anchor-hot mirror ticker: TTL 자연 만료를 반영하기 위해
+        // 신호 emit과 무관하게 주기적으로 CallRiskMonitor 상태를 읽어 StateFlow에 반영한다.
+        anchorMirrorJob?.cancel()
+        anchorMirrorJob = scope.launch {
+            while (isActive) {
+                refreshAnchorHotMirror()
+                delay(ANCHOR_MIRROR_INTERVAL_MS)
+            }
+        }
         job = scope.launch {
             combine(
                 callMonitor.observeCallSignals(),
@@ -119,6 +159,7 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
             }
                 .collect { (callSignals, appSignals, bankingForeground, installSignals, deviceEnvSignals) ->
                     Log.d(TAG, "combine fired — rawCall=$callSignals, app=$appSignals, banking=$bankingForeground, install=$installSignals, deviceEnv=$deviceEnvSignals")
+                    refreshAnchorHotMirror()
 
                     // ── end-call suppression: IDLE 감지 시 안정화 타이머 시작 ──
                     // raw callSignals 기준 — snooze filter와 무관한 실제 통화 상태 반영.
@@ -220,9 +261,10 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                         return@collect
                     }
 
-                    // 팝업이 표시될 수 없는 상태(뱅킹 포그라운드 또는 쿨다운 표시 중)에서는
-                    // 쿨다운/뱅킹 UI가 경고를 담당하므로 현재 활성 trigger를 자동 통보 처리한다.
-                    if ((bankingForeground || cooldownManager.isShowing()) && activeTriggers.isNotEmpty()) {
+                    // 쿨다운 표시 중일 때만 활성 trigger를 자동 통보 처리한다.
+                    // (뱅킹 포그라운드 단독은 쿨다운이 닫힌 상태일 수 있어 여기서 미리 마킹하면
+                    //  이후 CRITICAL 에스컬레이션 시 새 trigger 팝업이 누락된다 — 은행 ARS 발신 감지 누락 방지.)
+                    if (cooldownManager.isShowing() && activeTriggers.isNotEmpty()) {
                         val merged = syncedSession.notifiedActiveThreats + activeTriggers
                         if (merged != syncedSession.notifiedActiveThreats) {
                             sessionTracker.markActiveThreatsNotified(merged)
@@ -296,7 +338,7 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                         notificationManager.notify(event)
 
                         if (alertState.ordinal >= AlertState.INTERRUPT.ordinal &&
-                            !bankingForeground && !cooldownManager.isShowing() && !cooldownFiredThisTick
+                            !cooldownManager.isShowing() && !cooldownFiredThisTick
                         ) {
                             overlayManager.show(event, firstGuardian())
                             sessionTracker.markActiveThreatsNotified(triggers)
@@ -312,7 +354,7 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                         alertState.ordinal >= AlertState.INTERRUPT.ordinal && activeTriggers.isNotEmpty()
                     ) {
                         val newTriggers = activeTriggers - syncedSession.notifiedActiveThreats
-                        if (newTriggers.isNotEmpty() && !bankingForeground && !cooldownManager.isShowing()) {
+                        if (newTriggers.isNotEmpty() && !cooldownManager.isShowing()) {
                             val event = eventFactory.create(score, triggerSignals = newTriggers)
                             eventSink.pushRiskEvent(event)
                             notificationManager.notify(event)
@@ -330,6 +372,26 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
     override fun stop() {
         job?.cancel()
         job = null
+        anchorMirrorJob?.cancel()
+        anchorMirrorJob = null
+        _anchorHotState.value = false
+    }
+
+    private fun refreshAnchorHotMirror() {
+        val hot = callMonitor.isTelebankingAnchorHot()
+        if (_anchorHotState.value != hot) {
+            Log.d(TAG, "anchorHotState mirror → $hot")
+            _anchorHotState.value = hot
+        }
+    }
+
+    /**
+     * 명시적 사용자 액션(예: "안전 확인했어요") 후 mirror를 즉시 동기화.
+     * 내부적으로는 ticker/combine emit 경로와 동일한 [refreshAnchorHotMirror]를 호출하지만,
+     * 의미상 "평시 polling"이 아닌 "사용자 액션 직후 즉시 반영"임을 구분하기 위해 별도 메서드로 노출한다.
+     */
+    override fun refreshAnchorHotNow() {
+        refreshAnchorHotMirror()
     }
 
     /**
