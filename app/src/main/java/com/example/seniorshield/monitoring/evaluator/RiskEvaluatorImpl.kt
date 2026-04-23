@@ -26,6 +26,9 @@ import javax.inject.Singleton
  * 복합 패턴 강제 CRITICAL 상향 (TRIGGER 포함 필수):
  * - call 신호 + TRIGGER(원격제어/텔레뱅킹/금융 앱) → CRITICAL
  * - REMOTE_CONTROL_APP_OPENED + BANKING_APP_OPENED_AFTER_REMOTE_APP → CRITICAL
+ * - TELEBANKING_AFTER_SUSPICIOUS 단독 → CRITICAL
+ *   (이 신호는 anchor 5분 윈도우에서만 방출되므로 의심 맥락이 선행 조건.
+ *    일반 TELEBANKING 이벤트를 전부 CRITICAL로 올리는 것이 아님.)
  *
  * PASSIVE/AMPLIFIER 누적만으로는 CRITICAL 불가.
  */
@@ -64,6 +67,7 @@ class RiskEvaluatorImpl @Inject constructor() : RiskEvaluator {
         val finalLevel = when {
             hasCallSignal && hasTrigger -> RiskLevel.CRITICAL
             hasRemoteAndBanking -> RiskLevel.CRITICAL
+            RiskSignal.TELEBANKING_AFTER_SUSPICIOUS in allSignals -> RiskLevel.CRITICAL
             else -> scoreLevel
         }
         return RiskScore(total = total, level = finalLevel, signals = allSignals)
