@@ -9,15 +9,22 @@ import java.io.File
 /**
  * PR2 — S2 REC-REFIRE debounce isolation guardrails.
  *
- * 설계:
- * - `investigations/2026-04-24-cta-semantics/03_step2_design.md` §7.4 격리 4규칙 + §7.6.5 #C7-1/#C7-2
- * - `investigations/2026-04-24-cta-semantics/04_step3_impl_plan.md` §6 PR2-G1~G6
+ * ## Source of truth (단일 설계 참조)
+ * 본 테스트의 설계 참조는 `investigations/2026-04-24-cta-semantics/04_step3_impl_plan.md`
+ * §6 PR2-G1~G6 + G6-B 한 곳으로 고정한다. Step 2의 잠긴 결정(§7.4 격리 4규칙,
+ * #C7-1 TTL `>` 연산자, #C7-2 자동화 승격 등)은 본 04 문서에 restate되어 있다.
+ *
+ * 01~03 investigation notes(`01_step1_semantics.md`, `02_step1_5_recrefire_linkage.md`,
+ * `03_step2_design.md`)는 PR #5에서 separate docs scope로 다뤄진 상태이며 본 PR2의 직접 참조에
+ * 두지 않는다 — 본 테스트 review의 source of truth가 04 한 곳임을 명확히 하기 위함.
  *
  * ## 본 클래스의 책임
- * Step 2 #7 + #C7-2를 가벼운 source-text 검사로 운영화한다. 동작 코드를 변경하지 않고,
- * S2/α/CTA 격리가 회귀하지 않도록 grep-static guardrail 6개(G1~G6)를 자동화한다.
+ * Step 2 격리 4규칙 + #C7-1 + #C7-2를 가벼운 source-text 검사로 운영화한다. 동작 코드를
+ * 변경하지 않고, S2/α/CTA 격리가 회귀하지 않도록 grep-static guardrail 7개(G1~G6 + G6-B)를
+ * 자동화한다. G6-B는 BankingCooldownManager의 dismiss / dismissIfShowing 본문이
+ * safe-confirm 부수효과로 오염되는 퇴행을 막는 추가 guardrail이다.
  *
- * ## 격리 원칙 (PR1 §5.0 + §7.4 정적 규칙)
+ * ## 격리 원칙 (PR1 + §7.4 정적 규칙)
  * - 본 클래스는 운영 코드(`S2RecRefireDebounce`, `RiskSessionTracker`, `RiskOverlayManager` 등)를
  *   **import하지 않는다** — 모든 검사는 파일 본문을 텍스트로 읽어 적용한다.
  * - PR1 §11.2 baseline 식별자 5종을 grep 안정성 baseline으로 사용한다.
