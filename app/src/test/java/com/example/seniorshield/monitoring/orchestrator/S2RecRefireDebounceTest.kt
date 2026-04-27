@@ -1,6 +1,5 @@
 package com.example.seniorshield.monitoring.orchestrator
 
-import com.example.seniorshield.core.overlay.RiskOverlayManager
 import com.example.seniorshield.domain.model.RiskSignal
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -17,22 +16,25 @@ import org.junit.Test
  *
  * 본 테스트가 보증하는 8개 핵심 invariant:
  *   1. TTL boundary: exactly 30,000ms does not expire   → T2
- *   2. TTL boundary: 30,001ms expires                    → T3
- *   3. dismiss-only CTA does not trigger safe-confirm    → T4
- *   4. safe-confirm remains a separate dedicated flow    → T5
- *   5. REC-REFIRE = orchestration debounce, not CTA      → T6
- *   6. S2 debounce is separate from α debounce          → T6 (구조적 분리: 본 클래스는
- *                                                            `RiskSessionTrackerAlphaTest`와
- *                                                            disjoint하며 α의 변수에 read 0건)
- *   7. same REC-REFIRE within TTL suppress              → T1
- *   8. REC-REFIRE after TTL may re-fire                 → T3
+ *   2. TTL boundary: 30,001ms expires                   → T3
+ *   3. dismiss-only CTA is not an S2 gate input         → T4
+ *   4. safe-confirm CTA is not an S2 gate input         → T5
+ *   5. REC-REFIRE = orchestration debounce, not CTA     → T6
+ *   6. S2 debounce is separate from α debounce         → T6
+ *   7. same REC-REFIRE within TTL suppress             → T1
+ *   8. REC-REFIRE after TTL may re-fire                → T3
  *
- * **격리 (PR1 §5.0 + §7.4 정적 규칙 1·3 + 04_step3_impl_plan.md §5.6):**
+ * **격리 원칙 (PR1 §5.0 + §7.4 정적 규칙 + 04_step3_impl_plan.md §5.6, §11.2):**
  * - 본 클래스는 `RiskSessionTracker` 또는 그 내부 변수를 import/read 하지 않는다.
- * - 본 클래스는 CTA 핸들러(`HomeViewModel.confirmSafe`, `WarningViewModel.confirmSafe`,
- *   `RiskOverlayManager.dismiss`, `RiskOverlayManager.performSafeCtaSideEffects` 등)를 호출하지 않는다.
- *   T4/T5는 `performSafeCtaSideEffects`의 행동 표면을 **호출 없이 추적용으로만 시뮬레이션**한다 —
- *   safe-confirm 부수효과 자체는 dismiss 경로에서 발생할 수 없음을 직접 자동검증.
+ * - 본 클래스는 CTA handler(`HomeViewModel.confirmSafe`, `WarningViewModel.confirmSafe`,
+ *   `RiskOverlayManager`, `BankingCooldownManager` 등)를 **import하거나 호출하지 않는다**.
+ * - dismiss-only / safe-confirm production wiring 검증은 `RiskOverlayManagerSafeEffectsTest` 등
+ *   별도 CTA-쪽 테스트의 책임이며 본 클래스 범위 외다.
+ *
+ * **본 클래스의 책임:**
+ * `shouldSuppressS2RecRefire`의 pure-function boundary 검증뿐이다 — 즉 **"S2 gate의 입력
+ * surface는 (state, thisTickSignals, now) 3종이며 CTA/α는 입력이 아니다"**의 자동 자기증명.
+ * T4/T5는 production CTA side effect를 직접 검증하지 않는다.
  */
 class S2RecRefireDebounceTest {
 
@@ -101,60 +103,71 @@ class S2RecRefireDebounceTest {
     }
 
     // ── PR1-T4 ─────────────────────────────────────────────────────────
-    // dismiss-only CTA does not trigger safe-confirm effects (불변 회귀)
+    // dismiss-only CTA is not an S2 gate input (boundary 검증)
 
     @Test
-    fun `T4_dismissOnlyCta_doesNotTriggerSafeConfirmEffects`() {
-        // dismiss-only CTA = view 닫기 외 부수효과 0건.
-        // 본 테스트는 dismiss-only handler simulation을 수행하고 safe-confirm 5종 부수효과
-        // (reset/clearEvent/snooze/clearAnchor/markSafe) 카운터가 모두 0임을 검증한다.
+    fun `T4_dismissOnlyCta_isNotAnS2GateInput`() {
+        // `shouldSuppressS2RecRefire`의 시그니처는 (state, thisTickSignals, now) 3종뿐이다.
+        // dismiss-only 이벤트(예: BankingCooldownManager "일단 닫기" 버튼, RiskOverlayManager view dismiss 등)는
+        // 본 함수의 입력 자리에 존재하지 않는다 — 따라서 dismiss 발생 여부와 관계없이 동일 (state, thisTick, now)
+        // 입력은 항상 동일 출력을 만든다. 그 동일성이 곧 "dismiss-only CTA는 S2 gate에 영향 없다"의
+        // 자동 자기증명이다.
         //
-        // 현재 코드에서는 `BankingCooldownManager`의 "일단 닫기" 버튼이 view dismiss만 호출하며
-        // `RiskOverlayManager.performSafeCtaSideEffects`는 절대 호출하지 않는다. 본 테스트가
-        // simulation으로 그 성질을 자동 회귀 검증.
-
-        val safeConfirmEffects = mutableListOf<String>()
-        var dismissCalled = 0
-
-        val dismissOnlyHandler: () -> Unit = {
-            dismissCalled++
-            // 의도적으로 reset/clearEvent/snooze/clearAnchor/markSafe 호출 없음.
-        }
-
-        dismissOnlyHandler()
-
-        assertEquals("dismiss-only handler는 view 닫기 1회만 수행", 1, dismissCalled)
-        assertTrue(
-            "dismiss-only CTA는 safe-confirm 5종 부수효과를 0건 호출해야 한다 (불변)",
-            safeConfirmEffects.isEmpty(),
+        // production wiring("BankingCooldownManager 일단 닫기는 view dismiss 외 부수효과 0건")의
+        // 직접 검증은 본 클래스 범위 외 — 별도 CTA-쪽 테스트에서 다룬다.
+        val state = S2RecRefireDebounceState(
+            lastFiredAt = 1_000L,
+            snapshot = setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED),
         )
+        val thisTick = setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED)
+        val now = 5_000L  // TTL 내
+
+        val first = shouldSuppressS2RecRefire(state, thisTick, now)
+        // 가상의 dismiss 이벤트가 그 사이에 발생했다고 narrate (실제로는 본 함수의 입력 자리에 dismiss가
+        // 들어갈 수 없어 simulation 자체가 불가능 — 그 불가능성이 boundary의 본질).
+        val second = shouldSuppressS2RecRefire(state, thisTick, now)
+
+        assertEquals(
+            "동일 (state, thisTick, now) 입력은 동일 출력 — dismiss-only 이벤트는 S2 gate 입력 surface 외부",
+            first, second,
+        )
+        assertTrue("TTL 내 동일 scope signal → suppress (이번 케이스의 정답)", first)
     }
 
     // ── PR1-T5 ─────────────────────────────────────────────────────────
-    // safe-confirm remains a separate dedicated flow (불변 회귀)
+    // safe-confirm CTA is not an S2 gate input (boundary 검증, escape 시나리오)
 
     @Test
-    fun `T5_safeConfirmRemainsSeparateDedicatedFlow`() {
-        // safe-confirm = `RiskOverlayManager.performSafeCtaSideEffects` 진입 전용 흐름.
-        // 본 테스트는 inCall + call-derived signals 조건에서 safe-confirm path가 호출될 때
-        // **모든** 부수효과(reset → clearEvent → snooze → clearAnchor → markSafe)가
-        // 순서대로 실행됨을 검증한다 — 즉 이 path는 dismiss-only와 구조적으로 별개임을 자동검증.
-        val effects = mutableListOf<String>()
-
-        RiskOverlayManager.performSafeCtaSideEffects(
-            liveCallId = 333L,
-            callSafe = true,
-            reset = { effects.add("reset") },
-            clearEvent = { effects.add("clearEvent") },
-            snooze = { effects.add("snooze:$it") },
-            clearAnchor = { effects.add("clearAnchor") },
-            markSafe = { effects.add("markSafe:$it") },
+    fun `T5_safeConfirmCta_isNotAnS2GateInput`() {
+        // T4와 동일 boundary 원리 — safe-confirm 이벤트(예: 홈 "안전 확인했어요", Warning "안전 확인",
+        // 또는 팝업 보조 safe-CTA가 호출하는 부수효과 함수)도 본 함수의 입력 자리에 존재하지 않는다.
+        //
+        // 본 테스트는 escape 시나리오(snapshot 외 새 UPGRADE trigger 도래)로 boundary를 한 번 더 확인 —
+        // escape 결정이 일어나야 하는 상황에서도 safe-confirm 발생 여부는 결정에 관여하지 않는다.
+        //
+        // safe-confirm production wiring(safe-CTA 부수효과 함수가 reset → clearEvent → snooze →
+        // clearAnchor → markSafe 를 순서대로 호출하는 동작)의 직접 검증은 별도 CTA-쪽 테스트의
+        // 책임이며 본 클래스 범위 외.
+        val state = S2RecRefireDebounceState(
+            lastFiredAt = 1_000L,
+            snapshot = setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED),
         )
+        val thisTick = setOf(
+            RiskSignal.REMOTE_CONTROL_APP_OPENED,
+            RiskSignal.BANKING_APP_OPENED_AFTER_REMOTE_APP,  // snapshot 외 새 UPGRADE trigger
+        )
+        val now = 5_000L  // TTL 내
+
+        val first = shouldSuppressS2RecRefire(state, thisTick, now)
+        val second = shouldSuppressS2RecRefire(state, thisTick, now)
 
         assertEquals(
-            "safe-confirm은 5종 부수효과를 순서대로 모두 호출하는 전용 흐름이어야 한다 (T4의 dismiss-only와 disjoint)",
-            listOf("reset", "clearEvent", "snooze:333", "clearAnchor", "markSafe:333"),
-            effects,
+            "동일 (state, thisTick, now) 입력은 동일 출력 — safe-confirm 이벤트는 S2 gate 입력 surface 외부",
+            first, second,
+        )
+        assertFalse(
+            "snapshot 외 새 UPGRADE trigger 도래 → escape (suppress 해제) — safe-confirm 발생 여부와 무관",
+            first,
         )
     }
 
@@ -164,13 +177,10 @@ class S2RecRefireDebounceTest {
 
     @Test
     fun `T6_recRefireSuppression_isOrchestrationDebounce_notCta_andSeparateFromAlpha`() {
-        // S2 게이트의 입력은 (state, thisTickSignals, now) 3개뿐이다.
-        // CTA 이벤트(dismiss / safe-confirm)는 본 함수 시그니처에 존재하지 않으며,
-        // α 변수(`lastResetAt` / `lastResetSignals`)도 본 함수 시그니처에 존재하지 않는다.
-        //
-        // 따라서 어떤 CTA 클릭이 발생하든, α arm 상태가 어떻든, S2의 결정은 동일 입력에 대해
-        // 동일 출력을 보장한다. 본 테스트는 동일 (state, signals, now)을 두 번 호출하여
-        // 결정성(determinism)을 통한 외부 영향 차단을 자동검증한다.
+        // T4/T5의 boundary를 일반화 — S2 gate의 입력은 (state, thisTickSignals, now) 3종이며
+        // CTA / α 어떤 layer의 이벤트도 입력 자리에 존재하지 않는다. 본 테스트는 orchestration-layer
+        // 결정성을 한 번 더 확인하고, 더해서 S2 prefix 식별자 분리(§5.0)와 set 정의 관계(scope ⊊ UPGRADE)를
+        // 검증한다.
         val state = S2RecRefireDebounceState(
             lastFiredAt = 1_000L,
             snapshot = setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED),
@@ -179,28 +189,21 @@ class S2RecRefireDebounceTest {
         val now = 5_000L
 
         val first = shouldSuppressS2RecRefire(state, thisTick, now)
-        // CTA(dismiss/safe-confirm) 이벤트 또는 α arm 상태 변화는 본 함수의 시그니처에 입력으로
-        // 들어갈 수 없다. 따라서 동일 (state, thisTick, now)에 대한 두 번째 호출 결과는 첫 번째와
-        // 동일해야 하며, 이 동일성이 곧 "외부 layer 무관" 자동 검증이다.
         val second = shouldSuppressS2RecRefire(state, thisTick, now)
 
         assertEquals(
-            "S2 게이트는 동일 입력에 동일 출력 — CTA/α 이벤트는 입력에 관여하지 않음 (orchestration-layer 분리)",
-            first,
-            second,
+            "S2 gate는 동일 입력에 동일 출력 — CTA / α 이벤트는 입력에 관여하지 않음 (orchestration-layer 분리)",
+            first, second,
         )
-        // 이번 입력은 TTL 내 동일 signal 재emit이므로 suppress가 정답.
         assertTrue("orchestration-layer debounce는 CTA 무관하게 결정적", first)
 
-        // S2 debounce 상수와 α debounce 상수는 서로 다른 값으로 분리되어 있어야 한다 —
-        // 단순 값 동일성을 넘어 의미·축이 분리됨을 코드 차원에서 보증.
-        // (본 단언은 PR1 코드 단계 식별자 분리(§5.0)와 정합)
+        // S2 prefix 식별자 분리 (§5.0): S2_REC_REFIRE_TTL_MS는 S2 prefix가 강제된 식별자.
+        // α의 ALPHA_TTL_MS(`RiskSessionTracker.kt:22`)는 `private`이므로 import 자체가 금지된다(§7.4 규칙 1) —
+        // 본 테스트는 그 import를 의도적으로 하지 않음으로써 분리를 표현한다.
         @Suppress("UNUSED_VARIABLE")
-        val s2Ttl: Long = S2_REC_REFIRE_TTL_MS  // 30_000L — S2 prefix 식별자
-        // α의 ALPHA_TTL_MS는 RiskSessionTracker.kt 내부 private이므로 import 자체가 금지(§7.4 규칙 1).
-        // 본 테스트는 그 import를 의도적으로 하지 않는 것으로 분리를 표현한다.
+        val s2Ttl: Long = S2_REC_REFIRE_TTL_MS  // 30_000L
 
-        // 또한 S2 입력 set 정의(scope, UPGRADE_TRIGGERS)는 α의 어떤 상태 변수와도 구조적으로 무관:
+        // S2 입력 set 정의(scope ⊊ UPGRADE_TRIGGERS) — Step 2 #3 + #4 정의의 직접 결과.
         assertNotEquals(
             "S2 scope와 UPGRADE_TRIGGERS는 의미상 동일 set이 아니다 — UPGRADE는 scope의 superset",
             S2_REC_REFIRE_SCOPE,
