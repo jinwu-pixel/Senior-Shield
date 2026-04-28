@@ -129,6 +129,16 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
      */
     @Volatile private var cooldownConsumedSessionId: String? = null
 
+    /**
+     * S2 REC-REFIRE debounce 게이트 상태.
+     *
+     * Coordinator collect 블록 안에서만 read/write되며 외부에 노출되지 않는다.
+     * α 변수와 5축 disjoint 공존 — 같은 `UPGRADE_TRIGGERS` set만 의미상 공유한다.
+     * 자세한 설계는 `investigations/2026-04-24-cta-semantics/03_step2_design.md`,
+     * `04_step3_impl_plan.md` 참조.
+     */
+    @Volatile private var s2RecRefireState = S2RecRefireDebounceState()
+
     private val _anchorHotState = MutableStateFlow(false)
     override val anchorHotState: StateFlow<Boolean> = _anchorHotState.asStateFlow()
 
@@ -340,10 +350,16 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                         if (alertState.ordinal >= AlertState.INTERRUPT.ordinal &&
                             !cooldownManager.isShowing() && !cooldownFiredThisTick
                         ) {
-                            overlayManager.show(event, firstGuardian())
-                            sessionTracker.markActiveThreatsNotified(triggers)
-                            popupShownThisTick = true
-                            Log.d(TAG, "popup shown on state transition → $alertState")
+                            val nowMs = System.currentTimeMillis()
+                            if (shouldSuppressS2RecRefire(s2RecRefireState, rawTickSignals, nowMs)) {
+                                Log.d(TAG, "popup suppressed by S2 REC-REFIRE debounce (escalation path) — rawTick=$rawTickSignals, snapshot=${s2RecRefireState.snapshot}")
+                            } else {
+                                overlayManager.show(event, firstGuardian())
+                                s2RecRefireState = s2RecRefireStateAfterFiring(rawTickSignals, nowMs)
+                                sessionTracker.markActiveThreatsNotified(triggers)
+                                popupShownThisTick = true
+                                Log.d(TAG, "popup shown on state transition → $alertState (s2Snapshot=${s2RecRefireState.snapshot})")
+                            }
                         } else if (cooldownFiredThisTick && alertState.ordinal >= AlertState.INTERRUPT.ordinal) {
                             Log.d(TAG, "popup suppressed: cooldown fired this tick")
                         }
@@ -355,12 +371,18 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                     ) {
                         val newTriggers = activeTriggers - syncedSession.notifiedActiveThreats
                         if (newTriggers.isNotEmpty() && !cooldownManager.isShowing()) {
-                            val event = eventFactory.create(score, triggerSignals = newTriggers)
-                            eventSink.pushRiskEvent(event)
-                            notificationManager.notify(event)
-                            overlayManager.show(event, firstGuardian())
-                            sessionTracker.markActiveThreatsNotified(syncedSession.notifiedActiveThreats + newTriggers)
-                            Log.d(TAG, "새 trigger 팝업: new=$newTriggers")
+                            val nowMs = System.currentTimeMillis()
+                            if (shouldSuppressS2RecRefire(s2RecRefireState, rawTickSignals, nowMs)) {
+                                Log.d(TAG, "popup suppressed by S2 REC-REFIRE debounce (new-trigger path) — new=$newTriggers, snapshot=${s2RecRefireState.snapshot}")
+                            } else {
+                                val event = eventFactory.create(score, triggerSignals = newTriggers)
+                                eventSink.pushRiskEvent(event)
+                                notificationManager.notify(event)
+                                overlayManager.show(event, firstGuardian())
+                                s2RecRefireState = s2RecRefireStateAfterFiring(rawTickSignals, nowMs)
+                                sessionTracker.markActiveThreatsNotified(syncedSession.notifiedActiveThreats + newTriggers)
+                                Log.d(TAG, "새 trigger 팝업: new=$newTriggers (s2Snapshot=${s2RecRefireState.snapshot})")
+                            }
                         }
                     }
 
@@ -375,6 +397,7 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
         anchorMirrorJob?.cancel()
         anchorMirrorJob = null
         _anchorHotState.value = false
+        s2RecRefireState = S2RecRefireDebounceState()
     }
 
     private fun refreshAnchorHotMirror() {
