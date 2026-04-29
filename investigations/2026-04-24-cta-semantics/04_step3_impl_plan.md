@@ -325,6 +325,9 @@ Step 2 잠금 #6의 C1/C2/C3 회귀 규칙을 PR 체크리스트로 운영화한
   - TTL 경계는 `(now - lastFiredAt) > 30_000L`
   - non-in-call dismiss는 call-safe 효과를 만들지 않음
   - in-call safe-confirm만 safe-confirm 계열 효과를 허용
+  - α debounce와 S2 debounce는 상수/상태/함수/테스트 클래스 공용화 금지 (Step 2 §5 + §5.0 naming guideline + §10 자율 재량 불가 항목의 review-단계 재고정)
+- follow-up tracking (drift 방지) 항목을 체크리스트에 함께 고정:
+  - `UPGRADE_TRIGGERS` 3중 참조 (§11.1) — 단일화는 별도 follow-up이며 PR3에서 수행하지 않는다. set 변경 PR이 발생하면 3곳 동시 갱신 + §11.1 표 갱신 의무를 review 단계에서 확인
 - traceability 표 — Step 2의 9개 잠금(#1~#7 + #C7-1/#C7-2)이 각 PR에 어떻게 배치됐는지 명시
 
 ### 7.2. Non-goals
@@ -343,7 +346,8 @@ PR3는 코드를 추가하지 않으므로 단위 테스트 케이스가 없다.
 | **PR3-V1** | 체크리스트가 PR 템플릿에 등록 | 새 PR 작성 시 체크리스트 항목이 표시됨 |
 | **PR3-V2** | C1/C2/C3 항목이 #6 §6.6 회귀 규칙 표와 일대일 대응 | 본 문서 §2 + `03_step2_design.md` §6.6 표와 동일 의미 |
 | **PR3-V3** | traceability 표가 PR1/PR2의 실제 코드 위치를 정확히 가리킴 | merge 시점에 broken link 0건 |
-| **PR3-V4** | 6개 불변식이 본 문서 §2 전제와 일치 | 누락 0건, 변형 0건 |
+| **PR3-V4** | 7개 불변식이 본 문서 §2 전제 + Step 2 §5 / §5.0 / §10과 일치 | 누락 0건, 변형 0건 |
+| **PR3-V5** | follow-up tracking (`UPGRADE_TRIGGERS` §11.1)이 체크리스트 표면에 등장 | review-단계 drift 방지 의무가 PR template에 노출됨 |
 
 ### 7.4. Merge conditions
 
@@ -361,13 +365,29 @@ PR3 merge가 허용되는 조건:
 
 | Step 2 잠금 | PR3 반영 위치 |
 |---|---|
-| #6 — C1/C2/C3 회귀 규칙 | 체크리스트 항목 |
-| 전제 — `"일단 닫기"` dismiss-only | 불변식 1 |
-| 전제 — safe-confirm 별도 흐름 | 불변식 2, 6 |
-| 전제 — REC-REFIRE 억제 = orchestration-layer | 불변식 3 |
-| #C7-1 — TTL `>` | 불변식 4 |
-| §1.5 §3 invariant 3대 — non-in-call dismiss vs in-call safe-confirm | 불변식 5, 6 |
-| 전체 잠금 9개 | traceability 표 (#1~#7 + #C7-1/#C7-2) |
+| #6 — C1/C2/C3 회귀 규칙 | 체크리스트 §3 (C1/C2/C3) + 불변식 1/2/3 (§2) |
+| 전제 — `"일단 닫기"` dismiss-only | 불변식 1 + 5 (§2) |
+| 전제 — safe-confirm 별도 흐름 | 불변식 2 + 6 (§2) |
+| 전제 — REC-REFIRE 억제 = orchestration-layer | 불변식 3 (§2) |
+| #C7-1 — TTL `>` | 불변식 4 (§2) |
+| §1.5 §3 invariant 3대 — non-in-call dismiss vs in-call safe-confirm | 불변식 5 + 6 (§2) |
+| #5 + §5.0 + §10 — α/S2 공용화 금지 | 불변식 7 (§2) |
+| §11.1 — `UPGRADE_TRIGGERS` 3중 참조 | follow-up tracking (§4) |
+| 전체 잠금 9개 | traceability 표 (#1~#7 + #C7-1/#C7-2) §5 |
+
+### 7.6. PR3 commit 결과
+
+PR3 산출 위치:
+- `.github/PULL_REQUEST_TEMPLATE.md` — 모든 PR 자동 노출. S2 reviewer checklist 6개 체크박스 + 일반 체크 + UPGRADE_TRIGGERS follow-up 1줄
+- `.github/S2_REVIEW_CHECKLIST.md` — S2 인근 PR 적용. 7 불변식 (§2), C1/C2/C3 (§3), follow-up tracking (§4), traceability 표 (§5), reviewer 운영 규칙 (§6)
+- 본 문서 §7.1 / §7.3 / §7.5 갱신 — 불변식 6→7개, V4 갱신 + V5 추가, traceability 표에 #5/§5.0/§10 + §11.1 행 추가
+
+merge gate 충족 (PR3 commit 시점):
+- **PR3-V1** — `.github/PULL_REQUEST_TEMPLATE.md`로 GitHub PR 작성 시 자동 노출 ✓
+- **PR3-V2** — C1/C2/C3가 `S2_REVIEW_CHECKLIST.md` §3 표에 일대일 대응 ✓
+- **PR3-V3** — traceability 표가 PR1 (#5) 식별자 (`S2_REC_REFIRE_TTL_MS` / `S2RecRefireDebounce` / `shouldSuppressS2RecRefire` / `s2RecRefireStateAfterFiring` / `S2RecRefireDebounceTest`) + PR2 (#6) guardrail ID (`PR2-G1~G6 + G6-B`) + α 식별자 (`RiskSessionTracker` / `ALPHA_TTL_MS`)를 정확히 가리킴, broken link 0건 ✓
+- **PR3-V4** — 7 불변식이 본 문서 §2 전제 + Step 2 §5 / §5.0 naming guideline / §10 자율 재량 불가 항목과 일치 ✓
+- **PR3-V5** — `S2_REVIEW_CHECKLIST.md` §4 + PR template 마지막 체크박스에서 `UPGRADE_TRIGGERS` follow-up tracking 노출 ✓
 
 ---
 
