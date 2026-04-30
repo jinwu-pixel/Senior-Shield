@@ -1,30 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path android:pathData="M31,63.928c0,0 6.4,-11 12.1,-13.1c7.2,-2.6 26,-1.4 26,-1.4l38.1,38.1L107,108.928l-32,-1L31,63.928z">
+
+    <!-- 1. shield body: vertical gradient white→light blue + dark stroke
+         scaled to fit safe zone (21..87): width 30..78, height 26..82 -->
+    <path
+        android:pathData="M54,26 C48,26 38,29 30,32 L30,58 C30,71 41,80 54,82 C67,80 78,71 78,58 L78,32 C70,29 60,26 54,26 Z"
+        android:strokeColor="#FF0A3D91"
+        android:strokeWidth="1.6"
+        android:strokeLineJoin="round">
         <aapt:attr name="android:fillColor">
             <gradient
-                android:endX="85.84757"
-                android:endY="92.4963"
-                android:startX="42.9492"
-                android:startY="49.59793"
-                android:type="linear">
-                <item
-                    android:color="#44000000"
-                    android:offset="0.0" />
-                <item
-                    android:color="#00000000"
-                    android:offset="1.0" />
+                android:type="linear"
+                android:startX="54"
+                android:startY="26"
+                android:endX="54"
+                android:endY="82">
+                <item android:offset="0" android:color="#FFFFFFFF" />
+                <item android:offset="0.4" android:color="#FFF5F9FF" />
+                <item android:offset="1" android:color="#FF90CAF9" />
             </gradient>
         </aapt:attr>
     </path>
+
+    <!-- 2. shield top specular highlight (white fading down) -->
     <path
-        android:fillColor="#FFFFFF"
-        android:fillType="nonZero"
-        android:pathData="M65.3,45.828l3.8,-6.6c0.2,-0.4 0.1,-0.9 -0.3,-1.1c-0.4,-0.2 -0.9,-0.1 -1.1,0.3l-3.9,6.7c-6.3,-2.8 -13.4,-2.8 -19.7,0l-3.9,-6.7c-0.2,-0.4 -0.7,-0.5 -1.1,-0.3C38.8,38.328 38.7,38.828 38.9,39.228l3.8,6.6C36.2,49.428 31.7,56.028 31,63.928h46C76.3,56.028 71.8,49.428 65.3,45.828zM43.4,57.328c-0.8,0 -1.5,-0.5 -1.8,-1.2c-0.3,-0.7 -0.1,-1.5 0.4,-2.1c0.5,-0.5 1.4,-0.7 2.1,-0.4c0.7,0.3 1.2,1 1.2,1.8C45.3,56.528 44.5,57.328 43.4,57.328L43.4,57.328zM64.6,57.328c-0.8,0 -1.5,-0.5 -1.8,-1.2s-0.1,-1.5 0.4,-2.1c0.5,-0.5 1.4,-0.7 2.1,-0.4c0.7,0.3 1.2,1 1.2,1.8C66.5,56.528 65.6,57.328 64.6,57.328L64.6,57.328z"
-        android:strokeWidth="1"
-        android:strokeColor="#00000000" />
+        android:pathData="M54,30 C48,30 38,32 33,34 L33,50 L75,50 L75,34 C70,32 60,30 54,30 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="54"
+                android:startY="30"
+                android:endX="54"
+                android:endY="52">
+                <item android:offset="0" android:color="#A0FFFFFF" />
+                <item android:offset="1" android:color="#00FFFFFF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 3. shield inner bevel (subtle white stroke just inside outer edge) -->
+    <path
+        android:pathData="M54,30 C48,30 39,33 33,35 L33,58 C33,69 42,77 54,79 C66,77 75,69 75,58 L75,35 C69,33 60,30 54,30 Z"
+        android:fillColor="#00000000"
+        android:strokeColor="#80FFFFFF"
+        android:strokeWidth="0.7"
+        android:strokeLineJoin="round" />
+
+    <!-- 4. S monogram (open stroke path with vertical blue gradient) -->
+    <path
+        android:pathData="M66,46 C66,41 60,39 54,39 C48,39 42,41 42,48 C42,54 48,56 54,56 C60,56 66,59 66,66 C66,72 60,74 54,74 C48,74 42,72 42,67"
+        android:fillColor="#00000000"
+        android:strokeWidth="7"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:type="linear"
+                android:startX="42"
+                android:startY="38"
+                android:endX="42"
+                android:endY="74">
+                <item android:offset="0" android:color="#FF1E88E5" />
+                <item android:offset="0.55" android:color="#FF1565C0" />
+                <item android:offset="1" android:color="#FF0A3D91" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 5. S highlight (thin white arc on top portion) -->
+    <path
+        android:pathData="M64,45 C64,41 60,40 54,40 C48,40 44,41 43,45"
+        android:fillColor="#00000000"
+        android:strokeColor="#88FFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round" />
 </vector>
