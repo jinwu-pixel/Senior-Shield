@@ -47,15 +47,16 @@ domain/
   repository/   → RiskRepository, SettingsRepository, GuardianRepository (interfaces only)
 
 data/
-  local/        → SettingsDataStore, GuardianDataStore, fake/FakeRiskEventDataSource
+  local/        → SettingsDataStore, GuardianDataStore, LiveRiskEventStore (interface), RoomRiskEventStore, db/(RiskEventEntity, RiskEventDao, SeniorShieldDatabase)
   repository/   → RiskRepositoryImpl, SettingsRepositoryImpl, GuardianRepositoryImpl
-  di/           → DataModule (Hilt bindings)
+  di/           → DataModule, DatabaseModule (Hilt bindings)
 
 monitoring/
-  evaluator/    → RiskEvaluator (interface), FakeRiskEvaluator
-  call/         → CallRiskMonitor (interface), FakeCallRiskMonitor
-  appusage/     → AppUsageRiskMonitor (interface), FakeAppUsageRiskMonitor
+  evaluator/    → RiskEvaluator (interface), RiskEvaluatorImpl
+  call/         → CallRiskMonitor (interface), RealCallRiskMonitor
+  appusage/     → AppUsageRiskMonitor (interface), RealAppUsageRiskMonitor
   di/           → MonitoringModule
+  ※ 위 트리는 Fake→Real 교체분만 반영. session/RiskSessionTracker, orchestrator/(AlertStateResolver, DefaultRiskDetectionCoordinator, S2RecRefireDebounce), appinstall, deviceenv, registry, event 등 실제 존재 패키지 전수 반영은 별도 문서 현행화에서 처리(좁은 정정 범위 밖).
 
 feature/
   home/         → HomeScreen, HomeViewModel, HomeUiState
@@ -164,7 +165,8 @@ Tech: Min SDK 26, Target SDK 34, Kotlin 1.9.24, JVM 17, Compose + Material3, Nav
 - 단독 은행 발신은 경고하지 않음 (오탐 방지)
 
 ### 팝업 즉시 발생 조건
-1. 위험 점수 50점 이상 도달
+1. 위험 세션 중 TRIGGER 신호 발생 → AlertState ≥ INTERRUPT (팝업 발화의 일반 조건이며, 2~6은 그 구체 사례)
+   ※ 팝업은 위험 '점수'가 아니라 AlertState로 발화한다. PASSIVE 신호만으로 점수 50(= RiskLevel.HIGH)에 도달해도 세션은 GUARDED라 팝업은 뜨지 않는다.
 2. 원격제어 앱 실행 감지 (단독)
 3. 위험 세션 중 금융 앱 실행 → 쿨다운 인터럽터 발동 (BankingCooldownManager)
 4. 위험 세션 중 은행 ARS 번호 발신
@@ -172,8 +174,8 @@ Tech: Min SDK 26, Target SDK 34, Kotlin 1.9.24, JVM 17, Compose + Material3, Nav
 6. 반복 호출 패턴 후 원격제어 또는 금융행동
 
 ### 팝업 동작 규칙
-- 주 액션: "지금 전화 끊기"
-- 위험 세션 중 금융 앱/텔레뱅킹 시도 시 60초 쿨다운 (행동 지연)
+- 주 액션: 통화 중 "전화 앱으로 이동"(전화 앱을 foreground로 올려 사용자가 직접 종료) / 비통화 "일단 닫기"(즉시 dismiss). 자동 통화 종료(TelecomManager.endCall) 없음. 보조 CTA: 통화 중 "통화 경고 닫기" / 비통화 "위험 경고 해제"
+- 위험 세션 중 금융 앱/텔레뱅킹 시도 시 레벨별 쿨다운 (CRITICAL 60초 / HIGH 30초 / 그 외 10초; 텔레뱅킹은 항상 CRITICAL이므로 60초) — 행동 지연
 - TYPE_APPLICATION_OVERLAY 사용 — 통화 중에도 표시하기 위해 의도적으로 시스템 오버레이 사용
 - 새 위협 발생 시 기존 팝업을 닫고 새 내용으로 갱신
 - 자동 외부 연락 없음 (제품 원칙 준수)
