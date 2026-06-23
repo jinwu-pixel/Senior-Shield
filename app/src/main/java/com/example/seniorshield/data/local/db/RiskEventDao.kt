@@ -20,10 +20,6 @@ interface RiskEventDao {
     @Query("SELECT * FROM risk_events ORDER BY occurredAtMillis DESC LIMIT 50")
     fun observeRecent(): Flow<List<RiskEventEntity>>
 
-    /** [sinceMillis] 이후 발생한 이벤트를 최신순으로 조회한다. */
-    @Query("SELECT * FROM risk_events WHERE occurredAtMillis >= :sinceMillis ORDER BY occurredAtMillis DESC")
-    suspend fun getEventsSince(sinceMillis: Long): List<RiskEventEntity>
-
     /** [sinceMillis] 이후 이벤트 수를 반환한다. */
     @Query("SELECT COUNT(*) FROM risk_events WHERE occurredAtMillis >= :sinceMillis")
     suspend fun countEventsSince(sinceMillis: Long): Int
