@@ -89,9 +89,6 @@ private fun PermissionsContent(
 
     val runtimePermissions = buildList {
         add(Manifest.permission.READ_PHONE_STATE)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            add(Manifest.permission.ANSWER_PHONE_CALLS)
-        }
         add(Manifest.permission.READ_CONTACTS)
         add(Manifest.permission.READ_CALL_LOG)
         @Suppress("DEPRECATION") // PROCESS_OUTGOING_CALLS — 텔레뱅킹 발신 번호 선캡처

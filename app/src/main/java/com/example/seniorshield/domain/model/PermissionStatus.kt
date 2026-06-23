@@ -5,7 +5,6 @@ enum class PermissionType {
     USAGE_ACCESS,
     NOTIFICATION,
     OVERLAY,
-    ANSWER_CALLS,
     READ_CONTACTS,
     READ_CALL_LOG,
     OUTGOING_CALLS,

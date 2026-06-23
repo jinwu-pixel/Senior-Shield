@@ -57,14 +57,6 @@ class PermissionsViewModel @Inject constructor(
             granted = Settings.canDrawOverlays(context),
         ),
         PermissionStatus(
-            type = PermissionType.ANSWER_CALLS,
-            name = "전화 상태 제어(예약)",
-            description = "향후 통화 직접 제어 기능을 위해 예약된 권한입니다. " +
-                    "현재 앱은 위험 통화 시 '전화 앱으로 이동' 경로로 동작하며, 이 권한 없이도 팝업은 정상 표시됩니다.",
-            granted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
-                isGranted(Manifest.permission.ANSWER_PHONE_CALLS) else true,
-        ),
-        PermissionStatus(
             type = PermissionType.READ_CONTACTS,
             name = "연락처 읽기",
             description = "저장된 번호에서 걸려온 전화는 위험 신호에서 제외하기 위해 필요합니다.",
