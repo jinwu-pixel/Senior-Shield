@@ -6,7 +6,7 @@ import androidx.room.RoomDatabase
 @Database(
     entities = [RiskEventEntity::class],
     version = 1,
-    exportSchema = false,
+    exportSchema = true,
 )
 abstract class SeniorShieldDatabase : RoomDatabase() {
     abstract fun riskEventDao(): RiskEventDao

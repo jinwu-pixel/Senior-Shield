@@ -50,6 +50,14 @@ android {
     }
 }
 
+kapt {
+    arguments {
+        // Room 스키마 JSON을 app/schemas/<DB FQCN>/<version>.json 으로 export.
+        // exportSchema=true 와 한 쌍 — 이 인자가 없으면 JSON이 생성되지 않는다(경고만).
+        arg("room.schemaLocation", "$projectDir/schemas")
+    }
+}
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
     implementation(composeBom)

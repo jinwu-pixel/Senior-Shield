@@ -22,7 +22,13 @@ object DatabaseModule {
             context,
             SeniorShieldDatabase::class.java,
             "senior_shield.db",
-        ).build()
+        )
+            // 미정의 마이그레이션 경로 최후 안전망. version bump 시 Migration 미제공이면
+            // open-time 크래시(IllegalStateException) 대신 테이블 재생성(데이터 폐기)한다.
+            // risk_events는 재생성 가능한 비핵심 로컬 캐시라 허용. 보존가치 데이터가 추가되면
+            // fallbackToDestructiveMigrationFrom으로 범위를 좁히고 명시 Migration을 등록할 것.
+            .fallbackToDestructiveMigration()
+            .build()
 
     @Provides
     @Singleton
