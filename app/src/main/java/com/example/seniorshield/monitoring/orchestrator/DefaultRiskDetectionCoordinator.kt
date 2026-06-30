@@ -1,6 +1,7 @@
 package com.example.seniorshield.monitoring.orchestrator
 
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import com.example.seniorshield.core.notification.RiskNotificationManager
 import com.example.seniorshield.core.overlay.BankingCooldownManager
 import com.example.seniorshield.core.overlay.RiskOverlayManager
@@ -35,8 +36,11 @@ import javax.inject.Singleton
 
 private const val TAG = "SeniorShield-Coordinator"
 
-/** snooze 자동 만료: 설정 후 15분 경과 시 해제. */
-private const val SNOOZE_TTL_MS = 15 * 60 * 1000L
+/**
+ * snooze 자동 만료: 설정 후 15분 경과 시 해제.
+ * `internal` — 동일 패키지 테스트가 미러 없이 직접 참조한다([S2_REC_REFIRE_TTL_MS]와 동일 패턴).
+ */
+internal const val SNOOZE_TTL_MS = 15 * 60 * 1000L
 
 /**
  * anchor-hot mirror 폴링 주기.
@@ -118,6 +122,10 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
     private val ioDispatcher: CoroutineDispatcher,
 ) : RiskDetectionCoordinator {
 
+    /** 테스트용 시계 주입점. 프로덕션은 System.currentTimeMillis(). */
+    @VisibleForTesting
+    internal var clock: () -> Long = System::currentTimeMillis
+
     private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
     private var job: Job? = null
     private var anchorMirrorJob: Job? = null
@@ -191,7 +199,7 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                     if (sessionTracker.isSnoozeActive()) {
                         val snoozedId = sessionTracker.snoozedCallIdOrNull()
                         val snoozedAt = sessionTracker.snoozedAtOrNull() ?: 0L
-                        val now = System.currentTimeMillis()
+                        val now = clock()
                         when {
                             liveCallId == null ->
                                 sessionTracker.clearSnooze("IDLE (wasCallId=$snoozedId)")
@@ -350,7 +358,7 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                         if (alertState.ordinal >= AlertState.INTERRUPT.ordinal &&
                             !cooldownManager.isShowing() && !cooldownFiredThisTick
                         ) {
-                            val nowMs = System.currentTimeMillis()
+                            val nowMs = clock()
                             if (shouldSuppressS2RecRefire(s2RecRefireState, rawTickSignals, nowMs)) {
                                 Log.d(TAG, "popup suppressed by S2 REC-REFIRE debounce (escalation path) — rawTick=$rawTickSignals, snapshot=${s2RecRefireState.snapshot}")
                             } else {
@@ -371,7 +379,7 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                     ) {
                         val newTriggers = activeTriggers - syncedSession.notifiedActiveThreats
                         if (newTriggers.isNotEmpty() && !cooldownManager.isShowing()) {
-                            val nowMs = System.currentTimeMillis()
+                            val nowMs = clock()
                             if (shouldSuppressS2RecRefire(s2RecRefireState, rawTickSignals, nowMs)) {
                                 Log.d(TAG, "popup suppressed by S2 REC-REFIRE debounce (new-trigger path) — new=$newTriggers, snapshot=${s2RecRefireState.snapshot}")
                             } else {
@@ -443,7 +451,7 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
 
         // fallback: queryEvents 실패 시 — dismissedAt + 쿨다운표시시간 이내 1회 무시
         val fallbackWindow = cooldownManager.lastCountdownSec * 1_000L
-        val now = System.currentTimeMillis()
+        val now = clock()
         val isFallbackGhost = now - dismissedAt < fallbackWindow
         Log.d(TAG, "ghost check fallback: now=$now, dismissedAt=$dismissedAt, window=${fallbackWindow}ms → ghost=$isFallbackGhost")
         return isFallbackGhost

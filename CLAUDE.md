@@ -52,22 +52,30 @@ data/
   di/           → DataModule, DatabaseModule (Hilt bindings)
 
 monitoring/
-  evaluator/    → RiskEvaluator (interface), RiskEvaluatorImpl
-  call/         → CallRiskMonitor (interface), RealCallRiskMonitor
+  call/         → CallRiskMonitor (interface), RealCallRiskMonitor, CallerContactChecker, CallSignalMapper, BankArsRegistry, OutgoingCallReceiver
   appusage/     → AppUsageRiskMonitor (interface), RealAppUsageRiskMonitor
+  appinstall/   → AppInstallRiskMonitor (interface), RealAppInstallRiskMonitor
+  deviceenv/    → DeviceEnvironmentRiskMonitor (interface), RealDeviceEnvironmentRiskMonitor
+  evaluator/    → RiskEvaluator (interface), RiskEvaluatorImpl
+  session/      → RiskSession, RiskSessionTracker
+  orchestrator/ → RiskDetectionCoordinator (interface), DefaultRiskDetectionCoordinator, AlertStateResolver, S2RecRefireDebounce
+  event/        → RiskEventFactory
+  registry/     → RemoteControlAppRegistry
+  model/        → CallContext, CallState, CallMonitorState
+  service/      → MonitoringForegroundService (승인된 예외: foreground service)
   di/           → MonitoringModule
-  ※ 위 트리는 Fake→Real 교체분만 반영. session/RiskSessionTracker, orchestrator/(AlertStateResolver, DefaultRiskDetectionCoordinator, S2RecRefireDebounce), appinstall, deviceenv, registry, event 등 실제 존재 패키지 전수 반영은 별도 문서 현행화에서 처리(좁은 정정 범위 밖).
 
 feature/
   home/         → HomeScreen, HomeViewModel, HomeUiState
   history/      → HistoryScreen, HistoryViewModel
   warning/      → WarningScreen, WarningViewModel
-  settings/     → SettingsScreen
-  guardian/     → GuardianScreen, GuardianViewModel, GuardianUiState
+  settings/     → SettingsScreen, DebugViewModel
+  guardian/     → GuardianScreen, GuardianViewModel, GuardianUiState, GuardianAddScreen, GuardianAddViewModel
   permissions/  → PermissionsScreen, PermissionsViewModel
   policy/       → PolicyScreen, PolicyViewModel
   onboarding/   → OnboardingScreen, OnboardingViewModel
   splash/       → SplashScreen, SplashViewModel, SplashUiState
+  simulation/   → SimulationScreen, SimulationViewModel, SimulationUiState, FraudScenario
 
 core/
   navigation/   → SeniorShieldDestination (enum), SeniorShieldNavGraph
@@ -76,7 +84,10 @@ core/
 di/             → AppModule
 ```
 
-Navigation: Splash → Onboarding → Home → {History, Warning, Permissions, Policy, Settings, Guardian}
+Navigation: Splash → Onboarding → Permissions(fromOnboarding) → Home
+  Home → {History, Warning, Permissions, Policy, Settings, Guardian, SimulationList}
+  하위 분기: Guardian → GuardianAdd · SimulationList → SimulationPlay(/scenarioId) · Warning → Guardian · Settings → {Policy, Guardian}
+  (destination enum 12: SPLASH·ONBOARDING·HOME·HISTORY·WARNING·PERMISSIONS·POLICY·SETTINGS·GUARDIAN·GUARDIAN_ADD·SIMULATION_LIST·SIMULATION_PLAY)
 
 Tech: Min SDK 26, Target SDK 34, Kotlin 1.9.24, JVM 17, Compose + Material3, Navigation Compose 2.7.7, DataStore 1.1.1, Coroutines + Flow
 

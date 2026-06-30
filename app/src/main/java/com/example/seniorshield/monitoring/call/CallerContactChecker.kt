@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.ContactsContract
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import androidx.core.content.ContextCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -43,6 +44,11 @@ enum class CallerCheckResult {
 class CallerContactChecker @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
+
+    /** 테스트용 시계 주입점. 프로덕션은 System.currentTimeMillis(). */
+    @VisibleForTesting
+    internal var clock: () -> Long = System::currentTimeMillis
+
     /**
      * 발신자 번호의 연락처 상태를 [CallerCheckResult]로 반환한다.
      * UNKNOWN_CALLER/UNVERIFIED_CALLER 신호를 분리 판정하기 위해 사용한다.
@@ -90,9 +96,9 @@ class CallerContactChecker @Inject constructor(
                     ContactsContract.Contacts.CONTACT_LAST_UPDATED_TIMESTAMP
                 )
                 val updatedAt = if (colIdx >= 0) cursor.getLong(colIdx) else 0L
-                val isNew = updatedAt > System.currentTimeMillis() - NEW_CONTACT_THRESHOLD_MS
+                val isNew = updatedAt > clock() - NEW_CONTACT_THRESHOLD_MS
                 if (isNew) {
-                    val daysAgo = (System.currentTimeMillis() - updatedAt) / DAY_MS
+                    val daysAgo = (clock() - updatedAt) / DAY_MS
                     Log.d(TAG, "신규 저장 연락처 (${daysAgo}일 전) — NEW_CONTACT")
                     CallerCheckResult.NEW_CONTACT
                 } else {

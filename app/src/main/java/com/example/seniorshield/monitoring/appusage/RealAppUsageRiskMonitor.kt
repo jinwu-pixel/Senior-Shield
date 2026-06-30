@@ -4,6 +4,7 @@ import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import com.example.seniorshield.domain.model.RiskSignal
 import com.example.seniorshield.monitoring.registry.RemoteControlAppRegistry
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -54,6 +55,10 @@ class RealAppUsageRiskMonitor @Inject constructor(
     private val remoteControlRegistry: RemoteControlAppRegistry,
 ) : AppUsageRiskMonitor {
 
+    /** 테스트용 시계 주입점. 프로덕션은 System.currentTimeMillis(). */
+    @VisibleForTesting
+    internal var clock: () -> Long = System::currentTimeMillis
+
     private val usageStatsManager: UsageStatsManager? by lazy {
         context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
     }
@@ -79,7 +84,7 @@ class RealAppUsageRiskMonitor @Inject constructor(
 
         while (true) {
             val recentPackages = getRecentlyUsedPackages(DETECTION_WINDOW_MS)
-            val now = System.currentTimeMillis()
+            val now = clock()
 
             // 원격제어 앱 감지 → 마지막 감지 시각 갱신
             val detectedRemoteApp = recentPackages.firstOrNull { isRemoteControlApp(it) }
@@ -137,7 +142,7 @@ class RealAppUsageRiskMonitor @Inject constructor(
      */
     private fun getRecentlyUsedPackages(windowMs: Long): Set<String> {
         val manager = usageStatsManager ?: return emptySet()
-        val endTime = System.currentTimeMillis()
+        val endTime = clock()
         val startTime = endTime - windowMs
 
         // 1순위: INTERVAL_BEST (수초 단위 고해상도)
@@ -212,7 +217,7 @@ class RealAppUsageRiskMonitor @Inject constructor(
 
     override fun latestBankingForegroundEventTimestamp(windowMs: Long): Long? {
         val manager = usageStatsManager ?: return null
-        val now = System.currentTimeMillis()
+        val now = clock()
         val startTime = now - windowMs
         return try {
             val events = manager.queryEvents(startTime, now)

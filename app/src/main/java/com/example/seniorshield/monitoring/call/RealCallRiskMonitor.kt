@@ -14,6 +14,7 @@ import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
 import android.util.Log
 import androidx.annotation.RequiresApi
+import androidx.annotation.VisibleForTesting
 import androidx.core.content.ContextCompat
 import com.example.seniorshield.domain.model.RiskSignal
 import com.example.seniorshield.domain.repository.SettingsRepository
@@ -85,6 +86,10 @@ class RealCallRiskMonitor @Inject constructor(
     private val sessionTracker: com.example.seniorshield.monitoring.session.RiskSessionTracker,
 ) : CallRiskMonitor {
 
+    /** 테스트용 시계 주입점. 프로덕션은 System.currentTimeMillis(). */
+    @VisibleForTesting
+    internal var clock: () -> Long = System::currentTimeMillis
+
     /**
      * distinctUntilChanged()가 OFFHOOK(LIVE)과 IDLE(FINAL)의 동일 신호 리스트를
      * 구분할 수 있도록 phase를 포함하는 내부 wrapper.
@@ -92,7 +97,7 @@ class RealCallRiskMonitor @Inject constructor(
     private enum class SignalPhase { LIVE, FINAL, RESET }
     private data class CallSignalEvent(val phase: SignalPhase, val signals: List<RiskSignal>)
 
-    @Volatile private var lastSuspiciousCallEndedAt: Long? = null
+    @Volatile @VisibleForTesting internal var lastSuspiciousCallEndedAt: Long? = null
 
     /**
      * 현재 활성 통화의 식별자. OFFHOOK 진입 시각(offhookAtMillis) 기준.
@@ -110,7 +115,7 @@ class RealCallRiskMonitor @Inject constructor(
     @Volatile private var safeConfirmedCallId: Long? = null
 
     /** 최근 30분 이내 미확인/미검증 수신 호출 타임스탬프 버퍼 */
-    private val recentUnknownCalls: MutableList<Long> = CopyOnWriteArrayList()
+    @VisibleForTesting internal val recentUnknownCalls: MutableList<Long> = CopyOnWriteArrayList()
 
     /** shareIn 용 프로세스 수준 스코프. Singleton이므로 앱 종료 시까지 유지. */
     private val sharingScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -567,7 +572,7 @@ class RealCallRiskMonitor @Inject constructor(
         )
 
         CallState.OFFHOOK -> {
-            val now = System.currentTimeMillis()
+            val now = clock()
             onOffhookUpdated(now)
             val outgoing = previous == CallState.IDLE
             onOutgoingUpdated(outgoing)
@@ -586,7 +591,7 @@ class RealCallRiskMonitor @Inject constructor(
         }
 
         CallState.IDLE -> {
-            val now = System.currentTimeMillis()
+            val now = clock()
             when (previous) {
                 CallState.OFFHOOK -> {
                     val durationMs = offhookAtMillis?.let { now - it } ?: 0L
@@ -642,20 +647,22 @@ class RealCallRiskMonitor @Inject constructor(
     }
 
     /** 30분 초과 항목을 정리하고 반복 호출 여부를 반환한다. */
-    private fun isRepeatedUnknownCaller(): Boolean {
-        val cutoff = System.currentTimeMillis() - REPEATED_CALL_WINDOW_MS
+    @VisibleForTesting
+    internal fun isRepeatedUnknownCaller(): Boolean {
+        val cutoff = clock() - REPEATED_CALL_WINDOW_MS
         recentUnknownCalls.removeAll { it < cutoff }
         return recentUnknownCalls.size >= 2
     }
 
     /** 미확인/미검증 수신 호출을 버퍼에 기록한다. */
-    private fun recordUnknownCall() {
+    @VisibleForTesting
+    internal fun recordUnknownCall() {
         // 세션이 없으면 이전 버퍼를 초기화 (안전 확인 후 클린 슬레이트)
         if (sessionTracker.sessionState.value == null) {
             recentUnknownCalls.clear()
             lastSuspiciousCallEndedAt = null
         }
-        val now = System.currentTimeMillis()
+        val now = clock()
         val cutoff = now - REPEATED_CALL_WINDOW_MS
         recentUnknownCalls.removeAll { it < cutoff }
         recentUnknownCalls.add(now)
@@ -663,9 +670,10 @@ class RealCallRiskMonitor @Inject constructor(
     }
 
     /** 텔레뱅킹 윈도우: 의심 통화 종료 후 5분 이내. anchor가 null이면 false. */
-    private fun isTelebankingWindow(): Boolean {
+    @VisibleForTesting
+    internal fun isTelebankingWindow(): Boolean {
         val lastSuspicious = lastSuspiciousCallEndedAt ?: return false
-        return System.currentTimeMillis() - lastSuspicious <= TELEBANKING_WINDOW_MS
+        return clock() - lastSuspicious <= TELEBANKING_WINDOW_MS
     }
 
     /**

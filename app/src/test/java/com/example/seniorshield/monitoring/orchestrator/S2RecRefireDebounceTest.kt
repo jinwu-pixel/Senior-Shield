@@ -214,4 +214,229 @@ class S2RecRefireDebounceTest {
             S2_UPGRADE_TRIGGERS.containsAll(S2_REC_REFIRE_SCOPE),
         )
     }
+
+    // ════════════════════════════════════════════════════════════════════
+    // C-extension (03_step2_design.md §7.4 시나리오 매트릭스 자동 봉인)
+    //   G1 시간경계: C-T1 | G2 escape 진리표: C-E1·E2·E4·E5·E6
+    //   G3 시퀀스: C-R1·R2 | G4 CTA 음성회귀: C-C1·C2·C3
+    // 일부는 기존 T1~T6과 동일 코드경로(중복)이나 §7.4 시나리오 이름표(traceability)로 보존하며,
+    // 그 경우 "= Tn" 교차참조를 명시한다.
+    // ════════════════════════════════════════════════════════════════════
+
+    // ── G1 시간경계 ──────────────────────────────────────────────────────
+
+    /** C-T1: 29,999ms 경과(TTL 미만)는 억제 유지 — T2(정확히 30,000)와 함께 경계 양끝 봉인. */
+    @Test
+    fun `C_T1_suppressesAt29999ms_belowTtl`() {
+        val firedAt = 1_000L
+        val state = S2RecRefireDebounceState(
+            lastFiredAt = firedAt,
+            snapshot = setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED),
+        )
+        val now = firedAt + 29_999L  // = 30_999L, (now - lastFiredAt)=29_999 ≤ 30_000 → 미만료
+        val thisTick = setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED)
+
+        assertTrue(
+            "29,999ms는 TTL 미만 → 억제 유지",
+            shouldSuppressS2RecRefire(state, thisTick, now),
+        )
+    }
+
+    // ── G2 escape 진리표 ─────────────────────────────────────────────────
+
+    /** C-E1: snapshot 외 scope-내 UPGRADE trigger 도래 → escape. (= T5, escape-table view) */
+    @Test
+    fun `C_E1_scopeInternalNewUpgradeTrigger_escapes`() {
+        val state = S2RecRefireDebounceState(
+            lastFiredAt = 1_000L,
+            snapshot = setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED),
+        )
+        val now = 5_000L
+        val thisTick = setOf(
+            RiskSignal.REMOTE_CONTROL_APP_OPENED,
+            RiskSignal.BANKING_APP_OPENED_AFTER_REMOTE_APP,  // snapshot 외 scope-내 UPGRADE
+        )
+
+        assertFalse(
+            "delta={BANKING_AFTER_REMOTE}가 UPGRADE_TRIGGERS에 속함 → escape",
+            shouldSuppressS2RecRefire(state, thisTick, now),
+        )
+    }
+
+    /**
+     * C-E2: scope 신호 존재(REC-REFIRE 상황 성립) + scope-외 UPGRADE(TELEBANKING)가 delta에 도래 → escape.
+     * snapshot에 REMOTE를 두어 scope-empty 단락을 통과시키고, 실제 upgrade-in-delta 경로를 행사한다.
+     */
+    @Test
+    fun `C_E2_scopeExternalUpgradeTriggerInDelta_escapes`() {
+        val state = S2RecRefireDebounceState(
+            lastFiredAt = 1_000L,
+            snapshot = setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED),
+        )
+        val now = 5_000L
+        val thisTick = setOf(
+            RiskSignal.REMOTE_CONTROL_APP_OPENED,
+            RiskSignal.TELEBANKING_AFTER_SUSPICIOUS,  // scope 외 UPGRADE — delta로 진입
+        )
+
+        assertFalse(
+            "scope 신호 존재 + scope-외 UPGRADE(TELEBANKING)가 delta에 도래 → escape",
+            shouldSuppressS2RecRefire(state, thisTick, now),
+        )
+    }
+
+    /** C-E4: delta의 PASSIVE 신호(UNKNOWN_CALLER)는 UPGRADE 아님 → 억제 유지. */
+    @Test
+    fun `C_E4_passiveSignalAddedToDelta_keepsSuppression`() {
+        val state = S2RecRefireDebounceState(
+            lastFiredAt = 1_000L,
+            snapshot = setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED),
+        )
+        val now = 5_000L
+        val thisTick = setOf(
+            RiskSignal.REMOTE_CONTROL_APP_OPENED,
+            RiskSignal.UNKNOWN_CALLER,  // PASSIVE — UPGRADE 아님
+        )
+
+        assertTrue(
+            "delta={UNKNOWN_CALLER}는 UPGRADE_TRIGGERS가 아님 → 억제 유지",
+            shouldSuppressS2RecRefire(state, thisTick, now),
+        )
+    }
+
+    /** C-E5: delta의 install one-shot(SUSPICIOUS_APP_INSTALLED)은 UPGRADE 아님 → 억제 유지. */
+    @Test
+    fun `C_E5_installOneShotAddedToDelta_keepsSuppression`() {
+        val state = S2RecRefireDebounceState(
+            lastFiredAt = 1_000L,
+            snapshot = setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED),
+        )
+        val now = 5_000L
+        val thisTick = setOf(
+            RiskSignal.REMOTE_CONTROL_APP_OPENED,
+            RiskSignal.SUSPICIOUS_APP_INSTALLED,  // install one-shot — UPGRADE 아님
+        )
+
+        assertTrue(
+            "delta={SUSPICIOUS_APP_INSTALLED}는 UPGRADE_TRIGGERS가 아님 → 억제 유지",
+            shouldSuppressS2RecRefire(state, thisTick, now),
+        )
+    }
+
+    /**
+     * C-E6: escape 후 즉시 재무장(`s2RecRefireStateAfterFiring`) → 다음 tick 동일 set이면 delta=∅ → 억제 복귀.
+     * 본 그룹에서 유일하게 재무장 함수를 직접 행사한다.
+     */
+    @Test
+    fun `C_E6_reArmAfterEscape_thenSameTick_suppresses`() {
+        val firedAt = 1_000L
+        val firedTick = setOf(
+            RiskSignal.REMOTE_CONTROL_APP_OPENED,
+            RiskSignal.BANKING_APP_OPENED_AFTER_REMOTE_APP,
+        )
+        val rearmed = s2RecRefireStateAfterFiring(firedTick, firedAt)
+
+        assertEquals(
+            "재무장 snapshot = 발화 tick ∩ SCOPE",
+            setOf(
+                RiskSignal.REMOTE_CONTROL_APP_OPENED,
+                RiskSignal.BANKING_APP_OPENED_AFTER_REMOTE_APP,
+            ),
+            rearmed.snapshot,
+        )
+
+        val now = firedAt + 5_000L
+        assertTrue(
+            "재무장된 snapshot과 동일 tick 재emit → delta 공집합 → 억제 복귀",
+            shouldSuppressS2RecRefire(rearmed, firedTick, now),
+        )
+    }
+
+    // ── G3 REC-REFIRE 시퀀스 ─────────────────────────────────────────────
+
+    /** C-R1: 발화 후 5·10·15·20·25s 동일 scope signal 연속 수입 — 전부 TTL 내 → 모두 억제. */
+    @Test
+    fun `C_R1_fiveSecondTicks_withinTtl_allSuppressed`() {
+        val firedAt = 0L
+        val state = S2RecRefireDebounceState(
+            lastFiredAt = firedAt,
+            snapshot = setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED),
+        )
+        val thisTick = setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED)
+
+        for (elapsedSec in 5..25 step 5) {
+            val now = firedAt + elapsedSec * 1_000L
+            assertTrue(
+                "T=${elapsedSec}s (TTL 내) 동일 scope signal → 억제",
+                shouldSuppressS2RecRefire(state, thisTick, now),
+            )
+        }
+    }
+
+    /** C-R2: 시퀀스가 30초 경계(30,001ms)를 넘으면 동일 signal도 재발동(억제 해제). (= T3, 시퀀스 경계 락) */
+    @Test
+    fun `C_R2_after30sBoundary_reFires`() {
+        val firedAt = 0L
+        val state = S2RecRefireDebounceState(
+            lastFiredAt = firedAt,
+            snapshot = setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED),
+        )
+        val thisTick = setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED)
+        val now = firedAt + 30_001L
+
+        assertFalse(
+            "30,001ms 경과 → TTL 만료 → 동일 signal도 재발동",
+            shouldSuppressS2RecRefire(state, thisTick, now),
+        )
+    }
+
+    // ── G4 CTA 음성회귀 (부수효과 후 monitor 신호 상태 주입; 격리 — CTA import 없음) ──
+
+    /** C-C1: CTA 부수효과 후에도 scope 변동 없음 → 억제 유지. (= T1, §7.4 CTA 음성회귀 락) */
+    @Test
+    fun `C_C1_afterCtaSideEffect_noScopeChange_keepsSuppression`() {
+        val state = S2RecRefireDebounceState(
+            lastFiredAt = 1_000L,
+            snapshot = setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED),
+        )
+        val now = 5_000L
+        val thisTick = setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED)
+
+        assertTrue(
+            "CTA 부수효과는 S2 gate 입력 surface 외 → 동일 입력 동일 출력, 억제 유지",
+            shouldSuppressS2RecRefire(state, thisTick, now),
+        )
+    }
+
+    /** C-C2: snooze로 CALL_DERIVED 신호 소멸 후 {REMOTE}만 남음 → delta=∅ → 억제 유지. (= T1, §7.4 snooze 락) */
+    @Test
+    fun `C_C2_afterSnoozeCallDerivedRemoved_keepsSuppression`() {
+        val state = S2RecRefireDebounceState(
+            lastFiredAt = 1_000L,
+            snapshot = setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED),
+        )
+        val now = 5_000L
+        val thisTick = setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED)  // CALL_DERIVED 소멸 후
+
+        assertTrue(
+            "snooze로 CALL_DERIVED 소멸 → scope 신호만 남음 → delta 공집합 → 억제 유지",
+            shouldSuppressS2RecRefire(state, thisTick, now),
+        )
+    }
+
+    /** C-C3: clearAnchor로 TELEBANKING 누락 후 {REMOTE}만 남음 → 억제 유지. (= T1, §7.4 clearAnchor 락) */
+    @Test
+    fun `C_C3_afterClearAnchorTelebankingAbsent_keepsSuppression`() {
+        val state = S2RecRefireDebounceState(
+            lastFiredAt = 1_000L,
+            snapshot = setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED),
+        )
+        val now = 5_000L
+        val thisTick = setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED)  // TELEBANKING 누락
+
+        assertTrue(
+            "clearAnchor로 TELEBANKING 누락 → scope 신호만 남음 → 억제 유지",
+            shouldSuppressS2RecRefire(state, thisTick, now),
+        )
+    }
 }

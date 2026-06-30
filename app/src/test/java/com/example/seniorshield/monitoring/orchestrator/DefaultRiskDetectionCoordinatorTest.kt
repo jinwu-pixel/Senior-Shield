@@ -17,6 +17,8 @@ import com.example.seniorshield.monitoring.evaluator.RiskEvaluatorImpl
 import com.example.seniorshield.monitoring.event.RiskEventFactory
 import com.example.seniorshield.monitoring.model.CallMonitorState
 import com.example.seniorshield.monitoring.session.RiskSessionTracker
+import com.example.seniorshield.testutil.FakeClock
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -46,9 +48,12 @@ import org.junit.Test
  *   `isEndCallSuppressed()`·`isShowing()`·timestamp가 모두 비활성 경로가 되며, 상호작용은 verify로 확인.
  *
  * ## 시간 처리
- * Coordinator는 `System.currentTimeMillis()`를 직접 쓴다(주입 불가). 본 테스트는 **TTL 만료**가
- * 아니라 **set 기반 경로**(upgrade 해제, S2 동일-scope 재발화, 세션당 1회, AlertState 분기)만 검증하므로
- * 실 clock으로 충분하다(틱 간 실제 경과는 ms 단위 → 모든 TTL 창보다 훨씬 짧다).
+ * Coordinator·RiskSessionTracker·RiskEventFactory는 `clock` seam(`@VisibleForTesting internal var
+ * clock: () -> Long`)을 노출한다. **set 기반 경로**(upgrade 해제, S2 동일-scope 재발화, 세션당 1회,
+ * AlertState 분기)는 실 clock으로 충분하지만(틱 간 실제 경과는 ms 단위 → 모든 TTL 창보다 훨씬 짧다),
+ * **TTL 만료 경로**(snooze 15분, S2 REC-REFIRE 30초 escape, ghost fallback 창)는 [FakeClock]을 세
+ * 협력자에 **공유 주입**해 결정론적으로 검증한다([startCoordinator]의 `fakeClock` 파라미터). 공유가
+ * 핵심 — 한 객체만 바꾸면 TTL 계산이 어긋난다.
  *
  * ## 코루틴 구동
  * `ioDispatcher = UnconfinedTestDispatcher(testScheduler)`로 Flow 전파를 eager하게 만든다.
@@ -74,7 +79,9 @@ class DefaultRiskDetectionCoordinatorTest {
     private val cooldownManager = mockk<BankingCooldownManager>(relaxed = true)
     private val notificationManager = mockk<RiskNotificationManager>(relaxed = true)
 
-    private fun TestScope.startCoordinator(): DefaultRiskDetectionCoordinator {
+    private fun TestScope.startCoordinator(
+        fakeClock: FakeClock? = null,
+    ): DefaultRiskDetectionCoordinator {
         val coordinator = DefaultRiskDetectionCoordinator(
             callMonitor = callMonitor,
             appUsageMonitor = appUsageMonitor,
@@ -91,6 +98,13 @@ class DefaultRiskDetectionCoordinatorTest {
             guardianRepository = guardianRepository,
             ioDispatcher = UnconfinedTestDispatcher(testScheduler),
         )
+        // TTL 만료 테스트: 시간축을 동기화하기 위해 세 실물 협력자에 동일 provider를 공유 주입.
+        // (coordinator.clock만 바꾸면 sessionTracker·eventFactory는 실 clock으로 남아 TTL이 어긋난다.)
+        if (fakeClock != null) {
+            sessionTracker.clock = fakeClock.provider
+            eventFactory.clock = fakeClock.provider
+            coordinator.clock = fakeClock.provider
+        }
         coordinator.start()
         runCurrent()
         return coordinator
@@ -182,6 +196,105 @@ class DefaultRiskDetectionCoordinatorTest {
         verify(exactly = 0) { overlayManager.show(any(), any()) }
         verify(exactly = 0) { cooldownManager.triggerIfNotActive(any(), any(), any()) }
         verify(atLeast = 1) { notificationManager.notify(any()) }
+
+        coordinator.stop()
+        runCurrent()
+    }
+
+    /** #5 snooze 15분 TTL 경과 시 자동 해제 — TTL 미만은 유지하는 sibling과 대비(공유 clock 주입). */
+    @Test
+    fun `snooze 15분 TTL 경과 시 자동 해제, TTL 미만은 유지`() = runTest {
+        val fakeClock = FakeClock(now = 1_000_000L)
+        val coordinator = startCoordinator(fakeClock)
+
+        // 통화 세션(UNKNOWN_CALLER) → GUARDED
+        callMonitor.callId = 123L
+        callMonitor.callSignals.value = listOf(RiskSignal.UNKNOWN_CALLER)
+        runCurrent()
+
+        // "통화 경고 닫기" 효과 모사: 같은 callId로 snooze arm (snoozedAt = fakeClock.now = 1_000_000)
+        sessionTracker.snoozeForCall(123L)
+        assertTrue("snooze armed", sessionTracker.isSnoozeActive())
+
+        // sibling: TTL 미만(−1ms) 경과 + flow nudge(deviceEnv) → 같은 통화·upgrade 없음 → 유지
+        fakeClock.advanceMs(SNOOZE_TTL_MS - 1)
+        deviceEnvMonitor.deviceEnvSignals.value = listOf(RiskSignal.HIGH_RISK_DEVICE_ENVIRONMENT)
+        runCurrent()
+        assertTrue("TTL 미만이면 snooze 유지", sessionTracker.isSnoozeActive())
+
+        // TTL 초과(+2ms 추가 → 누적 +1ms) + flow nudge → TTL 분기로 snooze 해제
+        fakeClock.advanceMs(2)
+        deviceEnvMonitor.deviceEnvSignals.value = emptyList()
+        runCurrent()
+        assertFalse("TTL 경과 시 snooze 해제", sessionTracker.isSnoozeActive())
+
+        coordinator.stop()
+        runCurrent()
+    }
+
+    /**
+     * #6 S2 REC-REFIRE 30초 경과 후 동일 원격제어 재출현은 팝업이 재발화한다.
+     * #2(window 내 억제)의 결정론적 complement — `advanceMs(S2_REC_REFIRE_TTL_MS + 1)`로 escape.
+     */
+    @Test
+    fun `S2 REC-REFIRE 30초 경과 후 동일 원격제어 재출현은 팝업 재발화`() = runTest {
+        val fakeClock = FakeClock(now = 1_000_000L)
+        val coordinator = startCoordinator(fakeClock)
+
+        // tick1: 원격제어 등장 → INTERRUPT → 팝업1 + S2 arm(lastFiredAt=1_000_000)
+        appUsageMonitor.appSignals.value = listOf(RiskSignal.REMOTE_CONTROL_APP_OPENED)
+        runCurrent()
+        // tick2: 원격제어 사라짐 → notifiedActiveThreats에서 제거
+        appUsageMonitor.appSignals.value = emptyList()
+        runCurrent()
+        // 30초 + 1ms 경과 → S2 TTL escape
+        fakeClock.advanceMs(S2_REC_REFIRE_TTL_MS + 1)
+        // tick3: 동일 원격제어 재출현 → TTL 경과로 억제 해제 → 팝업2
+        appUsageMonitor.appSignals.value = listOf(RiskSignal.REMOTE_CONTROL_APP_OPENED)
+        runCurrent()
+
+        verify(exactly = 2) { overlayManager.show(any(), any()) }
+
+        coordinator.stop()
+        runCurrent()
+    }
+
+    /**
+     * #7 ghost fallback 경계 — `latestBankingForegroundEventTimestamp()=null`로 fallback 강제.
+     * `now - dismissedAt < lastCountdownSec*1000` 이면 거짓 전이(쿨다운 생략),
+     * 창 경과 후 전이는 진짜 재진입(쿨다운 발동). 경계 양쪽을 coordinator.clock으로 검증.
+     */
+    @Test
+    fun `ghost fallback - 쿨다운창 이내 전이는 생략, 창 경과 후 전이는 발동`() = runTest {
+        val fakeClock = FakeClock(now = 1_000_000L)
+        val coordinator = startCoordinator(fakeClock)
+
+        // fallback 경로 강제: eventTs=null + 쿨다운 활성 구간 [showedAt, dismissedAt] stub
+        every { cooldownManager.showedAtMillis } returns 1_000_000L
+        every { cooldownManager.dismissedAtMillis } returns 1_010_000L
+        every { cooldownManager.lastCountdownSec } returns 60   // fallbackWindow = 60_000ms
+        appUsageMonitor.latestBankingTs = null
+
+        // call-based GUARDED 세션
+        callMonitor.callId = 777L
+        callMonitor.callSignals.value = listOf(RiskSignal.UNKNOWN_CALLER)
+        runCurrent()
+
+        // 경계 A: now(1_040_000) - dismissedAt(1_010_000) = 30_000 < 60_000 → ghost → 쿨다운 생략
+        fakeClock.advanceMs(40_000)
+        appUsageMonitor.bankingForeground.value = true
+        runCurrent()
+        verify(exactly = 0) { cooldownManager.triggerIfNotActive(any(), any(), any()) }
+
+        // 다음 false→true 전이를 만들기 위해 banking foreground를 내린다
+        appUsageMonitor.bankingForeground.value = false
+        runCurrent()
+
+        // 경계 B: now(1_070_001) - dismissedAt(1_010_000) = 60_001 ≥ 60_000 → 진짜 재진입 → 쿨다운 발동
+        fakeClock.advanceMs(30_001)
+        appUsageMonitor.bankingForeground.value = true
+        runCurrent()
+        verify(exactly = 1) { cooldownManager.triggerIfNotActive(any(), any(), any()) }
 
         coordinator.stop()
         runCurrent()

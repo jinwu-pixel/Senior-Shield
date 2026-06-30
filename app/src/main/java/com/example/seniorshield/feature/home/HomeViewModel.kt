@@ -3,6 +3,7 @@ package com.example.seniorshield.feature.home
 import android.content.Context
 import android.content.pm.PackageManager
 import android.provider.Settings
+import androidx.annotation.VisibleForTesting
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -136,10 +137,14 @@ class HomeViewModel @Inject constructor(
     private val _navigateToWarning = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val navigateToWarning = _navigateToWarning.asSharedFlow()
 
+    /** 테스트용 시계 주입점. 프로덕션은 System.currentTimeMillis(). */
+    @VisibleForTesting
+    internal var clock: () -> Long = System::currentTimeMillis
+
     // ViewModel 생성 시각. MainActivity가 재생성되면(뱅킹 쿨다운 OPAQUE 오버레이로 인한 window 재부착 등)
     // HomeViewModel도 새로 만들어지고 StateFlow의 기존 currentRiskEvent가 replay된다.
     // 이 replay 값으로 Warning 자동 네비가 재발화되는 것을 막기 위해 VM 생성 이전에 발생한 이벤트는 무시한다.
-    private val viewModelStartedAt = System.currentTimeMillis()
+    private val viewModelStartedAt = clock()
 
     init {
         viewModelScope.launch { loadWeeklySnapshot() }

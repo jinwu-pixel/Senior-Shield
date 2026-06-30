@@ -1,5 +1,6 @@
 package com.example.seniorshield.monitoring.event
 
+import androidx.annotation.VisibleForTesting
 import com.example.seniorshield.domain.model.RiskEvent
 import com.example.seniorshield.domain.model.RiskScore
 import com.example.seniorshield.domain.model.RiskSignal
@@ -9,6 +10,10 @@ import javax.inject.Singleton
 
 @Singleton
 class RiskEventFactory @Inject constructor() {
+
+    /** 테스트용 시계 주입점. 프로덕션은 System.currentTimeMillis(). */
+    @VisibleForTesting
+    internal var clock: () -> Long = System::currentTimeMillis
 
     fun create(score: RiskScore, triggerSignals: Set<RiskSignal>? = null): RiskEvent {
         val messageSignals = if (triggerSignals != null) {
@@ -21,7 +26,7 @@ class RiskEventFactory @Inject constructor() {
             id = UUID.randomUUID().toString(),
             title = title,
             description = description,
-            occurredAtMillis = System.currentTimeMillis(),
+            occurredAtMillis = clock(),
             level = score.level,
             signals = score.signals,
         )

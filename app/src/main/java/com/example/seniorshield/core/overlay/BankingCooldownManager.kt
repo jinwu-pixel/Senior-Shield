@@ -17,6 +17,7 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.annotation.VisibleForTesting
 import com.example.seniorshield.core.util.CallEndHelper
 import com.example.seniorshield.domain.model.RiskLevel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -49,6 +50,11 @@ class BankingCooldownManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val callEndHelper: CallEndHelper,
 ) {
+
+    /** 테스트용 시계 주입점. 프로덕션은 System.currentTimeMillis(). */
+    @VisibleForTesting
+    internal var clock: () -> Long = System::currentTimeMillis
+
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val mainHandler = Handler(Looper.getMainLooper())
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -127,7 +133,7 @@ class BankingCooldownManager @Inject constructor(
         try {
             windowManager.addView(root, params)
             overlayView = root
-            showedAtMillis = System.currentTimeMillis()
+            showedAtMillis = clock()
             lastCountdownSec = countdownSec
             endCallButton.requestFocus()
             Log.d(TAG, "쿨다운 시작: ${countdownSec}초, showedAt=$showedAtMillis")
@@ -159,7 +165,7 @@ class BankingCooldownManager @Inject constructor(
             Log.e(TAG, "쿨다운 removeView 실패: ${e.message}")
         } finally {
             overlayView = null
-            dismissedAtMillis = System.currentTimeMillis()
+            dismissedAtMillis = clock()
             Log.d(TAG, "dismissedAt=$dismissedAtMillis")
         }
     }

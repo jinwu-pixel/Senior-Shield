@@ -42,4 +42,5 @@
 - 실기 시나리오 F-1~F-4(REC-REFIRE 재진입/경과/UPGRADE escape) 검증 인프라 미구축.
 - A′-R0 post-merge 런타임 게이트 문서(`investigations/2026-04-24-cta-semantics/05_...md`) draft/untracked.
 - CLAUDE.md 아키텍처 트리 전수 현행화(session/orchestrator/appinstall/deviceenv/registry/event 추가) + Navigation 라인(Simulation/GuardianAdd/온보딩→권한 경로 누락) — 이번 좁은 정정 범위 밖.
-- `RiskEventDao.getEventsSince()` dead query, Room 마이그레이션 부재(v1 단일) — 릴리스 관점 점검 대상.
+- ~~`RiskEventDao.getEventsSince()` dead query~~ → **2026-06-23 제거 완료(1624308)**. 현 DAO엔 live `countEventsSince()`(HomeViewModel 주간 이벤트 집계, HomeViewModel:208 경유)만 존재 — stale 검증 완료(dead query 없음 확인).
+- Room: destructive-fallback + 스키마 export baseline(`app/schemas/.../1.json`)은 1dba378로 추가됨, 단 보존 Migration 클래스는 미작성(v1 단일) — 릴리스 관점 점검 대상.
