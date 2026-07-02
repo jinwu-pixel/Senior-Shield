@@ -3,6 +3,7 @@ package com.example.seniorshield.feature.simulation
 import androidx.lifecycle.SavedStateHandle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -76,5 +77,32 @@ class SimulationViewModelTest {
         val finalState = vm.uiState.value
         assertTrue("마지막 단계 nextStep → isCompleted", finalState.isCompleted)
         assertEquals("3단계 전부 정답 → correctCount=3", 3, finalState.correctCount)
+    }
+
+    /** T-SIM-4: 시나리오 데이터 무결성 — 신규 4종 존재·정확히 3스텝, 전 시나리오 정답 보장, id 중복 없음. */
+    @Test
+    fun `T_SIM_4 시나리오 데이터 무결성 - 신규 4종 및 전체 규약`() {
+        // 신규 4종 id 존재 + 정확히 3스텝
+        val newIds = listOf("ai_voice_clone", "cash_pickup", "remote_otp_combo", "romance_investment")
+        newIds.forEach { id ->
+            val scenario = FRAUD_SCENARIOS.find { it.id == id }
+            assertNotNull("신규 시나리오 존재: $id", scenario)
+            assertEquals("신규 시나리오는 정확히 3스텝: $id", 3, scenario!!.steps.size)
+        }
+
+        // 전체: 모든 step은 choices 비어있지 않음 + 정답(isCorrect=true) 최소 1개
+        FRAUD_SCENARIOS.forEach { scenario ->
+            scenario.steps.forEachIndexed { i, step ->
+                assertTrue("choices 비어있지 않음: ${scenario.id}[$i]", step.choices.isNotEmpty())
+                assertTrue("정답 최소 1개: ${scenario.id}[$i]", step.choices.any { it.isCorrect })
+            }
+        }
+
+        // 전체 FRAUD_SCENARIOS id 중복 없음
+        assertEquals(
+            "FRAUD_SCENARIOS id 중복 없음",
+            FRAUD_SCENARIOS.size,
+            FRAUD_SCENARIOS.map { it.id }.toSet().size,
+        )
     }
 }

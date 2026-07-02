@@ -169,4 +169,116 @@ val FRAUD_SCENARIOS = listOf(
             ),
         ),
     ),
+    FraudScenario(
+        id = "ai_voice_clone",
+        title = "AI 목소리 사칭 사기",
+        description = "AI로 합성한 자녀 목소리로 사고를 빙자해 돈을 요구하는 시나리오",
+        steps = listOf(
+            ScenarioStep(
+                fraudsterMessage = "[전화] (흐느끼며) 엄마… 나야… 큰일 났어. 사고가 나서 지금 급하게 돈이 필요해…",
+                choices = listOf(
+                    ScenarioChoice("목소리가 우리 애가 맞네. 무슨 일이니? 얼마가 필요해?", false, "요즘은 AI로 목소리를 똑같이 흉내 낼 수 있습니다. 목소리가 같다고 자녀라고 믿으면 안 됩니다."),
+                    ScenarioChoice("일단 끊고, 원래 알고 있는 번호로 직접 전화해서 확인할게.", true, "정확합니다! 목소리가 아무리 똑같아도, 반드시 기존에 알고 있는 번호로 직접 전화해서 확인하세요."),
+                ),
+            ),
+            ScenarioStep(
+                fraudsterMessage = "합의금이 급해서 그래… 아빠한테는 말하지 마, 창피해. 이 계좌로 300만 원만 보내줘.",
+                choices = listOf(
+                    ScenarioChoice("알겠다, 아무한테도 말 안 하고 바로 보낼게.", false, "가족에게 비밀로 하라는 요구는 확인을 막으려는 전형적인 사기 수법입니다."),
+                    ScenarioChoice("가족과 상의하고 네 원래 번호로 확인하기 전에는 못 보낸다.", true, "훌륭합니다! 비밀 요구와 급한 송금 요구가 함께 오면 사기를 의심해야 합니다."),
+                ),
+            ),
+            ScenarioStep(
+                fraudsterMessage = "지금 바로 안 보내면 정말 큰일 나. 시간이 없어. 빨리!",
+                choices = listOf(
+                    ScenarioChoice("그래, 시간 없다니 서둘러 보낼게.", false, "서두르라는 압박은 침착한 판단을 막으려는 사기 수법입니다. 급할수록 멈추고 확인해야 합니다."),
+                    ScenarioChoice("직접 통화하거나 만나서 확인하기 전까지는 절대 보내지 않겠다.", true, "완벽합니다! 가족끼리 미리 확인 질문을 정해 두면 이런 사기를 쉽게 가려낼 수 있습니다."),
+                ),
+            ),
+        ),
+    ),
+    FraudScenario(
+        id = "cash_pickup",
+        title = "현금 수거 대면 사기",
+        description = "기관을 사칭해 현금을 찾게 한 뒤 직원을 보내 직접 가져가는 시나리오",
+        steps = listOf(
+            ScenarioStep(
+                fraudsterMessage = "금융감독원입니다. 고객님 계좌가 범죄 자금에 연루되어 계좌에 있는 돈이 더 이상 안전하지 않습니다. 긴급 보호 조치가 필요합니다.",
+                choices = listOf(
+                    ScenarioChoice("네? 어떡하죠. 시키는 대로 하겠습니다.", false, "금융감독원은 전화로 계좌 위험을 통보하지 않습니다. 불안하게 만들어 지시에 따르게 하는 수법입니다."),
+                    ScenarioChoice("금융감독원은 이렇게 전화하지 않습니다. 끊고 1332로 직접 확인하겠습니다.", true, "정확합니다! 의심되면 전화를 끊고 금융감독원 1332로 직접 전화해 확인하세요."),
+                ),
+            ),
+            ScenarioStep(
+                fraudsterMessage = "수사 기밀이니 가족에게도 알리지 마시고, 은행에 가서 계좌의 돈을 전부 현금으로 찾으세요. 저희가 안전하게 보관했다가 돌려드립니다.",
+                choices = listOf(
+                    ScenarioChoice("알겠습니다. 지금 은행에 가서 현금으로 찾을게요.", false, "국가기관이 돈을 대신 보관해 주는 제도는 없습니다. 현금을 찾게 하는 것은 대면 편취 사기의 시작입니다."),
+                    ScenarioChoice("국가기관은 현금을 보관해 주지 않습니다. 은행 직원에게 이 전화 내용을 그대로 말하겠습니다.", true, "맞습니다! 은행 창구 직원에게 사실대로 말하면 인출을 막고 신고를 도와줍니다."),
+                ),
+            ),
+            ScenarioStep(
+                fraudsterMessage = "잠시 후 저희 직원이 댁 근처로 갈 겁니다. 찾은 현금을 봉투에 담아 직원에게 전달해 주세요.",
+                choices = listOf(
+                    ScenarioChoice("네, 준비하고 기다리겠습니다.", false, "어떤 국가기관도 직원을 보내 현금을 받아 가지 않습니다. 100% 사기입니다."),
+                    ScenarioChoice("돈을 받으러 온다는 것 자체가 사기입니다. 즉시 112에 신고하겠습니다.", true, "완벽합니다! '직원이 현금을 받으러 간다'는 말이 나오면 그 순간 바로 112에 신고하세요."),
+                ),
+            ),
+        ),
+    ),
+    FraudScenario(
+        id = "remote_otp_combo",
+        title = "원격지원·인증번호 복합 사기",
+        description = "카드사를 사칭해 원격지원 앱을 설치시키고 인증번호까지 요구하는 시나리오",
+        steps = listOf(
+            ScenarioStep(
+                fraudsterMessage = "○○카드사입니다. 고객님 명의로 해외에서 카드 발급이 신청되었습니다. 명의도용인지 지금 확인해 드리겠습니다.",
+                choices = listOf(
+                    ScenarioChoice("제가 신청한 적 없어요. 어떻게 하면 되나요?", false, "상대가 안내하는 절차를 따라가면 안 됩니다. 카드 뒷면의 대표번호로 직접 전화해 확인하세요."),
+                    ScenarioChoice("카드 뒷면 대표번호로 제가 직접 전화해서 확인하겠습니다.", true, "정확합니다! 확인이 필요하면 반드시 카드 뒷면이나 공식 홈페이지의 대표번호로 직접 전화하세요."),
+                ),
+            ),
+            ScenarioStep(
+                fraudsterMessage = "명의도용 확인을 위해 원격 점검이 필요합니다. 문자로 보내드린 링크에서 원격지원 앱을 설치하고 화면 공유를 시작해 주세요.",
+                choices = listOf(
+                    ScenarioChoice("네, 설치하고 화면 공유를 시작할게요.", false, "원격지원 앱을 설치하면 사기꾼이 내 폰 화면을 보고 조작할 수 있습니다. 설치 요구는 100% 사기입니다."),
+                    ScenarioChoice("원격 앱은 설치하지 않겠습니다. 전화를 끊고 신고하겠습니다.", true, "훌륭합니다! 어떤 기관도 전화로 원격지원 앱 설치나 화면 공유를 요구하지 않습니다."),
+                ),
+            ),
+            ScenarioStep(
+                fraudsterMessage = "본인 확인 마지막 단계입니다. 방금 문자로 도착한 인증번호 6자리를 불러 주세요.",
+                choices = listOf(
+                    ScenarioChoice("인증번호는 592817입니다.", false, "인증번호를 불러주면 그 순간 돈이 빠져나갑니다. 은행·카드사 직원에게도 절대 알려주면 안 됩니다."),
+                    ScenarioChoice("인증번호는 누구에게도 알려줄 수 없습니다. 앱을 삭제하고 카드사에 직접 확인하겠습니다.", true, "완벽합니다! 인증번호는 본인만 사용해야 합니다. 이미 앱을 설치했다면 즉시 삭제하고 비밀번호를 바꾸세요."),
+                ),
+            ),
+        ),
+    ),
+    FraudScenario(
+        id = "romance_investment",
+        title = "친분·투자 권유 사기",
+        description = "온라인에서 친분을 쌓은 뒤 투자를 권유해 목돈을 가로채는 시나리오",
+        steps = listOf(
+            ScenarioStep(
+                fraudsterMessage = "[메시지] 요즘 대화가 즐거워요. 제가 하는 투자로 매달 수익을 내고 있는데, 소액으로 한번 체험해 보실래요?",
+                choices = listOf(
+                    ScenarioChoice("좋아요, 소액이니 한번 해볼게요.", false, "만난 적 없는 사람의 투자 권유는 사기입니다. 소액 수익 체험은 신뢰를 쌓기 위한 미끼입니다."),
+                    ScenarioChoice("직접 만난 적 없는 분의 투자 권유는 받지 않겠습니다.", true, "정확합니다! 온라인에서만 알게 된 사람의 투자 권유는 아무리 친절해도 거절하세요."),
+                ),
+            ),
+            ScenarioStep(
+                fraudsterMessage = "[메시지] 보세요, 벌써 20만 원 수익이 났어요! 이번에 1,000만 원을 넣으면 훨씬 크게 벌 수 있어요.",
+                choices = listOf(
+                    ScenarioChoice("정말 벌었네요! 이번에는 크게 넣어볼게요.", false, "수익 화면은 얼마든지 조작할 수 있습니다. 소액 수익을 보여준 뒤 목돈을 요구하는 것이 전형적인 수법입니다."),
+                    ScenarioChoice("수익 화면만으로는 믿을 수 없습니다. 더 이상 투자하지 않겠습니다.", true, "훌륭합니다! 사기범이 보여주는 수익 인증은 조작된 화면입니다."),
+                ),
+            ),
+            ScenarioStep(
+                fraudsterMessage = "[메시지] 출금 신청이 접수됐어요. 그런데 출금하려면 먼저 수수료 5%를 입금하셔야 처리가 됩니다.",
+                choices = listOf(
+                    ScenarioChoice("알겠어요, 수수료를 먼저 보낼게요.", false, "출금하는 데 돈을 먼저 내라는 요구는 100% 사기입니다. 보낼수록 더 큰 돈을 요구합니다."),
+                    ScenarioChoice("출금에 선입금을 요구하는 것은 사기입니다. 더 응하지 않고 경찰에 신고하겠습니다.", true, "완벽합니다! '출금 수수료 선입금'은 투자 사기의 결정적 신호입니다. 112 또는 1332에 신고하세요."),
+                ),
+            ),
+        ),
+    ),
 )
