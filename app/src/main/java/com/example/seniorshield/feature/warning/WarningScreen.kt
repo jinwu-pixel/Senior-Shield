@@ -23,12 +23,14 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -47,6 +49,7 @@ import com.example.seniorshield.core.designsystem.theme.StatusRed
 import com.example.seniorshield.core.navigation.SeniorShieldDestination
 import com.example.seniorshield.core.util.ContactIntentHelper
 import com.example.seniorshield.domain.model.Guardian
+import com.example.seniorshield.domain.model.RiskLevel
 
 private data class InstitutionInfo(
     val name: String,
@@ -59,6 +62,18 @@ private val institutions = listOf(
     InstitutionInfo("금융감독원", "1332", "금융사기 피해 상담 및 신고"),
     InstitutionInfo("한국인터넷진흥원", "118", "개인정보 침해, 보이스피싱 신고"),
     InstitutionInfo("금융결제원", "1577-5500", "계좌 지급정지 요청"),
+)
+
+/**
+ * Behavior Check(자가확인) 문항 — 앱이 관측할 수 없는 피해 경로(현금 대면 전달·인증번호
+ * 구두 유출·상품권 등)를 사용자 스스로 점검하게 한다. 응답은 화면 문구 강화에만 쓰인다.
+ */
+private val behaviorCheckQuestions = listOf(
+    "지금 돈을 보내라고 했나요?",
+    "인증번호를 알려달라고 했나요?",
+    "앱 설치나 화면 공유를 요구했나요?",
+    "은행·검찰·금감원·자녀라며 급하다고 했나요?",
+    "현금을 찾아서 누군가에게 전달하라고 했나요?",
 )
 
 fun NavGraphBuilder.warningScreen(
@@ -122,6 +137,7 @@ fun NavGraphBuilder.warningScreen(
                     Toast.makeText(context, "문자 앱을 찾을 수 없습니다", Toast.LENGTH_SHORT).show()
                 }
             },
+            onBehaviorAnswer = viewModel::answerBehaviorCheck,
         )
     }
 }
@@ -138,6 +154,7 @@ private fun WarningContent(
     onSmsClick: () -> Unit,
     onDismissSmsPicker: () -> Unit,
     onSmsGuardianSelected: (Guardian) -> Unit,
+    onBehaviorAnswer: (Int, Boolean) -> Unit,
 ) {
     SeniorShieldScaffold(title = "위험 경고", onBackClick = onBack) { padding ->
         Column(
@@ -151,6 +168,13 @@ private fun WarningContent(
             WarningCard(
                 eventTitle = uiState.detectedEventTitle,
                 eventDescription = uiState.detectedEventDescription,
+                hasActiveEvent = uiState.detectedEventLevel != null,
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            BehaviorCheckSection(
+                answers = uiState.behaviorCheckAnswers,
+                anyYes = uiState.behaviorCheckAnyYes,
+                onAnswer = onBehaviorAnswer,
             )
             Spacer(modifier = Modifier.height(32.dp))
             Checklist()
@@ -200,10 +224,14 @@ private fun WarningContent(
 private fun WarningCard(
     eventTitle: String?,
     eventDescription: String?,
+    hasActiveEvent: Boolean,
 ) {
+    // 활성 위험 이벤트 없이 진입한 경우(홈 GUARDED 카드 탭 등)에는
+    // 붉은 "감지" 문구 대신 중립 자가확인 안내로 분기한다.
+    val accent = if (hasActiveEvent) StatusRed else MaterialTheme.colorScheme.primary
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = StatusRed.copy(alpha = 0.05f)),
+        colors = CardDefaults.cardColors(containerColor = accent.copy(alpha = 0.05f)),
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
@@ -212,22 +240,114 @@ private fun WarningCard(
             Icon(
                 imageVector = Icons.Rounded.Error,
                 contentDescription = "경고",
-                tint = StatusRed,
+                tint = accent,
                 modifier = Modifier.size(48.dp),
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = eventTitle ?: "금융사기 위험이 감지되었습니다",
+                text = eventTitle
+                    ?: if (hasActiveEvent) "금융사기 위험이 감지되었습니다"
+                    else "지금 통화·요구 사항을 스스로 확인해 보세요",
                 style = MaterialTheme.typography.headlineMedium,
-                color = StatusRed,
+                color = accent,
                 fontWeight = FontWeight.Bold,
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = eventDescription
-                    ?: "상대방의 지시에 따라 앱을 설치하거나 돈을 보내지 마세요. 즉시 중단해야 합니다.",
+                    ?: if (hasActiveEvent) "상대방의 지시에 따라 앱을 설치하거나 돈을 보내지 마세요. 즉시 중단해야 합니다."
+                    else "의심스러운 전화나 요구가 있었다면 아래 질문에 답해 보세요.",
                 style = MaterialTheme.typography.bodyLarge,
             )
+        }
+    }
+}
+
+@Composable
+private fun BehaviorCheckSection(
+    answers: Map<Int, Boolean>,
+    anyYes: Boolean,
+    onAnswer: (Int, Boolean) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(text = "지금 상황을 확인해 보세요", style = MaterialTheme.typography.titleLarge)
+        behaviorCheckQuestions.forEachIndexed { index, question ->
+            BehaviorCheckItem(
+                question = question,
+                answer = answers[index],
+                onAnswer = { yes -> onAnswer(index, yes) },
+            )
+        }
+        if (anyYes) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = StatusRed.copy(alpha = 0.08f)),
+            ) {
+                Text(
+                    text = "하나라도 \"예\"라면 사기일 가능성이 매우 높습니다.\n" +
+                        "지금 하던 일을 멈추고, 아래 \"보호자에게 전화하기\"나 112·1332로 바로 확인하세요.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = StatusRed,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(16.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BehaviorCheckItem(
+    question: String,
+    answer: Boolean?,
+    onAnswer: (Boolean) -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(text = question, style = MaterialTheme.typography.bodyLarge)
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                BehaviorAnswerButton(
+                    text = "예",
+                    selected = answer == true,
+                    selectedColor = StatusRed,
+                    onClick = { onAnswer(true) },
+                    modifier = Modifier.weight(1f),
+                )
+                BehaviorAnswerButton(
+                    text = "아니요",
+                    selected = answer == false,
+                    selectedColor = StatusGreen,
+                    onClick = { onAnswer(false) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BehaviorAnswerButton(
+    text: String,
+    selected: Boolean,
+    selectedColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (selected) {
+        Button(
+            onClick = onClick,
+            modifier = modifier,
+            colors = ButtonDefaults.buttonColors(containerColor = selectedColor),
+        ) {
+            Text(text = text, style = MaterialTheme.typography.bodyLarge)
+        }
+    } else {
+        OutlinedButton(onClick = onClick, modifier = modifier) {
+            Text(text = text, style = MaterialTheme.typography.bodyLarge)
         }
     }
 }
@@ -367,6 +487,7 @@ private fun WarningScreenPreview() {
             uiState = WarningUiState(
                 detectedEventTitle = "의심 통화 후 원격제어 앱 실행",
                 detectedEventDescription = "알 수 없는 번호와 통화 직후 원격제어 앱이 실행되었습니다.",
+                detectedEventLevel = RiskLevel.HIGH,
             ),
             onFamilyCallClick = {},
             onInstitutionCall = {},
@@ -377,6 +498,7 @@ private fun WarningScreenPreview() {
             onSmsClick = {},
             onDismissSmsPicker = {},
             onSmsGuardianSelected = {},
+            onBehaviorAnswer = { _, _ -> },
         )
     }
 }

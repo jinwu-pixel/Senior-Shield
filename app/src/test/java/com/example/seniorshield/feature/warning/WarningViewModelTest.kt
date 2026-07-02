@@ -234,6 +234,68 @@ class WarningViewModelTest {
         // clearCurrentRiskEvent → currentEvent null
         assertNull(eventSink.currentEvent.value)
     }
+
+    // -----------------------------------------------------------------------
+    // 8~10. Behavior Check(자가확인) — 휘발성·비침습
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `behaviorCheck 응답이 uiState에 반영되고 anyYes가 파생됨`() = runTest {
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+
+        assertTrue(viewModel.uiState.value.behaviorCheckAnswers.isEmpty())
+        assertFalse(viewModel.uiState.value.behaviorCheckAnyYes)
+
+        viewModel.answerBehaviorCheck(0, yes = false)
+        viewModel.answerBehaviorCheck(1, yes = true)
+
+        val state = viewModel.uiState.value
+        assertEquals(false, state.behaviorCheckAnswers[0])
+        assertEquals(true, state.behaviorCheckAnswers[1])
+        assertTrue(state.behaviorCheckAnyYes)
+
+        // 같은 문항 재응답은 덮어쓴다 → 마지막 "예"가 사라지면 anyYes도 false
+        viewModel.answerBehaviorCheck(1, yes = false)
+        assertFalse(viewModel.uiState.value.behaviorCheckAnyYes)
+    }
+
+    @Test
+    fun `behaviorCheck 응답은 ViewModel 재생성 시 초기화됨 - 휘발성`() = runTest {
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+
+        viewModel.answerBehaviorCheck(0, yes = true)
+        assertTrue(viewModel.uiState.value.behaviorCheckAnyYes)
+
+        // 화면 이탈 후 재진입 = 새 ViewModel 인스턴스 — 응답은 어디에도 저장되지 않는다
+        val recreated = WarningViewModel(
+            guardianRepository,
+            riskRepository,
+            settingsRepository,
+            sessionTracker,
+            eventSink,
+            callRiskMonitor,
+            coordinator,
+        )
+        backgroundScope.launch(testDispatcher) { recreated.uiState.collect {} }
+
+        assertTrue(recreated.uiState.value.behaviorCheckAnswers.isEmpty())
+        assertFalse(recreated.uiState.value.behaviorCheckAnyYes)
+    }
+
+    @Test
+    fun `behaviorCheck 응답은 세션·모니터·이벤트에 전달되지 않음 - 비침습`() = runTest {
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+
+        viewModel.answerBehaviorCheck(0, yes = true)
+        viewModel.answerBehaviorCheck(4, yes = true)
+
+        // monitoring 축 부수효과 0 — 세션 미생성, anchor/safe-confirm/mirror/이벤트 호출 0
+        assertNull(sessionTracker.sessionState.value)
+        assertEquals(0, callRiskMonitor.clearTelebankingAnchorCallCount)
+        assertNull(callRiskMonitor.lastSafeConfirmedCallId)
+        assertEquals(0, coordinator.refreshAnchorHotNowCallCount)
+        assertNull(eventSink.currentEvent.value)
+    }
 }
 
 // ---------------------------------------------------------------------------

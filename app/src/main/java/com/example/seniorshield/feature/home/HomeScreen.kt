@@ -193,6 +193,7 @@ private fun HomeContent(
                 item {
                     GuardedSessionCard(
                         card = uiState.guardedCard,
+                        onClick = onNavigateWarning,
                         modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
                     )
                 }
@@ -275,12 +276,21 @@ private fun GuardianContactDialog(
 }
 
 @Composable
-private fun GuardedSessionCard(card: GuardedCardInfo, modifier: Modifier = Modifier) {
+private fun GuardedSessionCard(
+    card: GuardedCardInfo,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // 탭 시 Warning 화면으로 이동(사용자 개시 네비) — GUARDED 세션에서
+    // Behavior Check(자가확인)에 도달하는 유일한 경로.
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .dpadFocusHighlight(shape = RoundedCornerShape(12.dp))
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.tertiaryContainer)
+            .clickable(onClick = onClick)
+            .focusable()
             .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -294,7 +304,14 @@ private fun GuardedSessionCard(card: GuardedCardInfo, modifier: Modifier = Modif
                 text = card.title,
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onTertiaryContainer,
-                modifier = Modifier.padding(start = 8.dp),
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .weight(1f),
+            )
+            Icon(
+                imageVector = Icons.Rounded.ChevronRight,
+                contentDescription = "위험 경고 화면으로 이동",
+                tint = MaterialTheme.colorScheme.onTertiaryContainer,
             )
         }
         Spacer(Modifier.height(8.dp))

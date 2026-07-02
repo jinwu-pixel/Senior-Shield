@@ -31,6 +31,7 @@ class WarningViewModel @Inject constructor(
     private val _showGuardianPicker = MutableStateFlow(false)
     private val _message = MutableStateFlow<String?>(null)
     private val _showSmsPicker = MutableStateFlow(false)
+    private val _behaviorCheckAnswers = MutableStateFlow<Map<Int, Boolean>>(emptyMap())
 
     val uiState: StateFlow<WarningUiState> = combine(
         combine(
@@ -50,10 +51,12 @@ class WarningViewModel @Inject constructor(
         },
         settingsRepository.observeSmsMenuEnabled(),
         _showSmsPicker,
-    ) { base, smsMenuEnabled, showSmsPicker ->
+        _behaviorCheckAnswers,
+    ) { base, smsMenuEnabled, showSmsPicker, behaviorCheckAnswers ->
         base.copy(
             smsMenuEnabled = smsMenuEnabled,
             showSmsPicker = showSmsPicker,
+            behaviorCheckAnswers = behaviorCheckAnswers,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -66,6 +69,14 @@ class WarningViewModel @Inject constructor(
     fun clearMessage() { _message.value = null }
     fun showSmsPicker() { _showSmsPicker.value = true }
     fun dismissSmsPicker() { _showSmsPicker.value = false }
+
+    /**
+     * Behavior Check(자가확인) 응답 기록. 메모리 전용(휘발성) —
+     * monitoring/RiskSignal/세션/쿨다운으로 피드백하지 않으며, 저장·외부 전송도 하지 않는다.
+     */
+    fun answerBehaviorCheck(questionIndex: Int, yes: Boolean) {
+        _behaviorCheckAnswers.value = _behaviorCheckAnswers.value + (questionIndex to yes)
+    }
 
     /**
      * 사용자가 "안전 확인"을 선택하면 현재 위험 세션을 완전히 종료한다.
