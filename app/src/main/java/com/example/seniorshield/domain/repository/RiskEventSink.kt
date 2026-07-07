@@ -4,6 +4,12 @@ import com.example.seniorshield.domain.model.RiskEvent
 
 interface RiskEventSink {
     suspend fun pushRiskEvent(event: RiskEvent)
+    /**
+     * 이력에만 기록하고 currentEvent로 승격하지 않는다.
+     * GUARDED(비-INTERRUPT) 세션의 notification 이벤트용 — currentEvent 승격은
+     * 홈 WARNING 승격·Warning 활성 헤더를 유발하므로 INTERRUPT+ 전용이다.
+     */
+    suspend fun recordRiskEvent(event: RiskEvent)
     suspend fun updateCurrentRiskEvent(event: RiskEvent)
     /**
      * currentEvent를 즉시 null로 초기화한다.

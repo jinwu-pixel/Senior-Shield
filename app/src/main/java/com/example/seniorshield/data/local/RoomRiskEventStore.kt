@@ -50,6 +50,11 @@ class RoomRiskEventStore @Inject constructor(
         Log.d(TAG, "currentEvent updated — level=${event.level}")
     }
 
+    override suspend fun recordRiskEvent(event: RiskEvent) {
+        Log.d(TAG, "recordRiskEvent (이력만, currentEvent 미승격) — id=${event.id}, level=${event.level}, title=${event.title}")
+        dao.insert(event.toEntity())
+    }
+
     override suspend fun updateCurrentRiskEvent(event: RiskEvent) {
         _currentEvent.value = event
     }

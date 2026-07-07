@@ -348,6 +348,7 @@ private class FakeRiskEventSink : RiskEventSink {
     val currentEvent: StateFlow<RiskEvent?> = _currentEvent
 
     override suspend fun pushRiskEvent(event: RiskEvent) { _currentEvent.value = event }
+    override suspend fun recordRiskEvent(event: RiskEvent) { /* 이력만 — currentEvent 미승격 */ }
     override suspend fun updateCurrentRiskEvent(event: RiskEvent) { _currentEvent.value = event }
     override fun clearCurrentRiskEvent() { _currentEvent.value = null }
     override suspend fun clearAll() { _currentEvent.value = null }

@@ -30,6 +30,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -201,6 +202,29 @@ class DefaultRiskDetectionCoordinatorTest {
         runCurrent()
     }
 
+    /** #4b GUARDED escalation은 이력에만 기록(record), currentEvent 승격(push)은 INTERRUPT+부터. */
+    @Test
+    fun `GUARDED 세션 이벤트는 이력만 기록, currentEvent 승격은 INTERRUPT부터`() = runTest {
+        val coordinator = startCoordinator()
+
+        // PASSIVE only → GUARDED escalation: record 경로 (승격 없음, notification은 발생)
+        callMonitor.callSignals.value = listOf(RiskSignal.UNKNOWN_CALLER)
+        runCurrent()
+
+        assertEquals("GUARDED: currentEvent 승격 0건", 0, eventSink.pushed.size)
+        assertEquals("GUARDED: 이력 기록 1건", 1, eventSink.recorded.size)
+        verify(atLeast = 1) { notificationManager.notify(any()) }
+
+        // TRIGGER 등장 → INTERRUPT+ escalation: push 경로 (승격)
+        appUsageMonitor.appSignals.value = listOf(RiskSignal.REMOTE_CONTROL_APP_OPENED)
+        runCurrent()
+
+        assertTrue("INTERRUPT+: currentEvent 승격 발생", eventSink.pushed.isNotEmpty())
+
+        coordinator.stop()
+        runCurrent()
+    }
+
     /** #5 snooze 15분 TTL 경과 시 자동 해제 — TTL 미만은 유지하는 sibling과 대비(공유 clock 주입). */
     @Test
     fun `snooze 15분 TTL 경과 시 자동 해제, TTL 미만은 유지`() = runTest {
@@ -338,7 +362,9 @@ private class FakeDeviceEnvironmentRiskMonitor : DeviceEnvironmentRiskMonitor {
 
 private class FakeRiskEventSink : RiskEventSink {
     val pushed = mutableListOf<RiskEvent>()
+    val recorded = mutableListOf<RiskEvent>()
     override suspend fun pushRiskEvent(event: RiskEvent) { pushed += event }
+    override suspend fun recordRiskEvent(event: RiskEvent) { recorded += event }
     override suspend fun updateCurrentRiskEvent(event: RiskEvent) {}
     override fun clearCurrentRiskEvent() {}
     override suspend fun clearAll() {}

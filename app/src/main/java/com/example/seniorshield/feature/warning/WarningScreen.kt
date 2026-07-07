@@ -3,11 +3,13 @@ package com.example.seniorshield.feature.warning
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -165,27 +167,47 @@ private fun WarningContent(
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            val hasActiveEvent = uiState.detectedEventLevel != null
             WarningCard(
                 eventTitle = uiState.detectedEventTitle,
                 eventDescription = uiState.detectedEventDescription,
-                hasActiveEvent = uiState.detectedEventLevel != null,
+                hasActiveEvent = hasActiveEvent,
             )
             Spacer(modifier = Modifier.height(24.dp))
-            BehaviorCheckSection(
-                answers = uiState.behaviorCheckAnswers,
-                anyYes = uiState.behaviorCheckAnyYes,
-                onAnswer = onBehaviorAnswer,
-            )
-            Spacer(modifier = Modifier.height(32.dp))
-            Checklist()
-            Spacer(modifier = Modifier.height(24.dp))
-            PrimaryButton(text = "보호자에게 전화하기", onClick = onFamilyCallClick)
-            if (uiState.smsMenuEnabled && uiState.guardians.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(12.dp))
-                SecondaryButton(text = "보호자에게 문자 보내기", onClick = onSmsClick)
+            if (hasActiveEvent) {
+                // 활성 경고: 즉시 연락 CTA를 자가확인 문항보다 먼저 배치 —
+                // 고위험 상황에서 스크롤 없이 바로 전화할 수 있어야 한다.
+                ContactSection(
+                    smsVisible = uiState.smsMenuEnabled && uiState.guardians.isNotEmpty(),
+                    onFamilyCallClick = onFamilyCallClick,
+                    onSmsClick = onSmsClick,
+                    onInstitutionCall = onInstitutionCall,
+                )
+                Spacer(modifier = Modifier.height(32.dp))
+                Checklist()
+                Spacer(modifier = Modifier.height(24.dp))
+                BehaviorCheckSection(
+                    answers = uiState.behaviorCheckAnswers,
+                    anyYes = uiState.behaviorCheckAnyYes,
+                    onAnswer = onBehaviorAnswer,
+                )
+            } else {
+                // GUARDED 중립 진입: 자가확인이 목적이므로 문항 먼저.
+                BehaviorCheckSection(
+                    answers = uiState.behaviorCheckAnswers,
+                    anyYes = uiState.behaviorCheckAnyYes,
+                    onAnswer = onBehaviorAnswer,
+                )
+                Spacer(modifier = Modifier.height(32.dp))
+                Checklist()
+                Spacer(modifier = Modifier.height(24.dp))
+                ContactSection(
+                    smsVisible = uiState.smsMenuEnabled && uiState.guardians.isNotEmpty(),
+                    onFamilyCallClick = onFamilyCallClick,
+                    onSmsClick = onSmsClick,
+                    onInstitutionCall = onInstitutionCall,
+                )
             }
-            Spacer(modifier = Modifier.height(32.dp))
-            InstitutionSection(onCall = onInstitutionCall)
             Spacer(modifier = Modifier.height(32.dp))
             Button(
                 onClick = onConfirmSafe,
@@ -217,6 +239,28 @@ private fun WarningContent(
             onDismiss = onDismissSmsPicker,
             onSelect = onSmsGuardianSelected,
         )
+    }
+}
+
+/** 보호자 전화(+선택적 문자) + 공식 기관 연락처 — 즉시 연락 CTA 묶음. */
+@Composable
+private fun ContactSection(
+    smsVisible: Boolean,
+    onFamilyCallClick: () -> Unit,
+    onSmsClick: () -> Unit,
+    onInstitutionCall: (String) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        PrimaryButton(text = "보호자에게 전화하기", onClick = onFamilyCallClick)
+        if (smsVisible) {
+            Spacer(modifier = Modifier.height(12.dp))
+            SecondaryButton(text = "보호자에게 문자 보내기", onClick = onSmsClick)
+        }
+        Spacer(modifier = Modifier.height(32.dp))
+        InstitutionSection(onCall = onInstitutionCall)
     }
 }
 
@@ -288,7 +332,7 @@ private fun BehaviorCheckSection(
             ) {
                 Text(
                     text = "하나라도 \"예\"라면 사기일 가능성이 매우 높습니다.\n" +
-                        "지금 하던 일을 멈추고, 아래 \"보호자에게 전화하기\"나 112·1332로 바로 확인하세요.",
+                        "지금 하던 일을 멈추고, \"보호자에게 전화하기\"나 112·1332로 바로 확인하세요.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = StatusRed,
                     fontWeight = FontWeight.Bold,
@@ -412,7 +456,15 @@ private fun InstitutionCard(info: InstitutionInfo, onCall: () -> Unit) {
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
-            TextButton(onClick = onCall) { Text("전화하기") }
+            Spacer(modifier = Modifier.width(8.dp))
+            // 고령 사용자 터치 타깃: 텍스트 버튼은 오터치가 잦아 채움 버튼 + 최소 56dp 높이.
+            Button(
+                onClick = onCall,
+                modifier = Modifier.heightIn(min = 56.dp),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+            ) {
+                Text(text = "전화하기", style = MaterialTheme.typography.bodyLarge)
+            }
         }
     }
 }

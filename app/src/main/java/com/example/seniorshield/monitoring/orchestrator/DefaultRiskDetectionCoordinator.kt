@@ -348,7 +348,13 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                     val levelEscalated = score.level.ordinal > prevLevelOrdinal
                     if (alertEscalated || levelEscalated) {
                         val event = eventFactory.create(score)
-                        eventSink.pushRiskEvent(event)
+                        // currentEvent 승격은 INTERRUPT+ 전용 — GUARDED 세션은 이력·notification만.
+                        // (승격하면 홈이 WARNING으로 표시되고 Warning 화면 중립 헤더가 죽는다.)
+                        if (alertState.ordinal >= AlertState.INTERRUPT.ordinal) {
+                            eventSink.pushRiskEvent(event)
+                        } else {
+                            eventSink.recordRiskEvent(event)
+                        }
                         if (alertEscalated) sessionTracker.markAlertStateNotified(alertState)
                         sessionTracker.markNotified(score.level)
                         Log.d(TAG, "notification escalation: alertState=${session.notifiedAlertState}→$alertState, level=${session.notifiedLevel}→${score.level}")
