@@ -10,6 +10,7 @@ import com.example.seniorshield.domain.repository.RiskRepository
 import com.example.seniorshield.domain.repository.SettingsRepository
 import com.example.seniorshield.monitoring.call.CallRiskMonitor
 import com.example.seniorshield.monitoring.model.CallMonitorState
+import com.example.seniorshield.monitoring.model.Produced
 import com.example.seniorshield.monitoring.orchestrator.RiskDetectionCoordinator
 import com.example.seniorshield.monitoring.session.RiskSessionTracker
 import kotlinx.coroutines.Dispatchers
@@ -359,7 +360,8 @@ private class FakeCallRiskMonitor : CallRiskMonitor {
     var lastSafeConfirmedCallId: Long? = null
 
     override fun observeCallContext(): Flow<CallMonitorState> = flowOf(CallMonitorState.Idle)
-    override fun observeCallSignals(): Flow<List<RiskSignal>> = flowOf(emptyList())
+    override fun observeCallSignals(): Flow<Produced<List<RiskSignal>>> =
+        flowOf(Produced(emptyList(), 0L))
     override fun currentCallId(): Long? = null
     override fun clearTelebankingAnchor() { clearTelebankingAnchorCallCount++ }
     override fun markCurrentCallConfirmedSafe(callId: Long) { lastSafeConfirmedCallId = callId }

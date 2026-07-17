@@ -12,6 +12,8 @@ import com.example.seniorshield.monitoring.evaluator.RiskEvaluator
 import com.example.seniorshield.monitoring.evaluator.RiskEvaluatorImpl
 import com.example.seniorshield.monitoring.orchestrator.DefaultRiskDetectionCoordinator
 import com.example.seniorshield.monitoring.orchestrator.RiskDetectionCoordinator
+import com.example.seniorshield.monitoring.session.ResetEpochProvider
+import com.example.seniorshield.monitoring.session.RiskSessionTracker
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -39,4 +41,8 @@ abstract class MonitoringModule {
 
     @Binds @Singleton
     abstract fun bindRiskDetectionCoordinator(impl: DefaultRiskDetectionCoordinator): RiskDetectionCoordinator
+
+    /** 생산 경계 epoch 스탬프(A안)용 read-only provider — 쓰기 경로는 tracker에만 있다. */
+    @Binds @Singleton
+    abstract fun bindResetEpochProvider(impl: RiskSessionTracker): ResetEpochProvider
 }

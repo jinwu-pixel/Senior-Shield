@@ -4,6 +4,7 @@ import com.example.seniorshield.domain.model.RiskLevel
 import com.example.seniorshield.domain.model.RiskSignal
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -387,7 +388,7 @@ class RiskSessionTrackerTest {
     // =======================================================================
 
     @Test
-    fun `동일 신호 반복 방출 시 lastSignalAt 미갱신 - TTL 정상 만료`() {
+    fun `동일 신호 반복 방출 시 lastSignalAt 미갱신 - 경계에서는 renewal`() {
         // 세션 생성
         tracker.update(listOf(RiskSignal.UNKNOWN_CALLER), emptyList())
         val created = tracker.sessionState.value!!
@@ -403,11 +404,15 @@ class RiskSessionTrackerTest {
             afterRepeat.lastSignalAt,
         )
 
-        // 생성 시점 기준 30분 + 1ms 후 → 만료
+        // 생성 시점 기준 30분 + 1ms 후 — latched 신호(기존 accumulated와 겹침)는 같은 ID로
+        // renewal된다 (2026-07-14 D1 개정: 표시 연속성만 유지, notified* 승계로 재발동 없음).
+        // lastSignalAt은 rebase되어 영구 유지도 아니다.
         testTime = created.lastSignalAt + 30 * 60 * 1000L + 1
-        val expired = tracker.update(listOf(RiskSignal.UNKNOWN_CALLER), emptyList())
+        val renewed = tracker.update(listOf(RiskSignal.UNKNOWN_CALLER), emptyList())
 
-        assertNull("동일 신호만 있으면 TTL 만료되어야 함", expired)
+        assertNotNull("latched 신호는 renewal로 이어짐", renewed)
+        assertEquals("renewal은 같은 세션 ID", created.id, renewed!!.id)
+        assertEquals("renewal 시 TTL 창이 rebase", testTime, renewed.lastSignalAt)
     }
 
     @Test

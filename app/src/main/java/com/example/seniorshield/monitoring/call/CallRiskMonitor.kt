@@ -2,6 +2,7 @@ package com.example.seniorshield.monitoring.call
 
 import com.example.seniorshield.domain.model.RiskSignal
 import com.example.seniorshield.monitoring.model.CallMonitorState
+import com.example.seniorshield.monitoring.model.Produced
 import kotlinx.coroutines.flow.Flow
 
 interface CallRiskMonitor {
@@ -13,8 +14,12 @@ interface CallRiskMonitor {
      */
     fun observeCallContext(): Flow<CallMonitorState>
 
-    /** Coordinator가 소비하는 신호 목록. */
-    fun observeCallSignals(): Flow<List<RiskSignal>>
+    /**
+     * Coordinator가 소비하는 신호 목록. [Produced.producedAtEpoch]는 신호의 원인이 된
+     * 통화 컨텍스트가 생산된 시점(telephony callback/receiver/seed 진입부)의 epoch를
+     * 승계한다 — shareIn replay·one-shot delay(LONG)·CallLog 폴백을 거쳐도 재스탬프하지 않는다.
+     */
+    fun observeCallSignals(): Flow<Produced<List<RiskSignal>>>
 
     /**
      * 현재 활성 통화의 고유 식별자. OFFHOOK 진입 시각(ms) 기준.

@@ -1,33 +1,13 @@
 package com.example.seniorshield.monitoring.orchestrator
 
-import com.example.seniorshield.core.notification.RiskNotificationManager
-import com.example.seniorshield.core.overlay.BankingCooldownManager
-import com.example.seniorshield.core.overlay.RiskOverlayManager
-import com.example.seniorshield.domain.model.Guardian
-import com.example.seniorshield.domain.model.RiskEvent
 import com.example.seniorshield.domain.model.RiskLevel
 import com.example.seniorshield.domain.model.RiskSignal
-import com.example.seniorshield.domain.repository.GuardianRepository
-import com.example.seniorshield.domain.repository.RiskEventSink
-import com.example.seniorshield.monitoring.appinstall.AppInstallRiskMonitor
-import com.example.seniorshield.monitoring.appusage.AppUsageRiskMonitor
-import com.example.seniorshield.monitoring.call.CallRiskMonitor
-import com.example.seniorshield.monitoring.deviceenv.DeviceEnvironmentRiskMonitor
-import com.example.seniorshield.monitoring.evaluator.RiskEvaluatorImpl
-import com.example.seniorshield.monitoring.event.RiskEventFactory
-import com.example.seniorshield.monitoring.model.CallMonitorState
-import com.example.seniorshield.monitoring.session.RiskSessionTracker
+import com.example.seniorshield.testutil.CoordinatorTestHarness
 import com.example.seniorshield.testutil.FakeClock
 import io.mockk.every
-import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -38,78 +18,27 @@ import org.junit.Test
 /**
  * [DefaultRiskDetectionCoordinator] 통합 테스트.
  *
- * ## 하네스 설계
- * - **실물 협력자**(Android 의존 0): `RiskSessionTracker`·`AlertStateResolver`·`RiskEvaluatorImpl`·
- *   `RiskEventFactory` — Coordinator + 세션 + 평가 + AlertState 결정의 진짜 통합을 검증한다.
- * - **손수 fake**(인터페이스): 4 monitor + `RiskEventSink` + `GuardianRepository` — 각 Flow를
- *   `MutableStateFlow`로 노출해 신호 emission을 tick 단위로 제어한다. combine은 5소스가 모두 1회
- *   emit돼야 첫 발화하므로 초기값이 필수다.
- * - **mockk(relaxed)**: `RiskOverlayManager`·`BankingCooldownManager`·`RiskNotificationManager` —
- *   final + Context 생성자라 JVM 단위테스트에서 substitution 불가. relaxed 기본값(false/0/null)으로
- *   `isEndCallSuppressed()`·`isShowing()`·timestamp가 모두 비활성 경로가 되며, 상호작용은 verify로 확인.
- *
- * ## 시간 처리
- * Coordinator·RiskSessionTracker·RiskEventFactory는 `clock` seam(`@VisibleForTesting internal var
- * clock: () -> Long`)을 노출한다. **set 기반 경로**(upgrade 해제, S2 동일-scope 재발화, 세션당 1회,
- * AlertState 분기)는 실 clock으로 충분하지만(틱 간 실제 경과는 ms 단위 → 모든 TTL 창보다 훨씬 짧다),
- * **TTL 만료 경로**(snooze 15분, S2 REC-REFIRE 30초 escape, ghost fallback 창)는 [FakeClock]을 세
- * 협력자에 **공유 주입**해 결정론적으로 검증한다([startCoordinator]의 `fakeClock` 파라미터). 공유가
- * 핵심 — 한 객체만 바꾸면 TTL 계산이 어긋난다.
- *
- * ## 코루틴 구동
- * `ioDispatcher = UnconfinedTestDispatcher(testScheduler)`로 Flow 전파를 eager하게 만든다.
- * anchor-hot mirror ticker가 무한 `delay(15s)` 루프라 `advanceUntilIdle()`는 금지(영원히 돈다).
- * 각 테스트는 `runCurrent()`로 tick을 처리하고 종료 전 `coordinator.stop()`으로 잡을 정리한다.
+ * 협력자 조립·시간 처리·코루틴 구동 원칙은 공용 하네스 [CoordinatorTestHarness] KDoc 참조.
+ * **set 기반 경로**(upgrade 해제, S2 동일-scope 재발화, 세션당 1회, AlertState 분기)는 실 clock으로
+ * 충분하지만(틱 간 실제 경과는 ms 단위 → 모든 TTL 창보다 훨씬 짧다), **TTL 만료 경로**(snooze 15분,
+ * S2 REC-REFIRE 30초 escape, ghost fallback 창)는 [FakeClock] 공유 주입으로 결정론적으로 검증한다.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class DefaultRiskDetectionCoordinatorTest {
 
-    private val callMonitor = FakeCallRiskMonitor()
-    private val appUsageMonitor = FakeAppUsageRiskMonitor()
-    private val appInstallMonitor = FakeAppInstallRiskMonitor()
-    private val deviceEnvMonitor = FakeDeviceEnvironmentRiskMonitor()
-    private val eventSink = FakeRiskEventSink()
-    private val guardianRepository = FakeGuardianRepository()
-
-    private val evaluator = RiskEvaluatorImpl()
-    private val eventFactory = RiskEventFactory()
-    private val alertStateResolver = AlertStateResolver()
-    private val sessionTracker = RiskSessionTracker()
-
-    private val overlayManager = mockk<RiskOverlayManager>(relaxed = true)
-    private val cooldownManager = mockk<BankingCooldownManager>(relaxed = true)
-    private val notificationManager = mockk<RiskNotificationManager>(relaxed = true)
+    private val harness = CoordinatorTestHarness()
+    private val callMonitor get() = harness.callMonitor
+    private val appUsageMonitor get() = harness.appUsageMonitor
+    private val deviceEnvMonitor get() = harness.deviceEnvMonitor
+    private val eventSink get() = harness.eventSink
+    private val sessionTracker get() = harness.sessionTracker
+    private val overlayManager get() = harness.overlayManager
+    private val cooldownManager get() = harness.cooldownManager
+    private val notificationManager get() = harness.notificationManager
 
     private fun TestScope.startCoordinator(
         fakeClock: FakeClock? = null,
-    ): DefaultRiskDetectionCoordinator {
-        val coordinator = DefaultRiskDetectionCoordinator(
-            callMonitor = callMonitor,
-            appUsageMonitor = appUsageMonitor,
-            appInstallMonitor = appInstallMonitor,
-            deviceEnvMonitor = deviceEnvMonitor,
-            evaluator = evaluator,
-            eventFactory = eventFactory,
-            eventSink = eventSink,
-            notificationManager = notificationManager,
-            overlayManager = overlayManager,
-            cooldownManager = cooldownManager,
-            sessionTracker = sessionTracker,
-            alertStateResolver = alertStateResolver,
-            guardianRepository = guardianRepository,
-            ioDispatcher = UnconfinedTestDispatcher(testScheduler),
-        )
-        // TTL 만료 테스트: 시간축을 동기화하기 위해 세 실물 협력자에 동일 provider를 공유 주입.
-        // (coordinator.clock만 바꾸면 sessionTracker·eventFactory는 실 clock으로 남아 TTL이 어긋난다.)
-        if (fakeClock != null) {
-            sessionTracker.clock = fakeClock.provider
-            eventFactory.clock = fakeClock.provider
-            coordinator.clock = fakeClock.provider
-        }
-        coordinator.start()
-        runCurrent()
-        return coordinator
-    }
+    ): DefaultRiskDetectionCoordinator = with(harness) { start(fakeClock) }
 
     /** #1 snooze 활성 중 같은 통화에 upgrade trigger가 오면 snooze가 풀리고 팝업이 재발화한다. */
     @Test
@@ -323,56 +252,4 @@ class DefaultRiskDetectionCoordinatorTest {
         coordinator.stop()
         runCurrent()
     }
-}
-
-// ── 손수 fake (MutableStateFlow 기반 emission 제어) ──────────────────────────
-
-private class FakeCallRiskMonitor : CallRiskMonitor {
-    val callContext = MutableStateFlow<CallMonitorState>(CallMonitorState.Idle)
-    val callSignals = MutableStateFlow<List<RiskSignal>>(emptyList())
-    var callId: Long? = null
-    var anchorHot: Boolean = false
-    override fun observeCallContext(): Flow<CallMonitorState> = callContext.asStateFlow()
-    override fun observeCallSignals(): Flow<List<RiskSignal>> = callSignals.asStateFlow()
-    override fun currentCallId(): Long? = callId
-    override fun clearTelebankingAnchor() {}
-    override fun markCurrentCallConfirmedSafe(callId: Long) {}
-    override fun isTelebankingAnchorHot(): Boolean = anchorHot
-}
-
-private class FakeAppUsageRiskMonitor : AppUsageRiskMonitor {
-    val appSignals = MutableStateFlow<List<RiskSignal>>(emptyList())
-    val bankingForeground = MutableStateFlow(false)
-    var latestBankingTs: Long? = null
-    override fun observeAppUsageSignals(): Flow<List<RiskSignal>> = appSignals.asStateFlow()
-    override fun observeBankingAppForeground(): Flow<Boolean> = bankingForeground.asStateFlow()
-    override fun latestBankingForegroundEventTimestamp(windowMs: Long): Long? = latestBankingTs
-}
-
-private class FakeAppInstallRiskMonitor : AppInstallRiskMonitor {
-    val installSignals = MutableStateFlow<List<RiskSignal>>(emptyList())
-    override fun observeInstallSignals(): Flow<List<RiskSignal>> = installSignals.asStateFlow()
-}
-
-private class FakeDeviceEnvironmentRiskMonitor : DeviceEnvironmentRiskMonitor {
-    val deviceEnvSignals = MutableStateFlow<List<RiskSignal>>(emptyList())
-    override fun observeDeviceEnvironmentSignals(): Flow<List<RiskSignal>> =
-        deviceEnvSignals.asStateFlow()
-}
-
-private class FakeRiskEventSink : RiskEventSink {
-    val pushed = mutableListOf<RiskEvent>()
-    val recorded = mutableListOf<RiskEvent>()
-    override suspend fun pushRiskEvent(event: RiskEvent) { pushed += event }
-    override suspend fun recordRiskEvent(event: RiskEvent) { recorded += event }
-    override suspend fun updateCurrentRiskEvent(event: RiskEvent) {}
-    override fun clearCurrentRiskEvent() {}
-    override suspend fun clearAll() {}
-}
-
-private class FakeGuardianRepository : GuardianRepository {
-    override fun observeGuardians(): Flow<List<Guardian>> = flowOf(emptyList())
-    override suspend fun addGuardian(guardian: Guardian): Boolean = true
-    override suspend fun removeGuardian(id: String) {}
-    override suspend fun getGuardians(): List<Guardian> = emptyList()
 }

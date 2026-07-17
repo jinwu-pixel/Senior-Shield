@@ -8,7 +8,9 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import com.example.seniorshield.domain.model.RiskSignal
+import com.example.seniorshield.monitoring.model.Produced
 import com.example.seniorshield.monitoring.registry.RemoteControlAppRegistry
+import com.example.seniorshield.monitoring.session.ResetEpochProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.awaitClose
@@ -30,14 +32,27 @@ private const val SIGNAL_HOLD_MS = 5_000L
  * [RiskSignal.SUSPICIOUS_APP_INSTALLED] 신호를 방출한다.
  *
  * 보이스피싱의 핵심 단계인 "이 앱을 설치하세요" 유도를 차단하기 위한 모니터.
+ *
+ * ## 생산 provenance (A안, 2026-07-16)
+ * epoch는 onReceive 진입부 — 설치 출처 **조회·분류 시작 전** — 에 1회 캡처되어 두 분기
+ * (사이드로딩/원격제어)가 공유 승계한다. PackageManager 조회 도중 사용자 reset이 끼어도
+ * 방출은 pre-reset epoch를 유지해 보수적으로 필터된다. seed와 hold 만료 클리어는 값이
+ * empty(세션 생성 불가)이므로 방출 시점 epoch를 새로 읽는다 — reset 이후의 fresh 클리어가
+ * source 배제를 자연 해소한다.
+ *
+ * ## distinctUntilChanged 예외 (라운드 9-11)
+ * INSTALL은 상태가 아니라 **사건**이므로 [Produced] 기본 동등성((value, epoch))으로 dedupe한다 —
+ * reset 후 hold 창 내 실제 신규 설치는 같은 신호 값이어도 새 epoch로 통과하고,
+ * 같은 epoch의 중복 설치는 기존처럼 합쳐진다.
  */
 @Singleton
 class RealAppInstallRiskMonitor @Inject constructor(
     @ApplicationContext private val context: Context,
     private val remoteControlRegistry: RemoteControlAppRegistry,
+    private val resetEpochProvider: ResetEpochProvider,
 ) : AppInstallRiskMonitor {
 
-    override fun observeInstallSignals(): Flow<List<RiskSignal>> = callbackFlow {
+    override fun observeInstallSignals(): Flow<Produced<List<RiskSignal>>> = callbackFlow {
         var resetJob: Job? = null
 
         val receiver = object : BroadcastReceiver() {
@@ -46,15 +61,17 @@ class RealAppInstallRiskMonitor @Inject constructor(
                 if (intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) return
 
                 val packageName = intent.data?.schemeSpecificPart ?: return
-                Log.d(TAG, "새 앱 설치 감지: $packageName")
+                // 계약: 조회·분류(설치 출처/원격제어 판정) **시작 전** 단일 캡처 — 두 분기가 공유.
+                val producedAtEpoch = resetEpochProvider.userResetEpoch
+                Log.d(TAG, "새 앱 설치 감지: $packageName (epoch=$producedAtEpoch)")
 
                 if (isSideloaded(packageName)) {
                     Log.w(TAG, "사이드로딩 앱 감지: $packageName")
-                    trySend(listOf(RiskSignal.SUSPICIOUS_APP_INSTALLED))
+                    trySend(Produced(listOf(RiskSignal.SUSPICIOUS_APP_INSTALLED), producedAtEpoch))
                     Log.d(TAG, "emit(SUSPICIOUS_APP_INSTALLED) at ${System.currentTimeMillis()}")
                 } else if (isKnownRemoteControlApp(packageName)) {
                     Log.w(TAG, "원격제어 앱 설치 감지: $packageName")
-                    trySend(listOf(RiskSignal.SUSPICIOUS_APP_INSTALLED))
+                    trySend(Produced(listOf(RiskSignal.SUSPICIOUS_APP_INSTALLED), producedAtEpoch))
                     Log.d(TAG, "emit(SUSPICIOUS_APP_INSTALLED) at ${System.currentTimeMillis()}")
                 } else {
                     Log.d(TAG, "Play Store 설치 앱 — 무시: $packageName")
@@ -68,7 +85,9 @@ class RealAppInstallRiskMonitor @Inject constructor(
                 }
                 resetJob = launch {
                     delay(SIGNAL_HOLD_MS)
-                    trySend(emptyList())
+                    // 클리어는 방출 시점 epoch — empty는 세션을 되살릴 수 없고 fresh 클리어가
+                    // reset 후 source 배제를 자연 해소한다.
+                    trySend(Produced(emptyList(), resetEpochProvider.userResetEpoch))
                     Log.d(TAG, "emit(empty) — signal reset at ${System.currentTimeMillis()}")
                 }
             }
@@ -85,8 +104,8 @@ class RealAppInstallRiskMonitor @Inject constructor(
         }
         Log.d(TAG, "앱 설치 모니터 시작")
 
-        // 초기값: 신호 없음
-        trySend(emptyList())
+        // 초기값: 신호 없음 (방출 시점 epoch — combine 충전용 중립값)
+        trySend(Produced(emptyList(), resetEpochProvider.userResetEpoch))
 
         awaitClose {
             resetJob?.cancel()
@@ -94,7 +113,7 @@ class RealAppInstallRiskMonitor @Inject constructor(
             context.unregisterReceiver(receiver)
             Log.d(TAG, "앱 설치 모니터 중지 — resetJob cancelled")
         }
-    }.distinctUntilChanged()
+    }.distinctUntilChanged() // (value, epoch) 기본 동등성 — 사건 flow 예외 (KDoc 참조)
 
     private fun isSideloaded(packageName: String): Boolean {
         return try {
