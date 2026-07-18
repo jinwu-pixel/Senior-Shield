@@ -44,7 +44,10 @@ class RealCallRiskMonitorTest {
 
     private val monitor = RealCallRiskMonitor(
         context, mapper, contactChecker, settingsRepository, bankArsRegistry, sessionTracker,
-    ).apply { clock = fakeClock.provider }
+    ).apply {
+        clock = fakeClock.provider
+        monotonicClock = fakeClock.provider
+    }
 
     /** 활성 세션 stub — `recordUnknownCall`이 버퍼를 비우지 않도록 비-null 세션을 주입. */
     private fun stubActiveSession() {
@@ -85,5 +88,57 @@ class RealCallRiskMonitorTest {
 
         fakeClock.advanceMs(2000L)                          // now = 1_301_000 (5분 1초)
         assertFalse("5분 1초 → 윈도우 만료", monitor.isTelebankingWindow())
+    }
+
+    @Test
+    fun `wall clock forward jump does not expire a repeated-call window early`() {
+        stubActiveSession()
+        val elapsedClock = FakeClock(now = 1_000_000L)
+        monitor.monotonicClock = elapsedClock.provider
+
+        monitor.recordUnknownCall()
+        elapsedClock.advanceMs(29 * 60 * 1000L + 30_000L)
+        fakeClock.advanceMs(30 * 60 * 1000L + 30_000L) // 실제 경과 + wall clock 60초 도약
+        monitor.recordUnknownCall()
+
+        assertTrue("실제 경과 29분30초는 30분 창 안이어야 함", monitor.isRepeatedUnknownCaller())
+    }
+
+    @Test
+    fun `wall clock rollback does not revive an expired repeated-call window`() {
+        stubActiveSession()
+        val elapsedClock = FakeClock(now = 1_000_000L)
+        monitor.monotonicClock = elapsedClock.provider
+
+        monitor.recordUnknownCall()
+        elapsedClock.advanceMs(30 * 60 * 1000L + 30_000L)
+        fakeClock.advanceMs(29 * 60 * 1000L + 30_000L) // 실제 경과 - wall clock 60초 역행
+        monitor.recordUnknownCall()
+
+        assertFalse("실제 경과 30분30초는 30분 창을 초과해야 함", monitor.isRepeatedUnknownCaller())
+    }
+
+    @Test
+    fun `wall clock forward jump does not expire the telebanking window early`() {
+        val elapsedClock = FakeClock(now = 1_000_000L)
+        monitor.monotonicClock = elapsedClock.provider
+        monitor.lastSuspiciousCallEndedAt = elapsedClock.provider()
+
+        elapsedClock.advanceMs(4 * 60 * 1000L + 30_000L)
+        fakeClock.advanceMs(5 * 60 * 1000L + 30_000L) // 실제 경과 + wall clock 60초 도약
+
+        assertTrue("실제 경과 4분30초는 5분 창 안이어야 함", monitor.isTelebankingWindow())
+    }
+
+    @Test
+    fun `wall clock rollback does not revive an expired telebanking window`() {
+        val elapsedClock = FakeClock(now = 1_000_000L)
+        monitor.monotonicClock = elapsedClock.provider
+        monitor.lastSuspiciousCallEndedAt = elapsedClock.provider()
+
+        elapsedClock.advanceMs(5 * 60 * 1000L + 30_000L)
+        fakeClock.advanceMs(4 * 60 * 1000L + 30_000L) // 실제 경과 - wall clock 60초 역행
+
+        assertFalse("실제 경과 5분30초는 5분 창을 초과해야 함", monitor.isTelebankingWindow())
     }
 }

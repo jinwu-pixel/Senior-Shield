@@ -11,6 +11,9 @@ import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
 import com.example.seniorshield.domain.model.RiskSignal
 import com.example.seniorshield.domain.repository.SettingsRepository
+import com.example.seniorshield.monitoring.model.CallContext
+import com.example.seniorshield.monitoring.model.CallMonitorState
+import com.example.seniorshield.monitoring.model.CallState
 import com.example.seniorshield.monitoring.model.Produced
 import com.example.seniorshield.monitoring.session.RiskSessionTracker
 import com.example.seniorshield.testutil.FakeClock
@@ -18,18 +21,21 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -65,20 +71,25 @@ class RealCallRiskMonitorProvenanceTest {
     private val contactChecker = mockk<CallerContactChecker> {
         every { checkCaller(any()) } returns CallerCheckResult.NOT_IN_CONTACTS
     }
+    private val testModeEnabled = MutableStateFlow(false)
     private val settingsRepository = mockk<SettingsRepository> {
-        every { observeTestModeEnabled() } returns MutableStateFlow(false)
+        every { observeTestModeEnabled() } returns testModeEnabled
     }
     private val bankArsRegistry = mockk<BankArsRegistry> {
         every { matches(any()) } returns true
     }
+    private val mapper = mockk<CallSignalMapper>(relaxed = true)
     private val monitor = RealCallRiskMonitor(
         context,
-        mockk<CallSignalMapper>(relaxed = true),
+        mapper,
         contactChecker,
         settingsRepository,
         bankArsRegistry,
         tracker,
-    ).apply { clock = fakeClock.provider }
+    ).apply {
+        clock = fakeClock.provider
+        monotonicClock = fakeClock.provider
+    }
 
     private val emissions = Channel<Produced<List<RiskSignal>>>(Channel.UNLIMITED)
     private var collectorJob: Job? = null
@@ -203,6 +214,86 @@ class RealCallRiskMonitorProvenanceTest {
         assertEquals("callId 불변 (새 통화로 조작 금지)", callId, monitor.currentCallId())
         assertEquals("반복호출 이중 기록 금지", 1, monitor.recentUnknownCalls.size)
         assertNoFurtherEmission()
+    }
+
+    @Test
+    fun `test mode flip during offhook does not record or emit the same call twice`() = runBlocking {
+        startCollector()
+        drive(TelephonyManager.CALL_STATE_IDLE)
+        awaitEmission()
+        drive(TelephonyManager.CALL_STATE_RINGING, "01011112222")
+        drive(TelephonyManager.CALL_STATE_OFFHOOK, "01011112222")
+        val first = awaitEmissionWhere { RiskSignal.UNKNOWN_CALLER in it.value }
+        val callId = monitor.currentCallId()
+
+        assertEquals(listOf(RiskSignal.UNKNOWN_CALLER), first.value)
+        assertEquals(1, monitor.recentUnknownCalls.size)
+        assertNotNull(callId)
+        // 실제 coordinator는 첫 UNKNOWN 방출로 세션을 연다. 활성 세션을 재현해야 두 번째
+        // recordUnknownCall이 clean-slate clear에 가려지지 않고 이중 기록으로 드러난다.
+        tracker.update(listOf(RiskSignal.UNKNOWN_CALLER), emptyList())
+
+        testModeEnabled.value = true
+
+        assertNoFurtherEmission()
+        assertEquals("동일 OFFHOOK의 testMode 재시작은 호출을 재기록하지 않음", 1, monitor.recentUnknownCalls.size)
+        assertEquals("설정 flip은 통화 회차/callId를 바꾸지 않음", callId, monitor.currentCallId())
+    }
+
+    @Test
+    fun `test mode flip after safe-confirmed idle does not rearm the anchor`() = runBlocking {
+        startCollector()
+        drive(TelephonyManager.CALL_STATE_IDLE)
+        awaitEmission()
+        drive(TelephonyManager.CALL_STATE_RINGING, "01011112222")
+        drive(TelephonyManager.CALL_STATE_OFFHOOK, "01011112222")
+        awaitEmissionWhere { RiskSignal.UNKNOWN_CALLER in it.value }
+        val callId = requireNotNull(monitor.currentCallId())
+        monitor.markCurrentCallConfirmedSafe(callId)
+
+        fakeClock.advanceMs(1_000L)
+        drive(TelephonyManager.CALL_STATE_IDLE, "01011112222")
+        awaitEmissionWhere { it.value.isEmpty() }
+        assertNull("안전확인된 통화의 첫 IDLE은 anchor를 장전하지 않음", monitor.lastSuspiciousCallEndedAt)
+
+        testModeEnabled.value = true
+
+        assertNoFurtherEmission()
+        assertNull("완료된 IDLE을 설정 flip으로 재처리해 anchor를 되살리면 안 됨", monitor.lastSuspiciousCallEndedAt)
+    }
+
+    @Test
+    fun `reset while idle waits for test mode prevents stale resume side effects`() = runBlocking {
+        val collectionCount = AtomicInteger(0)
+        val idleSettingsStarted = CompletableDeferred<Unit>()
+        val releaseIdleSettings = CompletableDeferred<Unit>()
+        every { settingsRepository.observeTestModeEnabled() } returns flow {
+            if (collectionCount.incrementAndGet() == 1) {
+                emit(false) // OFFHOOK LONG 타이머의 최초 설정값
+            } else {
+                idleSettingsStarted.complete(Unit)
+                releaseIdleSettings.await()
+                emit(false)
+            }
+        }
+
+        startCollector()
+        drive(TelephonyManager.CALL_STATE_IDLE)
+        awaitEmission()
+        drive(TelephonyManager.CALL_STATE_RINGING, "01011112222")
+        drive(TelephonyManager.CALL_STATE_OFFHOOK, "01011112222")
+        awaitEmissionWhere { RiskSignal.UNKNOWN_CALLER in it.value }
+
+        fakeClock.advanceMs(1_000L)
+        drive(TelephonyManager.CALL_STATE_IDLE, "01011112222")
+        withTimeout(5_000) { idleSettingsStarted.await() }
+
+        tracker.resetAfterUserConfirmedSafe()
+        monitor.clearTelebankingAnchor()
+        releaseIdleSettings.complete(Unit)
+
+        assertNoFurtherEmission(waitMs = 1_000)
+        assertNull("reset 뒤 stale IDLE 재개가 anchor를 다시 장전하면 안 됨", monitor.lastSuspiciousCallEndedAt)
     }
 
     /**
@@ -757,6 +848,139 @@ class RealCallRiskMonitorProvenanceTest {
         assertEquals("새 owner callId 보존", 2_222L, monitor.currentCallId())
         assertTrue("새 owner generation 보존", monitor.writeCallId(newOwner, 3_333L))
         assertEquals("새 owner 후속 callId 기록", 3_333L, monitor.currentCallId())
+    }
+
+    @Test
+    fun `wall clock rollback does not make legacy call duration negative`() = runBlocking {
+        val elapsedClock = FakeClock(now = 2_000_000L)
+        monitor.monotonicClock = elapsedClock.provider
+        val contextSlot = slot<CallContext>()
+        every { mapper.map(capture(contextSlot), any()) } returns emptyList()
+
+        startCollector()
+        drive(TelephonyManager.CALL_STATE_IDLE)
+        awaitEmission()
+        drive(TelephonyManager.CALL_STATE_RINGING, "01011112222")
+        drive(TelephonyManager.CALL_STATE_OFFHOOK, "01011112222")
+        awaitEmissionWhere { RiskSignal.UNKNOWN_CALLER in it.value }
+        assertEquals("callId는 monotonic이 아닌 wall 시작시각", 1_000_000L, monitor.currentCallId())
+
+        elapsedClock.advanceMs(30_000L)
+        fakeClock.advanceMs(-30_000L) // 실제 30초 경과 중 wall clock 60초 역행
+        drive(TelephonyManager.CALL_STATE_IDLE, "01011112222")
+        withTimeout(5_000) {
+            while (!contextSlot.isCaptured) delay(10)
+        }
+
+        val ended = contextSlot.captured
+        assertEquals("노출 시작시각은 wall clock", 1_000_000L, ended.startedAtMillis)
+        assertEquals("노출 종료시각은 조정된 wall clock", 970_000L, ended.endedAtMillis)
+        assertEquals("duration은 monotonic 경과시간", 30_000L, ended.durationMs)
+        assertEquals(30L, ended.durationSec)
+    }
+
+    @Test
+    fun `replayed idle anchors at callback production elapsed time`() = runBlocking {
+        val elapsedClock = FakeClock(now = 2_000_000L)
+        monitor.monotonicClock = elapsedClock.provider
+        val contextStates = Channel<CallMonitorState>(Channel.UNLIMITED)
+        val contextJob = CoroutineScope(Dispatchers.Default).launch {
+            monitor.observeCallContext().collect { contextStates.trySend(it) }
+        }
+
+        suspend fun awaitContext(predicate: (CallMonitorState) -> Boolean): CallMonitorState =
+            withTimeout(5_000) {
+                var state = contextStates.receive()
+                while (!predicate(state)) state = contextStates.receive()
+                state
+            }
+
+        try {
+            withTimeout(5_000) {
+                while (!listenerSlot.isCaptured) delay(10)
+            }
+            drive(TelephonyManager.CALL_STATE_IDLE)
+            awaitContext { it is CallMonitorState.Idle }
+            drive(TelephonyManager.CALL_STATE_RINGING, "01011112222")
+            drive(TelephonyManager.CALL_STATE_OFFHOOK, "01011112222")
+            awaitContext {
+                it is CallMonitorState.Active && it.context.state == CallState.OFFHOOK
+            }
+
+            fakeClock.advanceMs(30_000L)
+            elapsedClock.advanceMs(30_000L)
+            val producedEndElapsed = elapsedClock.provider()
+            drive(TelephonyManager.CALL_STATE_IDLE, "01011112222")
+            awaitContext {
+                it is CallMonitorState.Active && it.context.state == CallState.IDLE
+            }
+            assertNull("신호 구독 전에는 anchor 부수효과가 실행되지 않음", monitor.lastSuspiciousCallEndedAt)
+
+            elapsedClock.advanceMs(5 * 60 * 1000L + 30_000L)
+            startCollector()
+            awaitEmission()
+
+            assertEquals(
+                "늦은 replay 소비가 아니라 callback IDLE 생산시각을 anchor로 유지",
+                producedEndElapsed,
+                monitor.lastSuspiciousCallEndedAt,
+            )
+            assertFalse("생산시각 기준 5분30초 경과 후 anchor는 만료", monitor.isTelebankingWindow())
+        } finally {
+            contextJob.cancel()
+        }
+    }
+
+    @Suppress("UnspecifiedRegisterReceiverFlag")
+    @Test
+    fun `wall clock jump does not inflate api31 call duration`() = runBlocking {
+        val elapsedClock = FakeClock(now = 1_000_000L)
+        monitor.monotonicClock = elapsedClock.provider
+        val contextSlot = slot<CallContext>()
+        every { mapper.map(capture(contextSlot), any()) } returns emptyList()
+        val manualExecutor = ManualExecutorService()
+        monitor.sdkIntProvider = { Build.VERSION_CODES.S }
+        monitor.callbackExecutorFactory = { manualExecutor }
+        val callbackSlot = slot<TelephonyCallback>()
+        val executorSlot = slot<java.util.concurrent.Executor>()
+        every {
+            telephonyManager.registerTelephonyCallback(capture(executorSlot), capture(callbackSlot))
+        } returns Unit
+        every { telephonyManager.callState } returns TelephonyManager.CALL_STATE_IDLE
+        val broadcastSlot = slot<BroadcastReceiver>()
+        every { context.registerReceiver(capture(broadcastSlot), any<IntentFilter>()) } returns null
+
+        collectorJob = CoroutineScope(Dispatchers.Default).launch {
+            monitor.observeCallSignals().collect { emissions.trySend(it) }
+        }
+        withTimeout(5_000) {
+            while (!broadcastSlot.isCaptured || !callbackSlot.isCaptured ||
+                manualExecutor.pendingCount() == 0
+            ) delay(10)
+        }
+        manualExecutor.drain()
+        awaitEmission()
+
+        val listener = callbackSlot.captured as TelephonyCallback.CallStateListener
+        deliverState(executorSlot.captured, listener, TelephonyManager.CALL_STATE_RINGING)
+        manualExecutor.drain()
+        deliverState(executorSlot.captured, listener, TelephonyManager.CALL_STATE_OFFHOOK)
+        manualExecutor.drain()
+        awaitEmission()
+
+        elapsedClock.advanceMs(30_000L)
+        fakeClock.advanceMs(90_000L) // 실제 30초 경과 중 wall clock 60초 도약
+        deliverState(executorSlot.captured, listener, TelephonyManager.CALL_STATE_IDLE)
+        manualExecutor.drain()
+        withTimeout(5_000) {
+            while (!contextSlot.isCaptured) delay(10)
+        }
+
+        val ended = contextSlot.captured
+        assertEquals("노출 시작시각은 wall clock", 1_000_000L, ended.startedAtMillis)
+        assertEquals("노출 종료시각은 조정된 wall clock", 1_090_000L, ended.endedAtMillis)
+        assertEquals("duration은 monotonic 경과시간", 30_000L, ended.durationMs)
+        assertEquals(30L, ended.durationSec)
     }
 
     /** framework의 callback 전달 모사 — 등록된 executor 큐 경계를 실제로 통과시킨다 (라운드 16-①). */

@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.SystemClock
 import android.telephony.PhoneStateListener
 import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
@@ -32,8 +33,9 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -79,7 +81,7 @@ import javax.inject.Singleton
  *
  * 신호 방출 시점:
  * - OFFHOOK 진입 시 isUnknownCaller == true 이면 UNKNOWN_CALLER 즉시 방출 (실시간 감지)
- * - IDLE 전환 시 통화 종료 신호 세트 방출 후 빈 리스트로 리셋 (combine 캐시 차단)
+ * - IDLE 전환 시 통화 종료 신호 세트 방출 후 빈 리스트로 리셋 (하류 캐시 차단)
  *
  * 로그 태그: SeniorShield-CallMonitor
  */
@@ -96,6 +98,13 @@ class RealCallRiskMonitor @Inject constructor(
     /** 테스트용 시계 주입점. 프로덕션은 System.currentTimeMillis(). */
     @VisibleForTesting
     internal var clock: () -> Long = System::currentTimeMillis
+
+    /**
+     * 프로세스 내부 경과시간 비교용 시계. wall clock 조정의 영향을 받지 않으며,
+     * [clock]과 달리 외부 timestamp나 CallLog 대조에는 사용하지 않는다.
+     */
+    @VisibleForTesting
+    internal var monotonicClock: () -> Long = SystemClock::elapsedRealtime
 
     /** 테스트용 SDK 분기 주입점 — API31 executor 경합의 plain-JVM 결정론 재현용 ([clock] 선례). */
     @VisibleForTesting
@@ -135,6 +144,14 @@ class RealCallRiskMonitor @Inject constructor(
         val state: CallMonitorState,
         val producedAtEpoch: Long,
         val origin: ContextOrigin,
+        /** IDLE 상태가 생산된 시점의 elapsed realtime. 하류 소비 지연으로 anchor가 늘어나지 않게 운반한다. */
+        val endedAtElapsedRealtime: Long? = null,
+    )
+
+    /** wall [CallContext]와 같은 전이에서 캡처한 내부 monotonic 종료시각. */
+    private data class BuiltCallState(
+        val context: CallContext?,
+        val endedAtElapsedRealtime: Long? = null,
     )
 
     /**
@@ -166,6 +183,10 @@ class RealCallRiskMonitor @Inject constructor(
         val currentCallId: Long?,
     )
 
+    /**
+     * 마지막 의심 통화 종료의 elapsed realtime. 기존 필드명은 테스트 범위 호환을 위해 유지한다.
+     * 외부 wall timestamp는 [CallContext.endedAtMillis]에 별도로 보존된다.
+     */
     @Volatile @VisibleForTesting internal var lastSuspiciousCallEndedAt: Long? = null
 
     /**
@@ -176,7 +197,7 @@ class RealCallRiskMonitor @Inject constructor(
      */
     @Volatile private var safeConfirmedCallId: Long? = null
 
-    /** 최근 30분 이내 미확인/미검증 수신 호출 타임스탬프 버퍼 */
+    /** 최근 30분 이내 미확인/미검증 수신 호출의 elapsed realtime 버퍼. */
     @VisibleForTesting internal val recentUnknownCalls: MutableList<Long> = CopyOnWriteArrayList()
 
     /**
@@ -297,19 +318,15 @@ class RealCallRiskMonitor @Inject constructor(
     // ── observeCallSignals ──────────────────────────────────────────────────────
 
     override fun observeCallSignals(): Flow<Produced<List<RiskSignal>>> =
-        combine(
-            sharedCallContext,
-            settingsRepository.observeTestModeEnabled(),
-        ) { sourced, testMode -> sourced to testMode }
-            .flatMapLatest { (sourced, testMode) ->
-                val thresholdMs = if (testMode) CallSignalMapper.TEST_LONG_CALL_THRESHOLD_MS else CallSignalMapper.LONG_CALL_THRESHOLD_MS
+        sharedCallContext
+            .flatMapLatest { sourced ->
                 val producedAtEpoch = sourced.producedAtEpoch
 
                 // ── 공통 진입 게이트 (계약: stale replay의 내부 부수효과 선차단) ──
                 // shareIn replay 등 reset 이전에 생산된 컨텍스트는 어떤 브랜치의 부수효과
                 // (반복호출 기록·anchor·safe marker·receiver 소비/clear·CallLog)도 실행하지
                 // 못한다 — coordinator의 signalsIfFresh는 방출만 거르고 이 변이는 못 막는다.
-                // 방출은 승계 epoch의 중립 RESET 1회 (emptyFlow는 combine 슬롯을 막아 금지).
+                // 방출은 승계 epoch의 중립 RESET 1회 (emptyFlow는 배제 회복 방출을 막아 금지).
                 if (producedAtEpoch < sessionTracker.userResetEpoch) {
                     Log.d(TAG, "stale call context (epoch=$producedAtEpoch) — side effects skipped")
                     return@flatMapLatest neutralReset(producedAtEpoch)
@@ -361,8 +378,9 @@ class RealCallRiskMonitor @Inject constructor(
                             }
 
                             ctx.state == CallState.OFFHOOK -> flow {
-                                // ── 수신 통화: 기존 로직 + 반복 호출 감지 ──
-                                // (진입 게이트를 통과한 CALLBACK-fresh 컨텍스트만 도달한다.)
+                                // ── 수신 통화의 일회성 경계 ──
+                                // CALLBACK 컨텍스트가 새로 생산될 때만 호출 기록·반복 여부를 확정한다.
+                                // testMode 변경은 아래 LONG 타이머만 재시작하며 이 구간은 재실행하지 않는다.
                                 if (ctx.isUnknownCaller == true || ctx.isVerifiedCaller == false) {
                                     recordUnknownCall()
                                 }
@@ -373,34 +391,61 @@ class RealCallRiskMonitor @Inject constructor(
                                 }
                                 emit(Produced(CallSignalEvent(SignalPhase.LIVE, immediateSignals), producedAtEpoch))
 
-                                Log.d(TAG, "통화 임계 대기: ${thresholdMs / 1000}초 (테스트모드=$testMode, repeated=$repeated)")
-                                delay(thresholdMs)
-                                // one-shot delay 재개 후 재확인 (계약). LONG의 causal epoch는
-                                // 타이머를 시작시킨 OFFHOOK ctx의 것을 승계한다 — 발화 시점
-                                // 재캡처는 "reset 이전 통화가 reset 이후 epoch를 받는" 원문제의 부활.
-                                if (sessionTracker.userResetEpoch != producedAtEpoch) return@flow
-                                val signals = buildList {
-                                    if (ctx.isUnknownCaller == true) add(RiskSignal.UNKNOWN_CALLER)
-                                    add(RiskSignal.LONG_CALL_DURATION)
-                                    if (repeated) {
-                                        add(RiskSignal.REPEATED_UNKNOWN_CALLER)
-                                        add(RiskSignal.REPEATED_CALL_THEN_LONG_TALK)
-                                    }
-                                }
-                                Log.d(TAG, "통화 임계 시간 경과 — signals: $signals")
-                                emit(Produced(CallSignalEvent(SignalPhase.LIVE, signals), producedAtEpoch))
+                                // 설정 반응성은 LONG 타이머에만 국소화한다. false↔true flip은 현재
+                                // 타이머를 취소하고 새 임계값으로 다시 시작하지만, 위 일회성 기록과
+                                // immediate 신호 snapshot은 같은 통화 회차에서 유지된다.
+                                emitAll(
+                                    settingsRepository.observeTestModeEnabled()
+                                        .distinctUntilChanged()
+                                        .flatMapLatest { testMode ->
+                                            val thresholdMs = if (testMode) {
+                                                CallSignalMapper.TEST_LONG_CALL_THRESHOLD_MS
+                                            } else {
+                                                CallSignalMapper.LONG_CALL_THRESHOLD_MS
+                                            }
+                                            flow longCallTimer@ {
+                                                Log.d(TAG, "통화 임계 대기: ${thresholdMs / 1000}초 (테스트모드=$testMode, repeated=$repeated)")
+                                                delay(thresholdMs)
+                                                // one-shot delay 재개 후 재확인 (계약). LONG의 causal epoch는
+                                                // 타이머를 시작시킨 OFFHOOK ctx의 것을 승계한다 — 발화 시점
+                                                // 재캡처는 "reset 이전 통화가 reset 이후 epoch를 받는" 원문제의 부활.
+                                                if (sessionTracker.userResetEpoch != producedAtEpoch) return@longCallTimer
+                                                val signals = buildList {
+                                                    if (ctx.isUnknownCaller == true) add(RiskSignal.UNKNOWN_CALLER)
+                                                    add(RiskSignal.LONG_CALL_DURATION)
+                                                    if (repeated) {
+                                                        add(RiskSignal.REPEATED_UNKNOWN_CALLER)
+                                                        add(RiskSignal.REPEATED_CALL_THEN_LONG_TALK)
+                                                    }
+                                                }
+                                                Log.d(TAG, "통화 임계 시간 경과 — signals: $signals")
+                                                emit(Produced(CallSignalEvent(SignalPhase.LIVE, signals), producedAtEpoch))
+                                            }
+                                        }
+                                )
                             }
 
                             // IDLE: 통화 종료 — FINAL phase로 방출 후 RESET으로 캐시 리셋
                             ctx.state == CallState.IDLE && ctx.endedAtMillis != null -> flow {
+                                // 이 signal collection에서 전달된 IDLE의 종료 부수효과는 testMode
+                                // emission과 분리해 먼저 실행한다. 설정 조회 대기가 anchor·outgoing
+                                // 정리를 지연하거나 새 컨텍스트에 의해 취소시키지 않는다.
                                 // callId == OFFHOOK 진입 시각(offhookAtMillis) == ctx.startedAtMillis (IDLE-from-OFFHOOK).
                                 // callOwnership의 currentCallId는 TelephonyCallback에서 이미 null로 클리어된 상태이므로,
                                 // ctx.startedAtMillis를 정답 callId로 사용한다. (RINGING→IDLE은 startedAtMillis=null로 매칭 불가 — B-3 적용 대상 아님.)
                                 val callIdAtIdle = ctx.startedAtMillis
                                 val confirmedSafe = (safeConfirmedCallId != null && callIdAtIdle != null && safeConfirmedCallId == callIdAtIdle)
                                 if ((ctx.isUnknownCaller == true || ctx.isVerifiedCaller == false) && !confirmedSafe) {
-                                    lastSuspiciousCallEndedAt = ctx.endedAtMillis
-                                    Log.d(TAG, "의심 통화 종료 기록: ${ctx.endedAtMillis}")
+                                    val endedAtElapsedRealtime = sourced.endedAtElapsedRealtime
+                                    if (endedAtElapsedRealtime != null) {
+                                        lastSuspiciousCallEndedAt = endedAtElapsedRealtime
+                                        Log.d(
+                                            TAG,
+                                            "의심 통화 종료 기록: wall=${ctx.endedAtMillis}, elapsed=$endedAtElapsedRealtime",
+                                        )
+                                    } else {
+                                        Log.w(TAG, "IDLE monotonic 종료시각 없음 — 텔레뱅킹 anchor 미설정")
+                                    }
                                 } else if (confirmedSafe) {
                                     Log.d(TAG, "의심 통화 종료지만 사용자 안전 확인 — anchor 스킵 (callId=$callIdAtIdle)")
                                 }
@@ -433,6 +478,15 @@ class RealCallRiskMonitor @Inject constructor(
 
                                 // 수신 통화만 mapper 적용 — 발신은 텔레뱅킹 감지만 해당
                                 if (!ctx.isOutgoing) {
+                                    // FINAL mapper만 현재 testMode를 1회 sample한다. 대기 중 reset이
+                                    // 끼면 stale IDLE의 신호/RESET 방출을 재개하지 않는다.
+                                    val testMode = settingsRepository.observeTestModeEnabled().first()
+                                    if (sessionTracker.userResetEpoch != producedAtEpoch) return@flow
+                                    val thresholdMs = if (testMode) {
+                                        CallSignalMapper.TEST_LONG_CALL_THRESHOLD_MS
+                                    } else {
+                                        CallSignalMapper.LONG_CALL_THRESHOLD_MS
+                                    }
                                     val signals = mapper.map(ctx, thresholdMs)
                                     if (signals.isNotEmpty()) {
                                         Log.d(TAG, "signals emitted (FINAL): $signals")
@@ -456,7 +510,7 @@ class RealCallRiskMonitor @Inject constructor(
     /**
      * 중립 RESET 1회 — 원인 컨텍스트의 epoch를 승계해 스탬프한다 (라운드 10: current-epoch
      * 예외 없음 — post-reset의 실제 IDLE/NoPermission은 컨텍스트 자체가 fresh라 배제 회복이
-     * 자연 성립한다). emptyFlow는 combine 슬롯 미충전으로 파이프라인을 정지시키므로 금지.
+     * 자연 성립한다). emptyFlow는 하류 배제 회복 방출을 없애므로 금지.
      */
     private fun neutralReset(producedAtEpoch: Long): Flow<Produced<CallSignalEvent>> =
         flowOf(Produced(CallSignalEvent(SignalPhase.RESET, emptyList()), producedAtEpoch))
@@ -492,6 +546,7 @@ class RealCallRiskMonitor @Inject constructor(
 
         var previousState = CallState.IDLE
         var offhookAtMillis: Long? = null
+        var offhookAtElapsedRealtime: Long? = null
         var callerMetadata: CallerMetadata? = null
         // 통화 회차 세대 — IDLE에서 전진 (라운드 15-②: 늦은 번호 작업의 회차 결속).
         // broadcast 스레드(onReceive 진입 캡처)와 executor 간 가시성 때문에 Atomic.
@@ -639,12 +694,15 @@ class RealCallRiskMonitor @Inject constructor(
                 if (newState == CallState.RINGING) {
                     episodeRingingEpoch = producedAtEpoch
                 }
-                val ctx: CallContext? = if (claimedInitial) {
+                val built = if (claimedInitial) {
                     // 첫 방출 선점 = SEED 복원 (계약 1) — blind gap 이후의 방향·번호는 알 수 없다.
-                    restoreSeedState(
-                        newState,
-                        onOffhookUpdated = { offhookAtMillis = it },
-                        onOutgoingUpdated = { isOutgoing = it },
+                    BuiltCallState(
+                        restoreSeedState(
+                            newState,
+                            onOffhookUpdated = { offhookAtMillis = it },
+                            onOffhookElapsedUpdated = { offhookAtElapsedRealtime = it },
+                            onOutgoingUpdated = { isOutgoing = it },
+                        ),
                     )
                 } else {
                     // metadata는 전이와 같은 epoch **그리고** 현재 회차일 때만 소비한다
@@ -654,13 +712,15 @@ class RealCallRiskMonitor @Inject constructor(
                             it.callGeneration == callGeneration.get()
                     }
                     buildContext(
-                        previousState, newState, offhookAtMillis,
+                        previousState, newState, offhookAtMillis, offhookAtElapsedRealtime,
                         meta?.phoneNumber, meta?.isUnknownCaller, meta?.isVerifiedCaller,
                         isOutgoing,
                         onOffhookUpdated = { offhookAtMillis = it },
+                        onOffhookElapsedUpdated = { offhookAtElapsedRealtime = it },
                         onOutgoingUpdated = { isOutgoing = it },
                     )
                 }
+                val ctx = built.context
                 previousState = newState
                 when (newState) {
                     CallState.OFFHOOK -> {
@@ -687,7 +747,14 @@ class RealCallRiskMonitor @Inject constructor(
                 }
                 val origin = if (claimedInitial) ContextOrigin.SEED else ContextOrigin.CALLBACK
                 if (ctx != null) {
-                    trySend(SourcedCallState(CallMonitorState.Active(ctx), producedAtEpoch, origin))
+                    trySend(
+                        SourcedCallState(
+                            CallMonitorState.Active(ctx),
+                            producedAtEpoch,
+                            origin,
+                            built.endedAtElapsedRealtime,
+                        ),
+                    )
                 } else if (claimedInitial) {
                     trySend(SourcedCallState(CallMonitorState.Idle, producedAtEpoch, ContextOrigin.SEED))
                 }
@@ -737,6 +804,7 @@ class RealCallRiskMonitor @Inject constructor(
             val seedCtx = restoreSeedState(
                 currentCallState,
                 onOffhookUpdated = { offhookAtMillis = it },
+                onOffhookElapsedUpdated = { offhookAtElapsedRealtime = it },
                 onOutgoingUpdated = { isOutgoing = it },
             )
             previousState = currentCallState
@@ -807,6 +875,7 @@ class RealCallRiskMonitor @Inject constructor(
 
         var previousState = CallState.IDLE
         var offhookAtMillis: Long? = null
+        var offhookAtElapsedRealtime: Long? = null
         var callerMetadata: CallerMetadata? = null
         // 통화 회차 세대 — IDLE에서 전진 (라운드 15-②). legacy는 단일 콜백 채널(main looper
         // 직렬)이라 별도 원인-epoch 저장이 불필요하다 — RINGING 커밋 epoch가 곧 원인 epoch.
@@ -853,12 +922,15 @@ class RealCallRiskMonitor @Inject constructor(
                     }
                 }
 
-                val ctx: CallContext? = if (claimedInitial) {
+                val built = if (claimedInitial) {
                     // 암묵 seed(등록 즉시 현재 상태 콜백) = SEED 복원 (계약 1).
-                    restoreSeedState(
-                        newState,
-                        onOffhookUpdated = { offhookAtMillis = it },
-                        onOutgoingUpdated = { isOutgoing = it },
+                    BuiltCallState(
+                        restoreSeedState(
+                            newState,
+                            onOffhookUpdated = { offhookAtMillis = it },
+                            onOffhookElapsedUpdated = { offhookAtElapsedRealtime = it },
+                            onOutgoingUpdated = { isOutgoing = it },
+                        ),
                     )
                 } else {
                     // metadata는 전이와 같은 epoch **그리고** 현재 회차일 때만 소비한다
@@ -867,13 +939,15 @@ class RealCallRiskMonitor @Inject constructor(
                         it.producedAtEpoch == producedAtEpoch && it.callGeneration == callGeneration
                     }
                     buildContext(
-                        previousState, newState, offhookAtMillis,
+                        previousState, newState, offhookAtMillis, offhookAtElapsedRealtime,
                         meta?.phoneNumber, meta?.isUnknownCaller, meta?.isVerifiedCaller,
                         isOutgoing,
                         onOffhookUpdated = { offhookAtMillis = it },
+                        onOffhookElapsedUpdated = { offhookAtElapsedRealtime = it },
                         onOutgoingUpdated = { isOutgoing = it },
                     )
                 }
+                val ctx = built.context
                 previousState = newState
 
                 when (newState) {
@@ -902,7 +976,14 @@ class RealCallRiskMonitor @Inject constructor(
 
                 val origin = if (claimedInitial) ContextOrigin.SEED else ContextOrigin.CALLBACK
                 if (ctx != null) {
-                    trySend(SourcedCallState(CallMonitorState.Active(ctx), producedAtEpoch, origin))
+                    trySend(
+                        SourcedCallState(
+                            CallMonitorState.Active(ctx),
+                            producedAtEpoch,
+                            origin,
+                            built.endedAtElapsedRealtime,
+                        ),
+                    )
                 } else if (claimedInitial) {
                     trySend(SourcedCallState(CallMonitorState.Idle, producedAtEpoch, ContextOrigin.SEED))
                 }
@@ -944,17 +1025,20 @@ class RealCallRiskMonitor @Inject constructor(
     private fun restoreSeedState(
         state: CallState,
         onOffhookUpdated: (Long?) -> Unit,
+        onOffhookElapsedUpdated: (Long?) -> Unit,
         onOutgoingUpdated: (Boolean) -> Unit,
     ): CallContext? = when (state) {
         CallState.OFFHOOK -> {
-            val now = clock()
-            onOffhookUpdated(now)
+            val wallNow = clock()
+            val elapsedNow = monotonicClock()
+            onOffhookUpdated(wallNow)
+            onOffhookElapsedUpdated(elapsedNow)
             onOutgoingUpdated(false)
             Log.d(TAG, "seed restore: in-progress call (OFFHOOK), direction unknown → isOutgoing=false")
             CallContext(
                 state = CallState.OFFHOOK,
                 phoneNumber = null,
-                startedAtMillis = now,
+                startedAtMillis = wallNow,
                 endedAtMillis = null,
                 durationMs = 0L,
                 durationSec = 0L,
@@ -977,6 +1061,7 @@ class RealCallRiskMonitor @Inject constructor(
 
         CallState.IDLE -> {
             onOffhookUpdated(null)
+            onOffhookElapsedUpdated(null)
             onOutgoingUpdated(false)
             null
         }
@@ -986,81 +1071,98 @@ class RealCallRiskMonitor @Inject constructor(
         previous: CallState,
         next: CallState,
         offhookAtMillis: Long?,
+        offhookAtElapsedRealtime: Long?,
         phoneNumber: String?,
         isUnknownCaller: Boolean?,
         isVerifiedCaller: Boolean?,
         isOutgoing: Boolean,
         onOffhookUpdated: (Long?) -> Unit,
+        onOffhookElapsedUpdated: (Long?) -> Unit,
         onOutgoingUpdated: (Boolean) -> Unit,
-    ): CallContext? = when (next) {
-        CallState.RINGING -> CallContext(
-            state = CallState.RINGING,
-            phoneNumber = phoneNumber,
-            startedAtMillis = null,
-            endedAtMillis = null,
-            durationMs = 0L,
-            durationSec = 0L,
-            isUnknownCaller = isUnknownCaller,
-            isVerifiedCaller = isVerifiedCaller,
-        )
-
-        CallState.OFFHOOK -> {
-            val now = clock()
-            onOffhookUpdated(now)
-            val outgoing = previous == CallState.IDLE
-            onOutgoingUpdated(outgoing)
-            Log.d(TAG, "call connected, startedAtMillis=$now, isOutgoing=$outgoing, isUnknownCaller=$isUnknownCaller, isVerifiedCaller=$isVerifiedCaller")
+    ): BuiltCallState = when (next) {
+        CallState.RINGING -> BuiltCallState(
             CallContext(
-                state = CallState.OFFHOOK,
+                state = CallState.RINGING,
                 phoneNumber = phoneNumber,
-                startedAtMillis = now,
+                startedAtMillis = null,
                 endedAtMillis = null,
                 durationMs = 0L,
                 durationSec = 0L,
                 isUnknownCaller = isUnknownCaller,
                 isVerifiedCaller = isVerifiedCaller,
-                isOutgoing = outgoing,
+            ),
+        )
+
+        CallState.OFFHOOK -> {
+            val wallNow = clock()
+            val elapsedNow = monotonicClock()
+            onOffhookUpdated(wallNow)
+            onOffhookElapsedUpdated(elapsedNow)
+            val outgoing = previous == CallState.IDLE
+            onOutgoingUpdated(outgoing)
+            Log.d(TAG, "call connected, startedAtMillis=$wallNow, isOutgoing=$outgoing, isUnknownCaller=$isUnknownCaller, isVerifiedCaller=$isVerifiedCaller")
+            BuiltCallState(
+                CallContext(
+                    state = CallState.OFFHOOK,
+                    phoneNumber = phoneNumber,
+                    startedAtMillis = wallNow,
+                    endedAtMillis = null,
+                    durationMs = 0L,
+                    durationSec = 0L,
+                    isUnknownCaller = isUnknownCaller,
+                    isVerifiedCaller = isVerifiedCaller,
+                    isOutgoing = outgoing,
+                ),
             )
         }
 
         CallState.IDLE -> {
-            val now = clock()
+            val wallNow = clock()
+            val elapsedNow = monotonicClock()
             when (previous) {
                 CallState.OFFHOOK -> {
-                    val durationMs = offhookAtMillis?.let { now - it } ?: 0L
+                    val durationMs = offhookAtElapsedRealtime?.let { elapsedNow - it } ?: 0L
                     val durationSec = durationMs / 1000L
                     Log.d(TAG, "call ended (OFFHOOK→IDLE), durationMs=$durationMs, durationSec=$durationSec, isUnknownCaller=$isUnknownCaller, isVerifiedCaller=$isVerifiedCaller, isOutgoing=$isOutgoing")
                     onOffhookUpdated(null)
+                    onOffhookElapsedUpdated(null)
                     onOutgoingUpdated(false)
-                    CallContext(
-                        state = CallState.IDLE,
-                        phoneNumber = phoneNumber,
-                        startedAtMillis = offhookAtMillis,
-                        endedAtMillis = now,
-                        durationMs = durationMs,
-                        durationSec = durationSec,
-                        isUnknownCaller = isUnknownCaller,
-                        isVerifiedCaller = isVerifiedCaller,
-                        isOutgoing = isOutgoing,
+                    BuiltCallState(
+                        CallContext(
+                            state = CallState.IDLE,
+                            phoneNumber = phoneNumber,
+                            startedAtMillis = offhookAtMillis,
+                            endedAtMillis = wallNow,
+                            durationMs = durationMs,
+                            durationSec = durationSec,
+                            isUnknownCaller = isUnknownCaller,
+                            isVerifiedCaller = isVerifiedCaller,
+                            isOutgoing = isOutgoing,
+                        ),
+                        endedAtElapsedRealtime = elapsedNow,
                     )
                 }
                 CallState.RINGING -> {
                     Log.d(TAG, "missed/rejected call (RINGING→IDLE)")
                     onOffhookUpdated(null)
+                    onOffhookElapsedUpdated(null)
                     onOutgoingUpdated(false)
-                    CallContext(
-                        state = CallState.IDLE,
-                        phoneNumber = phoneNumber,
-                        startedAtMillis = null,
-                        endedAtMillis = now,
-                        durationMs = 0L,
-                        durationSec = 0L,
-                        isUnknownCaller = isUnknownCaller,
-                        isVerifiedCaller = isVerifiedCaller,
-                        isOutgoing = isOutgoing,
+                    BuiltCallState(
+                        CallContext(
+                            state = CallState.IDLE,
+                            phoneNumber = phoneNumber,
+                            startedAtMillis = null,
+                            endedAtMillis = wallNow,
+                            durationMs = 0L,
+                            durationSec = 0L,
+                            isUnknownCaller = isUnknownCaller,
+                            isVerifiedCaller = isVerifiedCaller,
+                            isOutgoing = isOutgoing,
+                        ),
+                        endedAtElapsedRealtime = elapsedNow,
                     )
                 }
-                CallState.IDLE -> null
+                CallState.IDLE -> BuiltCallState(null)
             }
         }
     }
@@ -1082,7 +1184,7 @@ class RealCallRiskMonitor @Inject constructor(
     /** 30분 초과 항목을 정리하고 반복 호출 여부를 반환한다. */
     @VisibleForTesting
     internal fun isRepeatedUnknownCaller(): Boolean {
-        val cutoff = clock() - REPEATED_CALL_WINDOW_MS
+        val cutoff = monotonicClock() - REPEATED_CALL_WINDOW_MS
         recentUnknownCalls.removeAll { it < cutoff }
         return recentUnknownCalls.size >= 2
     }
@@ -1095,7 +1197,7 @@ class RealCallRiskMonitor @Inject constructor(
             recentUnknownCalls.clear()
             lastSuspiciousCallEndedAt = null
         }
-        val now = clock()
+        val now = monotonicClock()
         val cutoff = now - REPEATED_CALL_WINDOW_MS
         recentUnknownCalls.removeAll { it < cutoff }
         recentUnknownCalls.add(now)
@@ -1106,7 +1208,7 @@ class RealCallRiskMonitor @Inject constructor(
     @VisibleForTesting
     internal fun isTelebankingWindow(): Boolean {
         val lastSuspicious = lastSuspiciousCallEndedAt ?: return false
-        return clock() - lastSuspicious <= TELEBANKING_WINDOW_MS
+        return monotonicClock() - lastSuspicious <= TELEBANKING_WINDOW_MS
     }
 
     /**
