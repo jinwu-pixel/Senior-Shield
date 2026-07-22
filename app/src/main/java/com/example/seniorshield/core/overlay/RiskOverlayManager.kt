@@ -21,7 +21,6 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
-import androidx.annotation.VisibleForTesting
 import com.example.seniorshield.BuildConfig
 import com.example.seniorshield.MainActivity
 import com.example.seniorshield.core.navigation.NavigationEventBus
@@ -29,11 +28,9 @@ import com.example.seniorshield.core.util.CallEndHelper
 import com.example.seniorshield.domain.model.Guardian
 import com.example.seniorshield.domain.model.RiskEvent
 import com.example.seniorshield.domain.model.RiskLevel
-import com.example.seniorshield.domain.model.RiskSignal
-import com.example.seniorshield.domain.repository.RiskEventSink
 import com.example.seniorshield.monitoring.call.CallRiskMonitor
-import com.example.seniorshield.monitoring.orchestrator.AlertStateResolver
-import com.example.seniorshield.monitoring.session.RiskSessionTracker
+import com.example.seniorshield.monitoring.orchestrator.SafeConfirmationOverlayBinding
+import com.example.seniorshield.monitoring.session.ResetEpochProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -50,6 +47,118 @@ private const val POST_CALL_UI_STABILIZATION_MS = 1_000L
 private const val MAX_END_CALL_SUPPRESSION_MS = 3_000L
 
 /**
+ * Safe-confirm route postprocessing (notably Warning onBack) runs on main. Remove an existing
+ * surface in that same call stack so step 7 completes before step 8; preserve Handler dispatch for
+ * the defensive off-main case.
+ */
+internal fun dispatchSafeCleanup(
+    isMainThread: Boolean,
+    post: (Runnable) -> Unit,
+    cleanup: () -> Unit,
+) {
+    val task = Runnable { cleanup() }
+    if (isMainThread) task.run() else post(task)
+}
+
+/** Business reset epoch plus a manager-local surface generation. */
+internal data class PresentationGenerationToken(
+    val businessEpoch: Long,
+    val generation: Long,
+)
+
+/** Exact cleanup boundary captured when safe-confirm invalidates prior-epoch work. */
+internal data class PresentationInvalidationTicket(
+    val beforeBusinessEpoch: Long,
+    val issuedThroughGeneration: Long,
+)
+
+/**
+ * Pure, thread-safe gate shared by the two presentation managers through independent instances.
+ *
+ * Safe-confirm advances only [minimumBusinessEpoch]. Each business epoch owns its latest-token and
+ * dismissal boundary, so a late reservation from the old epoch cannot supersede or invalidate a
+ * token from the new epoch that was reserved after reset but before manager invalidation. Normal UI
+ * dismissal invalidates the relevant epoch through the captured token; a later same-epoch threat
+ * receives a larger generation and remains eligible.
+ */
+internal class PresentationGenerationGate {
+    private var nextGeneration = 0L
+    private var latestReservedGeneration = 0L
+    private var minimumBusinessEpoch = Long.MIN_VALUE
+    private val latestReservedGenerationByEpoch = mutableMapOf<Long, Long>()
+    private val invalidThroughGenerationByEpoch = mutableMapOf<Long, Long>()
+
+    @Synchronized
+    fun reserve(businessEpoch: Long): PresentationGenerationToken? {
+        if (businessEpoch < minimumBusinessEpoch) return null
+        nextGeneration += 1
+        latestReservedGeneration = nextGeneration
+        latestReservedGenerationByEpoch[businessEpoch] = nextGeneration
+        return PresentationGenerationToken(businessEpoch, nextGeneration)
+    }
+
+    @Synchronized
+    fun invalidateBeforeEpoch(businessEpoch: Long): PresentationInvalidationTicket {
+        minimumBusinessEpoch = maxOf(minimumBusinessEpoch, businessEpoch)
+        latestReservedGenerationByEpoch.keys.removeAll { it < minimumBusinessEpoch }
+        invalidThroughGenerationByEpoch.keys.removeAll { it < minimumBusinessEpoch }
+        return PresentationInvalidationTicket(
+            beforeBusinessEpoch = businessEpoch,
+            issuedThroughGeneration = latestReservedGeneration,
+        )
+    }
+
+    @Synchronized
+    fun invalidateThrough(token: PresentationGenerationToken): PresentationGenerationToken {
+        val invalidThrough = invalidThroughGenerationByEpoch[token.businessEpoch] ?: 0L
+        invalidThroughGenerationByEpoch[token.businessEpoch] = maxOf(
+            invalidThrough,
+            token.generation,
+        )
+        return token
+    }
+
+    @Synchronized
+    fun invalidateThroughLatest(businessEpoch: Long): PresentationGenerationToken? {
+        val latestForEpoch = latestReservedGenerationByEpoch[businessEpoch] ?: return null
+        return invalidateThrough(PresentationGenerationToken(businessEpoch, latestForEpoch))
+    }
+
+    @Synchronized
+    fun isCurrent(token: PresentationGenerationToken, liveBusinessEpoch: Long): Boolean =
+        token.businessEpoch == liveBusinessEpoch &&
+            token.businessEpoch >= minimumBusinessEpoch &&
+            token.generation == latestReservedGenerationByEpoch[token.businessEpoch] &&
+            token.generation > (invalidThroughGenerationByEpoch[token.businessEpoch] ?: 0L)
+
+    @Synchronized
+    fun runIfCurrent(
+        token: PresentationGenerationToken,
+        liveBusinessEpoch: Long,
+        action: () -> Unit,
+    ): Boolean {
+        if (!isCurrent(token, liveBusinessEpoch)) return false
+        action()
+        return true
+    }
+
+    fun shouldRemoveThrough(
+        token: PresentationGenerationToken,
+        cutoff: PresentationGenerationToken,
+    ): Boolean = token.businessEpoch == cutoff.businessEpoch &&
+        token.generation <= cutoff.generation
+
+    fun shouldRemoveBeforeEpoch(token: PresentationGenerationToken, businessEpoch: Long): Boolean =
+        token.businessEpoch < businessEpoch
+
+    fun shouldRemove(
+        token: PresentationGenerationToken,
+        ticket: PresentationInvalidationTicket,
+    ): Boolean = token.businessEpoch < ticket.beforeBusinessEpoch &&
+        token.generation <= ticket.issuedThroughGeneration
+}
+
+/**
  * 위험 감지 시 화면 전체를 덮는 경고 팝업을 표시한다.
  *
  * TYPE_APPLICATION_OVERLAY + MATCH_PARENT 높이로 다른 앱 위, 통화 중에도 표시된다.
@@ -62,53 +171,50 @@ private const val MAX_END_CALL_SUPPRESSION_MS = 3_000L
  * - 통화 중: "통화 경고 닫기"
  * - 비통화: "위험 경고 해제"
  *
- * 클릭 시 부수효과는 **두 축**으로 분리된다:
- *
- * 1. **snooze (respawn 억제)** — `sessionTracker.snoozeForCall(liveCallId)`.
- *    같은 callId의 call-derived signal을 Coordinator pre-update 필터에서 제거.
- *    `liveCallId != null` 이면 **항상** 적용 (provenance 무관). 목적: 사용자가 방금 닫은
- *    팝업이 call-derived signal 재감지만으로 즉시 respawn되는 UX 회귀 방지.
- *
- * 2. **anchor suppression** — `clearTelebankingAnchor` + `markCurrentCallConfirmedSafe`.
- *    두 호출은 같은 목적(텔레뱅킹 감지용 `lastSuspiciousCallEndedAt` anchor의 즉시 삭제 + 다음 IDLE
- *    시 재설정 차단)이라 **동일 predicate 아래 묶어서** 실행/스킵한다. 반쪽 실행 금지.
- *    predicate는 [shouldApplyCallSafeEffects] — positive allowlist.
- *    의미 계약: "현재 overlay를 닫는 행위가 해당 통화를 안전 확인하는 뜻으로 해석 가능한 경우에만" 적용.
- *    app-derived(REMOTE_CONTROL 등) / TELEBANKING 포함 / mixed 는 모두 deny.
- *
- * 클릭 시 실행 순서 (pure function [performSafeCtaSideEffects] 에 추출됨):
- *   1. sessionTracker.resetAfterUserConfirmedSafe()   (세션 즉시 종료 + α arm)
- *   2. eventSink.clearCurrentRiskEvent()              (UI 반영)
- *   3. (liveCallId != null) snoozeForCall(liveCallId) — 축 1
- *   4. (callSafe == true && liveCallId != null) clearTelebankingAnchor + markCurrentCallConfirmedSafe — 축 2
- *   5. dismiss()
- *
- * snooze는 IDLE 전이 / 통화 전환 / TTL 15분 / 상위 trigger(REMOTE_CONTROL 등) 출현 시 자동 해제된다.
+ * 보조 CTA는 클릭 시점 callId와 표시 신호만 [SafeConfirmationOverlayBinding]에 전달한다.
+ * 세션 reset, snooze, call-safe allowlist, anchor, current event, surface cleanup의 자격과
+ * 순서는 모두 Coordinator command가 검증·소유한다. callback이 false면 현재 표면은 유지된다.
  */
 @Singleton
 class RiskOverlayManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val callEndHelper: CallEndHelper,
     private val callRiskMonitor: CallRiskMonitor,
-    private val sessionTracker: RiskSessionTracker,
-    private val eventSink: RiskEventSink,
     private val navigationEventBus: NavigationEventBus,
+    private val resetEpochProvider: ResetEpochProvider,
 ) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val mainHandler = Handler(Looper.getMainLooper())
 
     @Volatile private var overlayView: LinearLayout? = null
+    @Volatile private var overlayPresentationToken: PresentationGenerationToken? = null
     @Volatile private var isDismissing = false
     private var currentParams: WindowManager.LayoutParams? = null
+    private val presentationGeneration = PresentationGenerationGate()
+    @Volatile private var pendingSafeCleanup: PresentationInvalidationTicket? = null
 
     // ── end-call suppression state ──────────────────────────────────
     @Volatile private var endCallSuppressionActive = false
     @Volatile private var idleStabilizationScheduled = false
     private var suppressionReleaseRunnable: Runnable? = null
     private var onSuppressionReleased: (() -> Unit)? = null
+    private val suppressionGeneration = PresentationGenerationGate()
+    @Volatile private var suppressionPresentationToken: PresentationGenerationToken? = null
 
-    fun show(event: RiskEvent, guardian: Guardian? = null) {
-        if (endCallSuppressionActive) {
+    fun show(
+        event: RiskEvent,
+        guardian: Guardian?,
+        safeConfirmation: SafeConfirmationOverlayBinding,
+    ) {
+        if (event.id != safeConfirmation.expectedEventId) {
+            Log.w(TAG, "safe-confirm binding/event mismatch — 팝업 생략")
+            return
+        }
+        if (safeConfirmation.expectedResetEpoch != resetEpochProvider.userResetEpoch) {
+            Log.w(TAG, "stale safe-confirm epoch — 팝업 생략")
+            return
+        }
+        if (isEndCallSuppressed()) {
             Log.d(TAG, "suppression active, skip risk popup")
             return
         }
@@ -116,18 +222,27 @@ class RiskOverlayManager @Inject constructor(
             Log.w(TAG, "SYSTEM_ALERT_WINDOW 권한 없음 — 팝업 생략")
             return
         }
-        mainHandler.post {
+        val presentationToken = presentationGeneration.reserve(
+            safeConfirmation.expectedResetEpoch,
+        ) ?: return
+        postIfCurrent(presentationToken) showTask@{
             if (overlayView != null) {
                 Log.d(TAG, "팝업 이미 표시 중 — 새 내용으로 갱신")
                 try {
                     windowManager.removeView(overlayView)
                     overlayView = null
+                    overlayPresentationToken = null
                 } catch (e: Exception) {
                     Log.e(TAG, "기존 팝업 제거 실패, 갱신 중단: ${e.message}")
-                    return@post
+                    return@showTask
                 }
             }
-            val (view, primaryButton) = buildView(event, guardian)
+            val (view, primaryButton) = buildView(
+                event,
+                guardian,
+                safeConfirmation,
+                presentationToken,
+            )
             val params = WindowManager.LayoutParams(
                 MATCH_PARENT,
                 MATCH_PARENT,
@@ -137,7 +252,17 @@ class RiskOverlayManager @Inject constructor(
             )
             try {
                 windowManager.addView(view, params)
+                if (!presentationGeneration.isCurrent(
+                        presentationToken,
+                        resetEpochProvider.userResetEpoch,
+                    )
+                ) {
+                    windowManager.removeView(view)
+                    Log.d(TAG, "팝업 add 직후 세대 무효 확인 — 즉시 제거")
+                    return@showTask
+                }
                 overlayView = view
+                overlayPresentationToken = presentationToken
                 currentParams = params
                 primaryButton.requestFocus()
                 Log.d(TAG, "전체화면 팝업 표시: level=${event.level}, title=${event.title}")
@@ -148,31 +273,108 @@ class RiskOverlayManager @Inject constructor(
     }
 
     fun dismiss() {
-        isDismissing = true
-        mainHandler.post {
-            val view = overlayView ?: run {
-                isDismissing = false
-                return@post
-            }
-            try {
-                windowManager.removeView(view)
-                Log.d(TAG, "팝업 닫힘")
-            } catch (e: Exception) {
-                Log.e(TAG, "팝업 removeView 실패: ${e.message}")
-            } finally {
-                overlayView = null
-                currentParams = null
-                isDismissing = false
+        val surfaceCutoff = overlayPresentationToken?.let(presentationGeneration::invalidateThrough)
+        val pendingCutoff = presentationGeneration.invalidateThroughLatest(
+            resetEpochProvider.userResetEpoch,
+        )
+        listOfNotNull(surfaceCutoff, pendingCutoff)
+            .distinct()
+            .forEach(::dismissThrough)
+    }
+
+    /** Safe-confirm step 3: synchronously invalidate only work from earlier business epochs. */
+    internal fun invalidateBeforeEpoch(businessEpoch: Long) {
+        pendingSafeCleanup = presentationGeneration.invalidateBeforeEpoch(businessEpoch)
+        invalidateSuppressionBeforeEpoch(businessEpoch)
+    }
+
+    /** Safe-confirm step 7: remove only the surface covered by the earlier invalidation ticket. */
+    internal fun dismissBeforeEpoch(businessEpoch: Long) {
+        val ticket = pendingSafeCleanup
+            ?.takeIf { it.beforeBusinessEpoch == businessEpoch }
+            ?: PresentationInvalidationTicket(
+                beforeBusinessEpoch = businessEpoch,
+                issuedThroughGeneration = Long.MAX_VALUE,
+            )
+        dispatchSafeCleanup(
+            isMainThread = Looper.myLooper() == mainHandler.looper,
+            post = { task ->
+                mainHandler.post(task)
+                Unit
+            },
+        ) {
+            val token = overlayPresentationToken
+            if (token != null && presentationGeneration.shouldRemove(token, ticket)) {
+                removeSurfaceIfExact(token)
+                if (pendingSafeCleanup == ticket) pendingSafeCleanup = null
             }
         }
     }
 
+    private fun dismiss(presentationToken: PresentationGenerationToken) {
+        val generationCutoff = presentationGeneration.invalidateThrough(presentationToken)
+        dismissThrough(generationCutoff)
+    }
+
+    private fun dismissThrough(generationCutoff: PresentationGenerationToken) {
+        isDismissing = true
+        mainHandler.post {
+            val token = overlayPresentationToken ?: run {
+                isDismissing = false
+                return@post
+            }
+            if (!presentationGeneration.shouldRemoveThrough(token, generationCutoff)) {
+                isDismissing = false
+                return@post
+            }
+            removeSurfaceIfExact(token)
+            isDismissing = false
+        }
+    }
+
+    private fun removeSurfaceIfExact(token: PresentationGenerationToken) {
+        if (overlayPresentationToken != token) return
+        val view = overlayView ?: return
+        try {
+            windowManager.removeView(view)
+            Log.d(TAG, "팝업 닫힘")
+        } catch (e: Exception) {
+            Log.e(TAG, "팝업 removeView 실패: ${e.message}")
+        } finally {
+            if (overlayPresentationToken == token) {
+                overlayView = null
+                overlayPresentationToken = null
+                currentParams = null
+            }
+        }
+    }
+
+    private fun postIfCurrent(
+        token: PresentationGenerationToken,
+        action: () -> Unit,
+    ) {
+        mainHandler.post {
+            presentationGeneration.runIfCurrent(
+                token,
+                resetEpochProvider.userResetEpoch,
+                action,
+            )
+        }
+    }
+
     fun ensureCriticalOnTop() {
+        val token = overlayPresentationToken ?: return
         if (Looper.myLooper() != Looper.getMainLooper()) {
             if (BuildConfig.DEBUG) Log.w(TAG, "ensureCriticalOnTop called off-main, posting to main")
-            mainHandler.post { ensureCriticalOnTop() }
+            postIfCurrent(token) { ensureCriticalOnTop(token) }
             return
         }
+        ensureCriticalOnTop(token)
+    }
+
+    private fun ensureCriticalOnTop(token: PresentationGenerationToken) {
+        if (!presentationGeneration.isCurrent(token, resetEpochProvider.userResetEpoch)) return
+        if (overlayPresentationToken != token) return
         val view = overlayView ?: return
         if (view.parent == null) return
         if (isDismissing) return
@@ -189,7 +391,11 @@ class RiskOverlayManager @Inject constructor(
     // ── end-call suppression ───────────────────────────────────────
 
     /** coordinator가 UI 억제 여부를 확인할 때 사용. */
-    fun isEndCallSuppressed(): Boolean = endCallSuppressionActive
+    fun isEndCallSuppressed(): Boolean {
+        val token = suppressionPresentationToken ?: return false
+        return endCallSuppressionActive &&
+            suppressionGeneration.isCurrent(token, resetEpochProvider.userResetEpoch)
+    }
 
     /**
      * 통화 종료 동작을 유도한 직후 호출되어 팝업 재표시를 억제한다.
@@ -197,17 +403,20 @@ class RiskOverlayManager @Inject constructor(
      * (현재 호출부 없음 — 팝업 주 버튼이 showInCallScreen 경로로 바뀌면서 유휴 상태.)
      */
     internal fun startEndCallSuppression(onReleased: (() -> Unit)? = null) {
+        val businessEpoch = resetEpochProvider.userResetEpoch
+        val token = suppressionGeneration.reserve(businessEpoch) ?: return
         endCallSuppressionActive = true
         idleStabilizationScheduled = false
         onSuppressionReleased = onReleased
+        suppressionPresentationToken = token
         suppressionReleaseRunnable?.let { mainHandler.removeCallbacks(it) }
         val safetyRelease = Runnable {
-            endCallSuppressionActive = false
-            idleStabilizationScheduled = false
-            suppressionReleaseRunnable = null
-            Log.d(TAG, "suppression force-released (safety timeout)")
-            onSuppressionReleased?.invoke()
-            onSuppressionReleased = null
+            suppressionGeneration.runIfCurrent(
+                token,
+                resetEpochProvider.userResetEpoch,
+            ) {
+                releaseSuppressionIfExact(token, "suppression force-released (safety timeout)")
+            }
         }
         suppressionReleaseRunnable = safetyRelease
         mainHandler.postDelayed(safetyRelease, MAX_END_CALL_SUPPRESSION_MS)
@@ -219,20 +428,47 @@ class RiskOverlayManager @Inject constructor(
      * 안전 타임아웃을 취소하고 짧은 안정화 지연 후 suppression 해제.
      */
     fun scheduleSuppressionRelease() {
-        if (!endCallSuppressionActive || idleStabilizationScheduled) return
+        val token = suppressionPresentationToken ?: return
+        if (!isEndCallSuppressed() || idleStabilizationScheduled) return
         idleStabilizationScheduled = true
         suppressionReleaseRunnable?.let { mainHandler.removeCallbacks(it) }
         val release = Runnable {
-            endCallSuppressionActive = false
-            idleStabilizationScheduled = false
-            suppressionReleaseRunnable = null
-            Log.d(TAG, "suppression released after stabilization")
-            onSuppressionReleased?.invoke()
-            onSuppressionReleased = null
+            suppressionGeneration.runIfCurrent(
+                token,
+                resetEpochProvider.userResetEpoch,
+            ) {
+                releaseSuppressionIfExact(token, "suppression released after stabilization")
+            }
         }
         suppressionReleaseRunnable = release
         mainHandler.postDelayed(release, POST_CALL_UI_STABILIZATION_MS)
         Log.d(TAG, "call became IDLE, suppression release in ${POST_CALL_UI_STABILIZATION_MS}ms")
+    }
+
+    private fun invalidateSuppressionBeforeEpoch(businessEpoch: Long) {
+        suppressionGeneration.invalidateBeforeEpoch(businessEpoch)
+        val token = suppressionPresentationToken ?: return
+        if (!suppressionGeneration.shouldRemoveBeforeEpoch(token, businessEpoch)) return
+        suppressionReleaseRunnable?.let { mainHandler.removeCallbacks(it) }
+        suppressionReleaseRunnable = null
+        suppressionPresentationToken = null
+        endCallSuppressionActive = false
+        idleStabilizationScheduled = false
+        onSuppressionReleased = null
+    }
+
+    private fun releaseSuppressionIfExact(
+        token: PresentationGenerationToken,
+        logMessage: String,
+    ) {
+        if (suppressionPresentationToken != token) return
+        endCallSuppressionActive = false
+        idleStabilizationScheduled = false
+        suppressionReleaseRunnable = null
+        suppressionPresentationToken = null
+        Log.d(TAG, logMessage)
+        onSuppressionReleased?.invoke()
+        onSuppressionReleased = null
     }
 
     // ── 레이아웃 ─────────────────────────────────────────────────
@@ -242,7 +478,12 @@ class RiskOverlayManager @Inject constructor(
         val primaryButton: Button,
     )
 
-    private fun buildView(event: RiskEvent, guardian: Guardian? = null): OverlayViews {
+    private fun buildView(
+        event: RiskEvent,
+        guardian: Guardian?,
+        safeConfirmation: SafeConfirmationOverlayBinding,
+        presentationToken: PresentationGenerationToken,
+    ): OverlayViews {
         val bgColor = when (event.level) {
             RiskLevel.CRITICAL -> Color.parseColor("#B71C1C")
             RiskLevel.HIGH     -> Color.parseColor("#BF360C")
@@ -271,7 +512,7 @@ class RiskOverlayManager @Inject constructor(
         //
         // 이 경로에서는 risk state를 절대 touch하지 않는다:
         //   - currentRiskEvent clear 금지
-        //   - sessionTracker.resetAfterUserConfirmedSafe() 금지
+        //   - user-confirmed-safe session reset 금지
         //   - anchor clear (callRiskMonitor.clearTelebankingAnchor) 금지
         //   - safe-confirm 관련 부수효과 일체 금지
         // → Home 복귀 시 currentRiskEvent가 살아있어 카드는 "위험 감지"로 유지되고,
@@ -283,7 +524,7 @@ class RiskOverlayManager @Inject constructor(
                 if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
                     Log.d(TAG, "오버레이 뒤로가기 키 → UI recovery (dismiss + popToHome, risk state 보존)")
                     navigationEventBus.popToHome()
-                    dismiss()
+                    dismiss(presentationToken)
                     return true
                 }
                 return super.dispatchKeyEvent(event)
@@ -380,9 +621,12 @@ class RiskOverlayManager @Inject constructor(
                     val telecom = context.getSystemService(Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
                     telecom?.showInCallScreen(false)
                     // 전화 앱이 foreground로 올라올 시간을 확보한 뒤 오버레이 제거
-                    mainHandler.postDelayed({ dismiss() }, SHOW_IN_CALL_DELAY_MS)
+                    mainHandler.postDelayed(
+                        { dismiss(presentationToken) },
+                        SHOW_IN_CALL_DELAY_MS,
+                    )
                 } else {
-                    dismiss()
+                    dismiss(presentationToken)
                 }
             }
             setOnFocusChangeListener { _, hasFocus ->
@@ -397,7 +641,7 @@ class RiskOverlayManager @Inject constructor(
         buttonArea.addView(primaryBtn)
 
         // 보조 CTA 라벨은 렌더 시점 통화 여부로 분기. 실제 call-scope 부수효과 적용 여부는
-        // 클릭 시점 shouldApplyCallSafeEffects(...) predicate가 결정한다 (위 클래스 주석 참조).
+        // 클릭 시점의 liveCallId와 binding 신호를 받은 Coordinator 명령이 결정한다.
         val safeCtaText = if (inCall) "통화 경고 닫기" else "위험 경고 해제"
         buttonArea.addView(Button(context).apply {
             text = safeCtaText
@@ -414,33 +658,16 @@ class RiskOverlayManager @Inject constructor(
                 topMargin = dp(8)
             }
             setOnClickListener {
-                // 클릭 시점에 callId + signals 재조회. 부수효과는 두 축으로 분리:
-                //   - snooze (respawn 억제): liveCallId != null 이면 항상 적용
-                //   - anchor suppression (clearTelebankingAnchor + markCurrentCallConfirmedSafe):
-                //     shouldApplyCallSafeEffects(...)가 true일 때만 적용 (provenance allowlist)
                 val liveCallId = callRiskMonitor.currentCallId()
-                val callSafe = shouldApplyCallSafeEffects(
-                    inCall = liveCallId != null,
+                val confirmed = safeConfirmation.confirm(
+                    liveCallId = liveCallId,
                     signals = event.signals.toSet(),
                 )
-                performSafeCtaSideEffects(
-                    liveCallId = liveCallId,
-                    callSafe = callSafe,
-                    reset = { sessionTracker.resetAfterUserConfirmedSafe() },
-                    clearEvent = { eventSink.clearCurrentRiskEvent() },
-                    snooze = { sessionTracker.snoozeForCall(it) },
-                    clearAnchor = { callRiskMonitor.clearTelebankingAnchor() },
-                    markSafe = { callRiskMonitor.markCurrentCallConfirmedSafe(it) },
-                )
-                when {
-                    callSafe && liveCallId != null ->
-                        Log.d(TAG, "safe CTA → anchor suppression + snooze (callId=$liveCallId, signals=${event.signals})")
-                    liveCallId != null ->
-                        Log.d(TAG, "safe CTA → snooze only, anchor preserved (callId=$liveCallId, callSafe=$callSafe, signals=${event.signals})")
-                    else ->
-                        Log.d(TAG, "safe CTA → session reset only (inCall=false, signals=${event.signals})")
+                if (confirmed) {
+                    Log.d(TAG, "safe CTA consumed by Coordinator (callId=$liveCallId, signals=${event.signals})")
+                } else {
+                    Log.w(TAG, "safe CTA rejected; keep current overlay visible")
                 }
-                dismiss()
             }
             setOnFocusChangeListener { _, hasFocus ->
                 background = GradientDrawable().apply {
@@ -479,7 +706,7 @@ class RiskOverlayManager @Inject constructor(
                     } else {
                         Toast.makeText(context, "이 기기에서는 문자 전송을 지원하지 않습니다", Toast.LENGTH_SHORT).show()
                     }
-                    dismiss()
+                    dismiss(presentationToken)
                 }
                 setOnFocusChangeListener { _, hasFocus ->
                     background = GradientDrawable().apply {
@@ -513,7 +740,7 @@ class RiskOverlayManager @Inject constructor(
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                     }
                 )
-                dismiss()
+                dismiss(presentationToken)
             }
             setOnFocusChangeListener { _, hasFocus ->
                 background = GradientDrawable().apply {
@@ -536,75 +763,4 @@ class RiskOverlayManager @Inject constructor(
 
     private fun dp(value: Int): Int =
         (value * context.resources.displayMetrics.density).toInt()
-
-    companion object {
-        /**
-         * **텔레뱅킹 anchor 억제** 두 층위([CallRiskMonitor.clearTelebankingAnchor] +
-         * [CallRiskMonitor.markCurrentCallConfirmedSafe]) 적용 자격을 판단하는 predicate.
-         *
-         * 의미 계약: "현재 overlay를 닫는 행위가 해당 통화를 안전 확인하는 뜻으로
-         * 해석 가능한 경우에만" true.
-         *
-         * **[RiskSessionTracker.snoozeForCall]은 이 predicate와 무관하다** — respawn 억제 목적이라
-         * `liveCallId != null` 이면 항상 적용 ([performSafeCtaSideEffects] 참조).
-         *
-         * 정책: **positive allowlist**.
-         * - `inCall == true` 는 필요조건이지만 충분조건이 아니다
-         * - 세션의 모든 signal이 [AlertStateResolver.CALL_SIGNALS]에 속할 때만 허용
-         * - [AlertStateResolver.CALL_SIGNALS] 는 원래 call-based session 판별용 상수이지만
-         *   여기서는 "call-scope anchor 억제 허용 신호 집합"이라는 정책 의미도 가진다
-         *
-         * deny되는 케이스:
-         * - `inCall == false`
-         * - app-derived signal 포함 (예: `REMOTE_CONTROL_APP_OPENED`, `BANKING_APP_OPENED_AFTER_REMOTE_APP`)
-         * - `TELEBANKING_AFTER_SUSPICIOUS` 포함 (텔레뱅킹 자체가 해당 통화 — "이 통화 안전" 의미 모순)
-         * - mixed (call + app-derived 병존)
-         * - empty signals (방어 가드)
-         */
-        @VisibleForTesting
-        internal fun shouldApplyCallSafeEffects(
-            inCall: Boolean,
-            signals: Set<RiskSignal>,
-        ): Boolean {
-            if (!inCall) return false
-            if (signals.isEmpty()) return false
-            return signals.all { it in AlertStateResolver.CALL_SIGNALS }
-        }
-
-        /**
-         * 보조 CTA 클릭 시 부수효과 순서. 두 축 분리:
-         *
-         * - **snooze 축**: `liveCallId != null` 이면 [snooze] 호출 (respawn 억제 목적)
-         * - **anchor 억제 축**: `callSafe && liveCallId != null` 이면 [clearAnchor] + [markSafe]
-         *   (텔레뱅킹 anchor 억제 두 층위, 동일 조건으로 묶음 — 반쪽 실행 금지)
-         *
-         * 호출 순서 (비즈니스 규칙):
-         *   1. [reset]        (세션 종료 + α arm)
-         *   2. [clearEvent]   (UI 반영)
-         *   3. [snooze]       (해당 통화의 call-derived signal 필터, 축 1)
-         *   4. [clearAnchor] + [markSafe]   (축 2, 묶음)
-         *
-         * reset이 snooze보다 먼저여야 session reset 이후 등록된 snooze가 살아남는다.
-         */
-        @VisibleForTesting
-        internal fun performSafeCtaSideEffects(
-            liveCallId: Long?,
-            callSafe: Boolean,
-            reset: () -> Unit,
-            clearEvent: () -> Unit,
-            snooze: (Long) -> Unit,
-            clearAnchor: () -> Unit,
-            markSafe: (Long) -> Unit,
-        ) {
-            reset()
-            clearEvent()
-            if (liveCallId != null) {
-                snooze(liveCallId)
-            }
-            if (callSafe && liveCallId != null) {
-                clearAnchor()
-                markSafe(liveCallId)
-            }
-        }
-    }
 }

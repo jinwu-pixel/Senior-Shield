@@ -3,7 +3,6 @@ package com.example.seniorshield.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.seniorshield.core.overlay.BankingCooldownManager
-import com.example.seniorshield.core.overlay.RiskOverlayManager
 import com.example.seniorshield.domain.model.RiskEvent
 import com.example.seniorshield.domain.model.RiskLevel
 import com.example.seniorshield.domain.model.RiskScore
@@ -11,6 +10,7 @@ import com.example.seniorshield.domain.model.RiskSignal
 import com.example.seniorshield.domain.repository.RiskEventSink
 import com.example.seniorshield.domain.repository.SettingsRepository
 import com.example.seniorshield.monitoring.evaluator.RiskEvaluator
+import com.example.seniorshield.monitoring.orchestrator.RiskDetectionCoordinator
 import com.example.seniorshield.monitoring.session.RiskSession
 import com.example.seniorshield.monitoring.session.RiskSessionTracker
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -26,7 +26,7 @@ class DebugViewModel @Inject constructor(
     private val sessionTracker: RiskSessionTracker,
     private val eventSink: RiskEventSink,
     private val evaluator: RiskEvaluator,
-    private val overlayManager: RiskOverlayManager,
+    private val coordinator: RiskDetectionCoordinator,
     private val cooldownManager: BankingCooldownManager,
     private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
@@ -55,7 +55,7 @@ class DebugViewModel @Inject constructor(
 
     /** HIGH 위험 팝업을 화면에 직접 띄운다. */
     fun showTestOverlay() {
-        overlayManager.show(
+        coordinator.showDebugOverlay(
             RiskEvent(
                 id = "debug-${System.currentTimeMillis()}",
                 title = "[테스트] HIGH 위험 감지",
@@ -108,8 +108,7 @@ class DebugViewModel @Inject constructor(
                 level = score.level,
                 signals = session.accumulatedSignals.toList(),
             )
-            viewModelScope.launch { eventSink.pushRiskEvent(event) }
-            overlayManager.show(event)
+            viewModelScope.launch { coordinator.publishAndShowDebugOverlay(event) }
         }
     }
 
@@ -135,8 +134,7 @@ class DebugViewModel @Inject constructor(
                 level = score.level,
                 signals = session.accumulatedSignals.toList(),
             )
-            viewModelScope.launch { eventSink.pushRiskEvent(event) }
-            overlayManager.show(event)
+            viewModelScope.launch { coordinator.publishAndShowDebugOverlay(event) }
         }
     }
 
@@ -164,8 +162,7 @@ class DebugViewModel @Inject constructor(
                 level = score.level,
                 signals = session.accumulatedSignals.toList(),
             )
-            viewModelScope.launch { eventSink.pushRiskEvent(event) }
-            overlayManager.show(event)
+            viewModelScope.launch { coordinator.publishAndShowDebugOverlay(event) }
         }
     }
 }

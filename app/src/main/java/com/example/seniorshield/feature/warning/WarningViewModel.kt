@@ -3,12 +3,10 @@ package com.example.seniorshield.feature.warning
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.seniorshield.domain.repository.GuardianRepository
-import com.example.seniorshield.domain.repository.RiskEventSink
 import com.example.seniorshield.domain.repository.RiskRepository
 import com.example.seniorshield.domain.repository.SettingsRepository
-import com.example.seniorshield.monitoring.call.CallRiskMonitor
 import com.example.seniorshield.monitoring.orchestrator.RiskDetectionCoordinator
-import com.example.seniorshield.monitoring.session.RiskSessionTracker
+import com.example.seniorshield.monitoring.orchestrator.SafeConfirmationOrigin
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -22,9 +20,6 @@ class WarningViewModel @Inject constructor(
     guardianRepository: GuardianRepository,
     riskRepository: RiskRepository,
     settingsRepository: SettingsRepository,
-    private val sessionTracker: RiskSessionTracker,
-    private val eventSink: RiskEventSink,
-    private val callRiskMonitor: CallRiskMonitor,
     private val coordinator: RiskDetectionCoordinator,
 ) : ViewModel() {
 
@@ -81,18 +76,12 @@ class WarningViewModel @Inject constructor(
     /**
      * 사용자가 "안전 확인"을 선택하면 현재 위험 세션을 완전히 종료한다.
      *
-     * 호출 순서 엄수 (HomeViewModel.confirmSafe와 동일):
-     *   1) sessionTracker.resetAfterUserConfirmedSafe()
-     *   2) callRiskMonitor.clearTelebankingAnchor()
-     *   3) coordinator.refreshAnchorHotNow()       ← mirror 즉시 false 동기화
-     *   4) eventSink.clearCurrentRiskEvent()       ← 항상 마지막
-     *
-     * 화면 복귀(onBack)는 호출자(Screen) 책임 — 상태 종료와 화면 종료는 분리된다.
+     * 상태 변경은 Coordinator의 typed command에 위임한다. 화면 복귀(onBack)는 이 반환값이
+     * true일 때에만 호출되어 상태 종료 실패를 성공처럼 처리하지 않는다.
      */
-    fun confirmSafe() {
-        sessionTracker.resetAfterUserConfirmedSafe()
-        callRiskMonitor.clearTelebankingAnchor()
-        coordinator.refreshAnchorHotNow()
-        eventSink.clearCurrentRiskEvent()
+    fun confirmSafe(): Boolean {
+        val request = coordinator.captureSafeConfirmationRequest(SafeConfirmationOrigin.WARNING)
+            ?: return false
+        return coordinator.confirmSafe(request)
     }
 }

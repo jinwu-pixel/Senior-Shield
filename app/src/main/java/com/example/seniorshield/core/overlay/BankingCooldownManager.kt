@@ -20,6 +20,7 @@ import android.widget.TextView
 import androidx.annotation.VisibleForTesting
 import com.example.seniorshield.core.util.CallEndHelper
 import com.example.seniorshield.domain.model.RiskLevel
+import com.example.seniorshield.monitoring.session.ResetEpochProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -49,6 +50,7 @@ private const val SHOW_IN_CALL_DELAY_MS = 500L
 class BankingCooldownManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val callEndHelper: CallEndHelper,
+    private val resetEpochProvider: ResetEpochProvider,
 ) {
 
     /** 테스트용 시계 주입점. 프로덕션은 System.currentTimeMillis(). */
@@ -60,7 +62,11 @@ class BankingCooldownManager @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     @Volatile private var overlayView: LinearLayout? = null
+    @Volatile private var overlayPresentationToken: PresentationGenerationToken? = null
     private var countdownJob: Job? = null
+    private var countdownJobToken: PresentationGenerationToken? = null
+    private val presentationGeneration = PresentationGenerationGate()
+    @Volatile private var pendingSafeCleanup: PresentationInvalidationTicket? = null
 
     /** 쿨다운 오버레이가 화면에 표시된 시각 (epoch ms). 0이면 미표시. */
     @Volatile var showedAtMillis: Long = 0L
@@ -74,20 +80,61 @@ class BankingCooldownManager @Inject constructor(
     @Volatile var lastCountdownSec: Int = 0
         private set
 
-    fun isShowing(): Boolean = overlayView != null
+    fun isShowing(): Boolean {
+        val token = overlayPresentationToken ?: return false
+        return overlayView != null &&
+            presentationGeneration.isCurrent(token, resetEpochProvider.userResetEpoch)
+    }
 
     /** 세션 종료(안전 확인, TTL 만료) 시 표시 중인 쿨다운을 즉시 닫는다. */
     fun dismissIfShowing() {
-        if (!isShowing()) return
-        mainHandler.post { dismiss() }
+        val surfaceCutoff = overlayPresentationToken?.let(presentationGeneration::invalidateThrough)
+        val pendingCutoff = presentationGeneration.invalidateThroughLatest(
+            resetEpochProvider.userResetEpoch,
+        )
+        listOfNotNull(surfaceCutoff, pendingCutoff)
+            .distinct()
+            .forEach(::dismissThrough)
         Log.d(TAG, "dismissIfShowing — 세션 종료로 쿨다운 해제")
+    }
+
+    /** Safe-confirm step 3: invalidate queued starts and surface work from prior epochs. */
+    internal fun invalidateBeforeEpoch(businessEpoch: Long) {
+        pendingSafeCleanup = presentationGeneration.invalidateBeforeEpoch(businessEpoch)
+    }
+
+    /** Safe-confirm step 7: remove only the surface covered by the captured prior-epoch ticket. */
+    internal fun dismissBeforeEpoch(businessEpoch: Long) {
+        val ticket = pendingSafeCleanup
+            ?.takeIf { it.beforeBusinessEpoch == businessEpoch }
+            ?: PresentationInvalidationTicket(
+                beforeBusinessEpoch = businessEpoch,
+                issuedThroughGeneration = Long.MAX_VALUE,
+            )
+        dispatchSafeCleanup(
+            isMainThread = Looper.myLooper() == mainHandler.looper,
+            post = { task ->
+                mainHandler.post(task)
+                Unit
+            },
+        ) {
+            val token = overlayPresentationToken
+            if (token != null && presentationGeneration.shouldRemove(token, ticket)) {
+                dismissExact(token)
+                if (pendingSafeCleanup == ticket) pendingSafeCleanup = null
+            }
+        }
     }
 
     /** 디버그/미리보기 전용. 지정된 초 수만큼 HIGH 레벨로 쿨다운을 표시한다. */
     fun triggerPreview(countdownSec: Int) {
-        if (isShowing()) return
-        if (!Settings.canDrawOverlays(context)) return
-        mainHandler.post { startCooldown(countdownSec, RiskLevel.HIGH, null, isCallActive = false) }
+        trigger(
+            countdownSec = countdownSec,
+            level = RiskLevel.HIGH,
+            reason = null,
+            isCallActive = false,
+            expectedResetEpoch = resetEpochProvider.userResetEpoch,
+        )
     }
 
     /**
@@ -97,7 +144,12 @@ class BankingCooldownManager @Inject constructor(
      * @param reason 쿨다운 이유 설명 — 현재 세션 컨텍스트에 맞는 사용자 설명형 문구.
      * @param isCallActive true이면 주 버튼 "전화 앱으로 이동"(showInCallScreen 경로), false이면 "일단 닫기"(dismiss).
      */
-    fun triggerIfNotActive(level: RiskLevel, reason: String? = null, isCallActive: Boolean = true) {
+    fun triggerIfNotActive(
+        level: RiskLevel,
+        reason: String? = null,
+        isCallActive: Boolean = true,
+        expectedResetEpoch: Long,
+    ) {
         if (isShowing()) {
             Log.d(TAG, "already showing — skipped")
             return
@@ -112,18 +164,55 @@ class BankingCooldownManager @Inject constructor(
             else -> 10
         }
         Log.d(TAG, "쿨다운 발동: level=$level, countdown=${countdownSec}초, reason=$reason, isCallActive=$isCallActive")
-        mainHandler.post { startCooldown(countdownSec, level, reason, isCallActive) }
+        trigger(countdownSec, level, reason, isCallActive, expectedResetEpoch)
     }
 
-    private fun startCooldown(countdownSec: Int, level: RiskLevel, reason: String?, isCallActive: Boolean) {
+    private fun trigger(
+        countdownSec: Int,
+        level: RiskLevel,
+        reason: String?,
+        isCallActive: Boolean,
+        expectedResetEpoch: Long,
+    ) {
+        if (expectedResetEpoch != resetEpochProvider.userResetEpoch) return
+        if (isShowing()) return
+        if (!Settings.canDrawOverlays(context)) return
+        val token = presentationGeneration.reserve(expectedResetEpoch) ?: return
+        postIfCurrent(token) {
+            startCooldown(countdownSec, level, reason, isCallActive, token)
+        }
+    }
+
+    private fun startCooldown(
+        countdownSec: Int,
+        level: RiskLevel,
+        reason: String?,
+        isCallActive: Boolean,
+        presentationToken: PresentationGenerationToken,
+    ) {
         // main thread 직렬 실행 보장: triggerIfNotActive의 isShowing() 체크는
         // mainHandler.post 전에 실행되므로 2개 이상의 startCooldown이 동시 enqueue될 수 있다.
         // 여기서 한 번 더 체크하여 뷰 중복 생성을 방지한다.
         if (overlayView != null) {
-            Log.d(TAG, "startCooldown 중복 방지 — 이미 표시 중")
-            return
+            val existingToken = overlayPresentationToken
+            if (existingToken != null &&
+                presentationGeneration.isCurrent(
+                    existingToken,
+                    resetEpochProvider.userResetEpoch,
+                )
+            ) {
+                Log.d(TAG, "startCooldown 중복 방지 — 이미 표시 중")
+                return
+            }
+            existingToken?.let(::dismissExact)
         }
-        val (root, countdownText, bottomText, endCallButton) = buildView(countdownSec, level, reason, isCallActive)
+        val (root, countdownText, bottomText, endCallButton) = buildView(
+            countdownSec,
+            level,
+            reason,
+            isCallActive,
+            presentationToken,
+        )
         val params = WindowManager.LayoutParams(
             MATCH_PARENT, MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
@@ -132,7 +221,17 @@ class BankingCooldownManager @Inject constructor(
         )
         try {
             windowManager.addView(root, params)
+            if (!presentationGeneration.isCurrent(
+                    presentationToken,
+                    resetEpochProvider.userResetEpoch,
+                )
+            ) {
+                windowManager.removeView(root)
+                Log.d(TAG, "쿨다운 add 직후 세대 무효 확인 — 즉시 제거")
+                return
+            }
             overlayView = root
+            overlayPresentationToken = presentationToken
             showedAtMillis = clock()
             lastCountdownSec = countdownSec
             endCallButton.requestFocus()
@@ -142,21 +241,42 @@ class BankingCooldownManager @Inject constructor(
             return
         }
 
-        countdownJob = scope.launch {
+        val job = scope.launch {
             for (remaining in countdownSec downTo 1) {
-                mainHandler.post {
-                    countdownText.text = remaining.toString()
-                    bottomText.text = "${remaining}초 후 앱 사용 가능합니다"
+                postIfCurrent(presentationToken) {
+                    if (overlayPresentationToken == presentationToken) {
+                        countdownText.text = remaining.toString()
+                        bottomText.text = "${remaining}초 후 앱 사용 가능합니다"
+                    }
                 }
                 delay(1_000L)
             }
-            mainHandler.post { dismiss() }
+            mainHandler.post { dismiss(presentationToken) }
+        }
+        countdownJob = job
+        countdownJobToken = presentationToken
+    }
+
+    private fun dismiss(presentationToken: PresentationGenerationToken) {
+        val generationCutoff = presentationGeneration.invalidateThrough(presentationToken)
+        dismissThrough(generationCutoff)
+    }
+
+    private fun dismissThrough(generationCutoff: PresentationGenerationToken) {
+        mainHandler.post {
+            val token = overlayPresentationToken ?: return@post
+            if (!presentationGeneration.shouldRemoveThrough(token, generationCutoff)) return@post
+            dismissExact(token)
         }
     }
 
-    private fun dismiss() {
-        countdownJob?.cancel()
-        countdownJob = null
+    private fun dismissExact(presentationToken: PresentationGenerationToken) {
+        if (overlayPresentationToken != presentationToken) return
+        if (countdownJobToken == presentationToken) {
+            countdownJob?.cancel()
+            countdownJob = null
+            countdownJobToken = null
+        }
         val view = overlayView ?: return
         try {
             windowManager.removeView(view)
@@ -164,9 +284,25 @@ class BankingCooldownManager @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "쿨다운 removeView 실패: ${e.message}")
         } finally {
-            overlayView = null
-            dismissedAtMillis = clock()
-            Log.d(TAG, "dismissedAt=$dismissedAtMillis")
+            if (overlayPresentationToken == presentationToken) {
+                overlayView = null
+                overlayPresentationToken = null
+                dismissedAtMillis = clock()
+                Log.d(TAG, "dismissedAt=$dismissedAtMillis")
+            }
+        }
+    }
+
+    private fun postIfCurrent(
+        token: PresentationGenerationToken,
+        action: () -> Unit,
+    ) {
+        mainHandler.post {
+            presentationGeneration.runIfCurrent(
+                token,
+                resetEpochProvider.userResetEpoch,
+                action,
+            )
         }
     }
 
@@ -179,7 +315,13 @@ class BankingCooldownManager @Inject constructor(
         val endCallButton: Button,
     )
 
-    private fun buildView(countdownSec: Int, level: RiskLevel, reason: String?, isCallActive: Boolean): CooldownViews {
+    private fun buildView(
+        countdownSec: Int,
+        level: RiskLevel,
+        reason: String?,
+        isCallActive: Boolean,
+        presentationToken: PresentationGenerationToken,
+    ): CooldownViews {
         val bg = when (level) {
             RiskLevel.CRITICAL -> Color.parseColor("#B71C1C")
             else -> Color.parseColor("#BF360C")
@@ -304,16 +446,17 @@ class BankingCooldownManager @Inject constructor(
             }
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(52))
             setOnClickListener {
-                countdownJob?.cancel()
-                countdownJob = null
                 if (callEndHelper.isInCall()) {
                     Log.d(TAG, "opening in-call screen")
                     val telecom = context.getSystemService(Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
                     telecom?.showInCallScreen(false)
                     // 전화 앱이 foreground로 올라올 시간을 확보한 뒤 오버레이 제거
-                    mainHandler.postDelayed({ dismiss() }, SHOW_IN_CALL_DELAY_MS)
+                    mainHandler.postDelayed(
+                        { dismiss(presentationToken) },
+                        SHOW_IN_CALL_DELAY_MS,
+                    )
                 } else {
-                    dismiss()
+                    dismiss(presentationToken)
                 }
             }
             setOnFocusChangeListener { _, hasFocus ->

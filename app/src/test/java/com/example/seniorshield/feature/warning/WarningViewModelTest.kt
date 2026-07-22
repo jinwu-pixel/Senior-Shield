@@ -5,20 +5,19 @@ import com.example.seniorshield.domain.model.RiskEvent
 import com.example.seniorshield.domain.model.RiskLevel
 import com.example.seniorshield.domain.model.RiskSignal
 import com.example.seniorshield.domain.repository.GuardianRepository
-import com.example.seniorshield.domain.repository.RiskEventSink
 import com.example.seniorshield.domain.repository.RiskRepository
 import com.example.seniorshield.domain.repository.SettingsRepository
-import com.example.seniorshield.monitoring.call.CallRiskMonitor
-import com.example.seniorshield.monitoring.model.CallMonitorState
-import com.example.seniorshield.monitoring.model.Produced
 import com.example.seniorshield.monitoring.orchestrator.RiskDetectionCoordinator
-import com.example.seniorshield.monitoring.session.RiskSessionTracker
+import com.example.seniorshield.monitoring.orchestrator.SafeConfirmationOrigin
+import com.example.seniorshield.monitoring.orchestrator.SafeConfirmationRequest
+import com.example.seniorshield.monitoring.orchestrator.SafeConfirmationSubject
+import com.example.seniorshield.monitoring.orchestrator.WarningNavigationPayload
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -27,7 +26,6 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -41,9 +39,6 @@ class WarningViewModelTest {
     private lateinit var guardianRepository: FakeGuardianRepository
     private lateinit var riskRepository: FakeRiskRepository
     private lateinit var settingsRepository: FakeSettingsRepository
-    private lateinit var sessionTracker: RiskSessionTracker
-    private lateinit var eventSink: FakeRiskEventSink
-    private lateinit var callRiskMonitor: FakeCallRiskMonitor
     private lateinit var coordinator: FakeRiskDetectionCoordinator
     private lateinit var viewModel: WarningViewModel
 
@@ -53,17 +48,11 @@ class WarningViewModelTest {
         guardianRepository = FakeGuardianRepository()
         riskRepository = FakeRiskRepository()
         settingsRepository = FakeSettingsRepository()
-        sessionTracker = RiskSessionTracker()
-        eventSink = FakeRiskEventSink()
-        callRiskMonitor = FakeCallRiskMonitor()
         coordinator = FakeRiskDetectionCoordinator()
         viewModel = WarningViewModel(
             guardianRepository,
             riskRepository,
             settingsRepository,
-            sessionTracker,
-            eventSink,
-            callRiskMonitor,
             coordinator,
         )
     }
@@ -184,56 +173,32 @@ class WarningViewModelTest {
     }
 
     // -----------------------------------------------------------------------
-    // 7. confirmSafe 호출 시 세션 초기화
+    // 7. confirmSafe는 Coordinator command에 위임
     // -----------------------------------------------------------------------
 
     @Test
-    fun `confirmSafe 호출 시 세션이 초기화됨`() = runTest {
-        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+    fun `confirmSafe 성공은 WARNING request를 Coordinator에 한 번 위임하고 true를 반환`() = runTest {
+        coordinator.confirmResult = true
 
-        // 세션 생성
-        sessionTracker.update(listOf(RiskSignal.UNKNOWN_CALLER), emptyList())
-        assertNotNull(sessionTracker.sessionState.value)
+        assertTrue(viewModel.confirmSafe())
 
-        // 안전 확인
-        viewModel.confirmSafe()
-
-        assertNull(sessionTracker.sessionState.value)
+        assertEquals(1, coordinator.captureCallCount)
+        assertEquals(1, coordinator.confirmCallCount)
+        assertEquals(SafeConfirmationOrigin.WARNING, coordinator.lastOrigin)
     }
 
     // -----------------------------------------------------------------------
-    // T-A7. confirmSafe 호출 시 통일 종료 시퀀스 모두 실행 (B-6)
+    // T-A7. command 실패는 false로 전파
     // -----------------------------------------------------------------------
 
     @Test
-    fun `T-A7 confirmSafe 호출 시 reset clearAnchor clearEvent 모두 호출`() = runTest {
-        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+    fun `T-A7 confirmSafe command 실패를 false로 전파`() = runTest {
+        coordinator.confirmResult = false
 
-        // 사전 상태: 세션 + currentEvent 존재
-        sessionTracker.update(listOf(RiskSignal.UNKNOWN_CALLER), emptyList())
-        eventSink.pushRiskEvent(
-            RiskEvent(
-                id = "event-1",
-                title = "test",
-                description = "test",
-                occurredAtMillis = 1L,
-                level = RiskLevel.HIGH,
-                signals = listOf(RiskSignal.UNKNOWN_CALLER),
-            )
-        )
-        assertNotNull(sessionTracker.sessionState.value)
-        assertNotNull(eventSink.currentEvent.value)
-        assertEquals(0, callRiskMonitor.clearTelebankingAnchorCallCount)
+        assertFalse(viewModel.confirmSafe())
 
-        // 안전 확인
-        viewModel.confirmSafe()
-
-        // reset → session null
-        assertNull(sessionTracker.sessionState.value)
-        // clearTelebankingAnchor 호출
-        assertEquals(1, callRiskMonitor.clearTelebankingAnchorCallCount)
-        // clearCurrentRiskEvent → currentEvent null
-        assertNull(eventSink.currentEvent.value)
+        assertEquals(1, coordinator.captureCallCount)
+        assertEquals(1, coordinator.confirmCallCount)
     }
 
     // -----------------------------------------------------------------------
@@ -272,9 +237,6 @@ class WarningViewModelTest {
             guardianRepository,
             riskRepository,
             settingsRepository,
-            sessionTracker,
-            eventSink,
-            callRiskMonitor,
             coordinator,
         )
         backgroundScope.launch(testDispatcher) { recreated.uiState.collect {} }
@@ -290,12 +252,9 @@ class WarningViewModelTest {
         viewModel.answerBehaviorCheck(0, yes = true)
         viewModel.answerBehaviorCheck(4, yes = true)
 
-        // monitoring 축 부수효과 0 — 세션 미생성, anchor/safe-confirm/mirror/이벤트 호출 0
-        assertNull(sessionTracker.sessionState.value)
-        assertEquals(0, callRiskMonitor.clearTelebankingAnchorCallCount)
-        assertNull(callRiskMonitor.lastSafeConfirmedCallId)
-        assertEquals(0, coordinator.refreshAnchorHotNowCallCount)
-        assertNull(eventSink.currentEvent.value)
+        // monitoring command 부수효과 0 — 자가확인 응답은 safe-confirm을 호출하지 않는다.
+        assertEquals(0, coordinator.captureCallCount)
+        assertEquals(0, coordinator.confirmCallCount)
     }
 }
 
@@ -344,36 +303,37 @@ private class FakeRiskRepository : RiskRepository {
     }
 }
 
-private class FakeRiskEventSink : RiskEventSink {
-    private val _currentEvent = MutableStateFlow<RiskEvent?>(null)
-    val currentEvent: StateFlow<RiskEvent?> = _currentEvent
-
-    override suspend fun pushRiskEvent(event: RiskEvent) { _currentEvent.value = event }
-    override suspend fun recordRiskEvent(event: RiskEvent) { /* 이력만 — currentEvent 미승격 */ }
-    override suspend fun updateCurrentRiskEvent(event: RiskEvent) { _currentEvent.value = event }
-    override fun clearCurrentRiskEvent() { _currentEvent.value = null }
-    override suspend fun clearAll() { _currentEvent.value = null }
-}
-
-private class FakeCallRiskMonitor : CallRiskMonitor {
-    var clearTelebankingAnchorCallCount = 0
-    var lastSafeConfirmedCallId: Long? = null
-
-    override fun observeCallContext(): Flow<CallMonitorState> = flowOf(CallMonitorState.Idle)
-    override fun observeCallSignals(): Flow<Produced<List<RiskSignal>>> =
-        flowOf(Produced(emptyList(), 0L))
-    override fun currentCallId(): Long? = null
-    override fun clearTelebankingAnchor() { clearTelebankingAnchorCallCount++ }
-    override fun markCurrentCallConfirmedSafe(callId: Long) { lastSafeConfirmedCallId = callId }
-    override fun isTelebankingAnchorHot(): Boolean = false
-}
-
 private class FakeRiskDetectionCoordinator : RiskDetectionCoordinator {
     var refreshAnchorHotNowCallCount = 0
+    var captureCallCount = 0
+    var confirmCallCount = 0
+    var confirmResult = false
+    var lastOrigin: SafeConfirmationOrigin? = null
     override fun start() {}
     override fun stop() {}
     override val anchorHotState: StateFlow<Boolean> = MutableStateFlow(false)
+    override val warningNavigationEvents: Flow<WarningNavigationPayload> = emptyFlow()
     override fun refreshAnchorHotNow() { refreshAnchorHotNowCallCount++ }
+    override fun showDebugOverlay(event: RiskEvent) = Unit
+    override suspend fun publishAndShowDebugOverlay(event: RiskEvent) = Unit
+    override fun captureSafeConfirmationRequest(
+        origin: SafeConfirmationOrigin,
+    ): SafeConfirmationRequest {
+        captureCallCount += 1
+        lastOrigin = origin
+        return SafeConfirmationRequest(
+            origin = origin,
+            subject = SafeConfirmationSubject.Event("event-1"),
+            expectedResetEpoch = 0L,
+            liveCallId = null,
+            signals = emptySet(),
+        )
+    }
+
+    override fun confirmSafe(request: SafeConfirmationRequest): Boolean {
+        confirmCallCount += 1
+        return confirmResult
+    }
 }
 
 private class FakeSettingsRepository : SettingsRepository {

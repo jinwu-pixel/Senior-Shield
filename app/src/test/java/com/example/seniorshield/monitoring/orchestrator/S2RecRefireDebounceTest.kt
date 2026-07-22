@@ -145,9 +145,9 @@ class S2RecRefireDebounceTest {
         // 본 테스트는 escape 시나리오(snapshot 외 새 UPGRADE trigger 도래)로 boundary를 한 번 더 확인 —
         // escape 결정이 일어나야 하는 상황에서도 safe-confirm 발생 여부는 결정에 관여하지 않는다.
         //
-        // safe-confirm production wiring(safe-CTA 부수효과 함수가 reset → clearEvent → snooze →
-        // clearAnchor → markSafe 를 순서대로 호출하는 동작)의 직접 검증은 별도 CTA-쪽 테스트의
-        // 책임이며 본 클래스 범위 외.
+        // safe-confirm production wiring(Coordinator command가 reset → snooze → 조건부 mark→clear
+        // → mirror → event clear → surface cleanup 순서를 소유)의 직접 검증은 별도 command/CTA
+        // 테스트의 책임이며 본 클래스 범위 외.
         val state = S2RecRefireDebounceState(
             lastFiredAt = 1_000L,
             snapshot = setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED),

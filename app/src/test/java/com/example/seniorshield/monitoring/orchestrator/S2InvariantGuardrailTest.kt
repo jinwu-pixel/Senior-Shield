@@ -129,8 +129,10 @@ class S2InvariantGuardrailTest {
             containsCtaHandlerCall(s2Test),
         )
 
-        // fixture self-proof: §6.3 PR2-G3 표가 명시한 4종 호출 패턴 각각이 발화해야 한다
+        // fixture self-proof: 현재/과거 CTA 호출 패턴 각각이 발화해야 한다.
         val violationFixtures = listOf(
+            "safeConfirmation.confirm(",
+            ".confirmSafe(",
             "performSafeCtaSideEffects(",
             "HomeViewModel.confirmSafe(",
             "WarningViewModel.confirmSafe(",
@@ -249,7 +251,7 @@ class S2InvariantGuardrailTest {
     //
     // **본 guardrail의 범위 (commit 전 보강 — G6 한계 명시):**
     //   - 대상: `RiskOverlayManager.kt`의 `fun dismiss(...)` 본문 한 곳.
-    //   - 검사: 해당 본문에 `performSafeCtaSideEffects(` 호출이 등장하지 않음을 단언한다.
+    //   - 검사: 해당 본문에 `safeConfirmation.confirm(` 호출이 등장하지 않음을 단언한다.
     //
     // **본 guardrail이 보장하지 않는 것 (의도된 범위 한정):**
     //   - "dismiss-only CTA 전체 production wiring" 검증은 PR2 범위 밖이다.
@@ -271,15 +273,15 @@ class S2InvariantGuardrailTest {
         )
 
         assertFalse(
-            "RiskOverlayManager.dismiss 본문이 performSafeCtaSideEffects를 호출하면 dismiss-only ↔ safe-confirm 결합 위반",
-            dismissBody!!.contains("performSafeCtaSideEffects("),
+            "RiskOverlayManager.dismiss 본문이 binding confirm을 호출하면 dismiss-only ↔ safe-confirm 결합 위반",
+            dismissBody!!.contains("safeConfirmation.confirm("),
         )
 
         // fixture self-proof — 결합 위반 fixture에서 predicate가 발화해야 한다
         val violationFixture = """
             class FakeOverlay {
                 fun dismiss() {
-                    performSafeCtaSideEffects(state)
+                    safeConfirmation.confirm(state)
                 }
             }
         """.trimIndent()
@@ -290,7 +292,7 @@ class S2InvariantGuardrailTest {
         )
         assertTrue(
             "predicate self-proof: 결합 위반 fixture는 G6 검사에서 발화해야 함",
-            fixtureDismissBody!!.contains("performSafeCtaSideEffects("),
+            fixtureDismissBody!!.contains("safeConfirmation.confirm("),
         )
     }
 
@@ -312,8 +314,8 @@ class S2InvariantGuardrailTest {
         )
 
         assertFalse(
-            "BankingCooldownManager.dismiss 본문이 performSafeCtaSideEffects를 호출하면 dismiss-only ↔ safe-confirm 결합 위반",
-            dismissBody!!.contains("performSafeCtaSideEffects("),
+            "BankingCooldownManager.dismiss 본문이 binding confirm을 호출하면 dismiss-only ↔ safe-confirm 결합 위반",
+            dismissBody!!.contains("safeConfirmation.confirm("),
         )
 
         // dismissIfShowing 본문도 같은 predicate를 적용한다 (G6과 같은 부패 패턴이 외부 진입점에 들어오는 회귀 차단).
@@ -323,18 +325,18 @@ class S2InvariantGuardrailTest {
             dismissIfShowingBody,
         )
         assertFalse(
-            "BankingCooldownManager.dismissIfShowing 본문이 performSafeCtaSideEffects를 호출하면 dismiss-only ↔ safe-confirm 결합 위반",
-            dismissIfShowingBody!!.contains("performSafeCtaSideEffects("),
+            "BankingCooldownManager.dismissIfShowing 본문이 binding confirm을 호출하면 dismiss-only ↔ safe-confirm 결합 위반",
+            dismissIfShowingBody!!.contains("safeConfirmation.confirm("),
         )
 
         // fixture self-proof — 결합 위반 fixture에서 predicate가 발화해야 한다
         val violationFixture = """
             class FakeCooldown {
                 fun dismissIfShowing() {
-                    performSafeCtaSideEffects(state)
+                    safeConfirmation.confirm(state)
                 }
                 private fun dismiss() {
-                    performSafeCtaSideEffects(state)
+                    safeConfirmation.confirm(state)
                 }
             }
         """.trimIndent()
@@ -343,7 +345,7 @@ class S2InvariantGuardrailTest {
             assertNotNull("predicate self-proof: fixture에서 $sig 본문 추출이 가능해야 한다", body)
             assertTrue(
                 "predicate self-proof: 결합 위반 fixture($sig)는 G6-B 검사에서 발화해야 함",
-                body!!.contains("performSafeCtaSideEffects("),
+                body!!.contains("safeConfirmation.confirm("),
             )
         }
     }
@@ -394,9 +396,11 @@ class S2InvariantGuardrailTest {
         return pattern.containsMatchIn(source)
     }
 
-    /** G3: 4종 CTA 호출 패턴 (괄호로 끝나는 call site) */
+    /** G3: 현재/과거 CTA 호출 패턴 (괄호로 끝나는 call site) */
     private fun containsCtaHandlerCall(source: String): Boolean {
         val callPatterns = listOf(
+            "safeConfirmation.confirm(",
+            ".confirmSafe(",
             "performSafeCtaSideEffects(",
             "HomeViewModel.confirmSafe(",
             "WarningViewModel.confirmSafe(",

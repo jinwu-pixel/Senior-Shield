@@ -81,7 +81,11 @@ fun NavGraphBuilder.homeScreen(
         val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
         LaunchedEffect(viewModel) {
-            viewModel.navigateToWarning.collect { onNavigateWarning() }
+            viewModel.navigateToWarning.collect { payload ->
+                if (viewModel.isWarningNavigationPayloadCurrent(payload)) {
+                    onNavigateWarning()
+                }
+            }
         }
 
         val lifecycleOwner = LocalLifecycleOwner.current

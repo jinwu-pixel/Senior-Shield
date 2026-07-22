@@ -20,11 +20,13 @@ import com.example.seniorshield.monitoring.orchestrator.AlertStateResolver
 import com.example.seniorshield.monitoring.orchestrator.DefaultRiskDetectionCoordinator
 import com.example.seniorshield.monitoring.session.RiskSessionTracker
 import io.mockk.mockk
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -64,15 +66,20 @@ import kotlinx.coroutines.test.runCurrent
 @OptIn(ExperimentalCoroutinesApi::class)
 class CoordinatorTestHarness {
 
+    val safeConfirmationOperations = mutableListOf<String>()
+
     // 생성 순서 계약: tracker가 먼저 — fake들의 StampedState가 대입 시점에 이 tracker의
     // userResetEpoch를 읽는다 (KDoc "생산 시점 스탬프" 참조).
     val sessionTracker = RiskSessionTracker()
 
-    val callMonitor = FakeCallRiskMonitor { sessionTracker.userResetEpoch }
+    val callMonitor = FakeCallRiskMonitor(
+        epoch = { sessionTracker.userResetEpoch },
+        safeConfirmationOperations = safeConfirmationOperations,
+    )
     val appUsageMonitor = FakeAppUsageRiskMonitor { sessionTracker.userResetEpoch }
     val appInstallMonitor = FakeAppInstallRiskMonitor { sessionTracker.userResetEpoch }
     val deviceEnvMonitor = FakeDeviceEnvironmentRiskMonitor { sessionTracker.userResetEpoch }
-    val eventSink = FakeRiskEventSink()
+    val eventSink = FakeRiskEventSink(safeConfirmationOperations)
     val guardianRepository = FakeGuardianRepository()
 
     val evaluator = RiskEvaluatorImpl()
@@ -83,14 +90,17 @@ class CoordinatorTestHarness {
     val cooldownManager = mockk<BankingCooldownManager>(relaxed = true)
     val notificationManager = mockk<RiskNotificationManager>(relaxed = true)
 
-    fun TestScope.start(fakeClock: FakeClock? = null): DefaultRiskDetectionCoordinator {
+    fun TestScope.start(
+        fakeClock: FakeClock? = null,
+        eventFactoryOverride: RiskEventFactory? = null,
+    ): DefaultRiskDetectionCoordinator {
         val coordinator = DefaultRiskDetectionCoordinator(
             callMonitor = callMonitor,
             appUsageMonitor = appUsageMonitor,
             appInstallMonitor = appInstallMonitor,
             deviceEnvMonitor = deviceEnvMonitor,
             evaluator = evaluator,
-            eventFactory = eventFactory,
+            eventFactory = eventFactoryOverride ?: eventFactory,
             eventSink = eventSink,
             notificationManager = notificationManager,
             overlayManager = overlayManager,
@@ -134,11 +144,30 @@ class StampedState<T>(initial: T, private val epoch: () -> Long) {
     }
 }
 
-class FakeCallRiskMonitor(epoch: () -> Long) : CallRiskMonitor {
+class FakeCallRiskMonitor(
+    private val epoch: () -> Long,
+    private val safeConfirmationOperations: MutableList<String> = mutableListOf(),
+) : CallRiskMonitor {
     val callContext = MutableStateFlow<CallMonitorState>(CallMonitorState.Idle)
     val callSignals = StampedState<List<RiskSignal>>(emptyList(), epoch)
     var callId: Long? = null
     var anchorHot: Boolean = false
+    var clearTelebankingAnchorCallCount: Int = 0
+    var failClearTelebankingAnchor: Boolean = false
+    var failAnchorRead: Boolean = false
+    var logAnchorReads: Boolean = false
+    var onClearTelebankingAnchor: (() -> Unit)? = null
+    var onCurrentCallIdRead: ((readIndex: Int, value: Long?) -> Unit)? = null
+    val markedSafeCallIds = mutableListOf<Long>()
+    private val scriptedCallIds = mutableListOf<Long?>()
+    var currentCallIdReadCount: Int = 0
+        private set
+
+    fun scriptCurrentCallIds(vararg values: Long?) {
+        scriptedCallIds.clear()
+        scriptedCallIds.addAll(values)
+        currentCallIdReadCount = 0
+    }
     override fun observeCallContext(): Flow<CallMonitorState> = callContext.asStateFlow()
 
     // 실물 계약: (phase, signals) 비교·epoch 제외 — fake에는 phase 축이 없으므로
@@ -146,10 +175,28 @@ class FakeCallRiskMonitor(epoch: () -> Long) : CallRiskMonitor {
     override fun observeCallSignals(): Flow<Produced<List<RiskSignal>>> =
         callSignals.flow.distinctUntilChanged { a, b -> a.value == b.value }
 
-    override fun currentCallId(): Long? = callId
-    override fun clearTelebankingAnchor() {}
-    override fun markCurrentCallConfirmedSafe(callId: Long) {}
-    override fun isTelebankingAnchorHot(): Boolean = anchorHot
+    override fun currentCallId(): Long? {
+        val value = if (scriptedCallIds.isNotEmpty()) scriptedCallIds.removeAt(0) else callId
+        currentCallIdReadCount += 1
+        onCurrentCallIdRead?.invoke(currentCallIdReadCount, value)
+        return value
+    }
+    override fun clearTelebankingAnchor() {
+        safeConfirmationOperations += "source"
+        clearTelebankingAnchorCallCount += 1
+        onClearTelebankingAnchor?.invoke()
+        if (failClearTelebankingAnchor) error("injected source clear failure")
+        anchorHot = false
+    }
+    override fun markCurrentCallConfirmedSafe(callId: Long) {
+        safeConfirmationOperations += "mark:$callId"
+        markedSafeCallIds += callId
+    }
+    override fun isTelebankingAnchorHot(): Boolean {
+        if (logAnchorReads) safeConfirmationOperations += "mirror"
+        if (failAnchorRead) error("injected mirror refresh failure")
+        return anchorHot
+    }
 }
 
 class FakeAppUsageRiskMonitor(epoch: () -> Long) : AppUsageRiskMonitor {
@@ -184,16 +231,29 @@ class FakeDeviceEnvironmentRiskMonitor(epoch: () -> Long) : DeviceEnvironmentRis
  * 과거 no-op `clearCurrentRiskEvent`의 별도 사본(CountingRiskEventSink)과 갈라져 있던 것을 통합 —
  * cleanup 횟수 검증은 [clearCurrentCount]로 한다.
  */
-class FakeRiskEventSink : RiskEventSink {
+class FakeRiskEventSink(
+    private val safeConfirmationOperations: MutableList<String> = mutableListOf(),
+) : RiskEventSink {
     val pushed = mutableListOf<RiskEvent>()
     val recorded = mutableListOf<RiskEvent>()
-    var currentEvent: RiskEvent? = null
-        private set
+    private val _currentEventState = MutableStateFlow<RiskEvent?>(null)
+    val currentEventState = _currentEventState.asStateFlow()
+    val currentEvent: RiskEvent? get() = _currentEventState.value
     var clearCurrentCount: Int = 0
+    var failClearCurrentRiskEvent: Boolean = false
+    var cancelNextPushBeforeCurrentEventSet: Boolean = false
+    var beforeCurrentEventSet: (suspend (RiskEvent) -> Unit)? = null
+    var afterCurrentEventSetBeforePushReturns: (suspend (RiskEvent) -> Unit)? = null
 
     override suspend fun pushRiskEvent(event: RiskEvent) {
+        if (cancelNextPushBeforeCurrentEventSet) {
+            cancelNextPushBeforeCurrentEventSet = false
+            throw CancellationException("injected push cancellation before sink mutation")
+        }
+        beforeCurrentEventSet?.invoke(event)
         pushed += event
-        currentEvent = event
+        _currentEventState.value = event
+        afterCurrentEventSetBeforePushReturns?.invoke(event)
     }
 
     override suspend fun recordRiskEvent(event: RiskEvent) {
@@ -201,23 +261,30 @@ class FakeRiskEventSink : RiskEventSink {
     }
 
     override suspend fun updateCurrentRiskEvent(event: RiskEvent) {
-        currentEvent = event
+        _currentEventState.value = event
     }
 
     override fun clearCurrentRiskEvent() {
+        safeConfirmationOperations += "event"
         clearCurrentCount += 1
-        currentEvent = null
+        if (failClearCurrentRiskEvent) error("injected event clear failure")
+        _currentEventState.value = null
     }
 
     override suspend fun clearAll() {
         pushed.clear()
         recorded.clear()
-        currentEvent = null
+        _currentEventState.value = null
     }
 }
 
 class FakeGuardianRepository : GuardianRepository {
-    override fun observeGuardians(): Flow<List<Guardian>> = flowOf(emptyList())
+    var beforeFirstEmission: (suspend () -> Unit)? = null
+
+    override fun observeGuardians(): Flow<List<Guardian>> = flow {
+        beforeFirstEmission?.invoke()
+        emit(emptyList())
+    }
     override suspend fun addGuardian(guardian: Guardian): Boolean = true
     override suspend fun removeGuardian(id: String) {}
     override suspend fun getGuardians(): List<Guardian> = emptyList()

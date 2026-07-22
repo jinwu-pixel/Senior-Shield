@@ -59,6 +59,13 @@ private data class InstitutionInfo(
     val description: String,
 )
 
+internal fun completeSafeConfirmation(
+    confirmSafe: () -> Boolean,
+    onBack: () -> Unit,
+) {
+    if (confirmSafe()) onBack()
+}
+
 private val institutions = listOf(
     InstitutionInfo("경찰청", "112", "금융사기 피해 신고"),
     InstitutionInfo("금융감독원", "1332", "금융사기 피해 상담 및 신고"),
@@ -105,10 +112,8 @@ fun NavGraphBuilder.warningScreen(
             },
             onBack = onBack,
             onConfirmSafe = {
-                // 책임 분리: confirmSafe()는 상태 종료(세션 + anchor + currentEvent),
-                //            onBack()은 화면 종료(네비게이션 복귀). 둘은 별개 의도.
-                viewModel.confirmSafe()
-                onBack()
+                // 화면 종료는 Coordinator command가 상태 종료에 성공한 경우에만 허용한다.
+                completeSafeConfirmation(viewModel::confirmSafe, onBack)
             },
             onDismissGuardianPicker = viewModel::dismissGuardianPicker,
             onGuardianSelected = { guardian ->

@@ -59,7 +59,7 @@ class DefaultRiskDetectionCoordinatorTest {
         runCurrent()
 
         assertFalse("upgrade trigger가 snooze를 해제", sessionTracker.isSnoozeActive())
-        verify(exactly = 1) { overlayManager.show(any(), any()) }
+        verify(exactly = 1) { overlayManager.show(any(), any(), any()) }
 
         coordinator.stop()
         runCurrent()
@@ -80,7 +80,7 @@ class DefaultRiskDetectionCoordinatorTest {
         appUsageMonitor.appSignals.value = listOf(RiskSignal.REMOTE_CONTROL_APP_OPENED)
         runCurrent()
 
-        verify(exactly = 1) { overlayManager.show(any(), any()) }
+        verify(exactly = 1) { overlayManager.show(any(), any(), any()) }
 
         coordinator.stop()
         runCurrent()
@@ -94,6 +94,7 @@ class DefaultRiskDetectionCoordinatorTest {
         // 통화 세션(UNKNOWN_CALLER) → GUARDED
         callMonitor.callSignals.value = listOf(RiskSignal.UNKNOWN_CALLER)
         runCurrent()
+        val expectedTickEpoch = sessionTracker.userResetEpoch
 
         // 텔레뱅킹 발신 감지 → call 세션 + TRIGGER → CRITICAL → 쿨다운 발동
         callMonitor.callSignals.value =
@@ -104,9 +105,16 @@ class DefaultRiskDetectionCoordinatorTest {
         deviceEnvMonitor.deviceEnvSignals.value = listOf(RiskSignal.HIGH_RISK_DEVICE_ENVIRONMENT)
         runCurrent()
 
-        verify(exactly = 1) { cooldownManager.triggerIfNotActive(RiskLevel.CRITICAL, any(), any()) }
+        verify(exactly = 1) {
+            cooldownManager.triggerIfNotActive(
+                RiskLevel.CRITICAL,
+                any(),
+                any(),
+                expectedTickEpoch,
+            )
+        }
         // CRITICAL 쿨다운이 같은 tick에 떴으므로 팝업은 생략(modal surface 1개 원칙)
-        verify(exactly = 0) { overlayManager.show(any(), any()) }
+        verify(exactly = 0) { overlayManager.show(any(), any(), any()) }
 
         coordinator.stop()
         runCurrent()
@@ -123,8 +131,8 @@ class DefaultRiskDetectionCoordinatorTest {
         runCurrent()
 
         // 점수는 HIGH지만 AlertState는 GUARDED → 팝업/쿨다운 없음, notification만 발생
-        verify(exactly = 0) { overlayManager.show(any(), any()) }
-        verify(exactly = 0) { cooldownManager.triggerIfNotActive(any(), any(), any()) }
+        verify(exactly = 0) { overlayManager.show(any(), any(), any()) }
+        verify(exactly = 0) { cooldownManager.triggerIfNotActive(any(), any(), any(), any()) }
         verify(atLeast = 1) { notificationManager.notify(any()) }
 
         coordinator.stop()
@@ -206,7 +214,7 @@ class DefaultRiskDetectionCoordinatorTest {
         appUsageMonitor.appSignals.value = listOf(RiskSignal.REMOTE_CONTROL_APP_OPENED)
         runCurrent()
 
-        verify(exactly = 2) { overlayManager.show(any(), any()) }
+        verify(exactly = 2) { overlayManager.show(any(), any(), any()) }
 
         coordinator.stop()
         runCurrent()
@@ -237,7 +245,7 @@ class DefaultRiskDetectionCoordinatorTest {
         fakeClock.advanceMs(40_000)
         appUsageMonitor.bankingForeground.value = true
         runCurrent()
-        verify(exactly = 0) { cooldownManager.triggerIfNotActive(any(), any(), any()) }
+        verify(exactly = 0) { cooldownManager.triggerIfNotActive(any(), any(), any(), any()) }
 
         // 다음 false→true 전이를 만들기 위해 banking foreground를 내린다
         appUsageMonitor.bankingForeground.value = false
@@ -247,7 +255,7 @@ class DefaultRiskDetectionCoordinatorTest {
         fakeClock.advanceMs(30_001)
         appUsageMonitor.bankingForeground.value = true
         runCurrent()
-        verify(exactly = 1) { cooldownManager.triggerIfNotActive(any(), any(), any()) }
+        verify(exactly = 1) { cooldownManager.triggerIfNotActive(any(), any(), any(), any()) }
 
         coordinator.stop()
         runCurrent()

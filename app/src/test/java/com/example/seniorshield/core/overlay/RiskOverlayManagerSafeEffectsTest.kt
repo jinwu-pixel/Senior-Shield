@@ -1,13 +1,26 @@
 package com.example.seniorshield.core.overlay
 
+import com.example.seniorshield.domain.model.RiskEvent
+import com.example.seniorshield.domain.model.RiskLevel
 import com.example.seniorshield.domain.model.RiskSignal
+import com.example.seniorshield.monitoring.event.RiskEventFactory
+import com.example.seniorshield.monitoring.orchestrator.DefaultRiskDetectionCoordinator
+import com.example.seniorshield.monitoring.orchestrator.SafeConfirmationOverlayBinding
+import com.example.seniorshield.monitoring.orchestrator.shouldApplyOverlayCallSafeEffects
+import com.example.seniorshield.testutil.CoordinatorTestHarness
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * [RiskOverlayManager.shouldApplyCallSafeEffects] pure predicate 검증.
+ * Coordinator-owned positive allowlist와 safe-confirm 실행 순서 검증.
  *
  * 의미 계약:
  *   "현재 overlay를 닫는 행위가 해당 통화를 안전 확인하는 뜻으로 해석 가능한 경우에만" true.
@@ -18,13 +31,14 @@ import org.junit.Test
  * 실제 click handler의 view/WindowManager 경로는 실기 Scenario A~D (02_patch_plan.md §6-2)로 커버.
  * 여기서는 predicate 로직만 분리해 단위 검증.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class RiskOverlayManagerSafeEffectsTest {
 
     // ── A: inCall + call-only → allow ─────────────────────────────────
 
     @Test
     fun `allow_whenInCallAndAllCallDerivedSignals`() {
-        val result = RiskOverlayManager.shouldApplyCallSafeEffects(
+        val result = shouldApplyOverlayCallSafeEffects(
             inCall = true,
             signals = setOf(RiskSignal.UNKNOWN_CALLER, RiskSignal.LONG_CALL_DURATION),
         )
@@ -33,7 +47,7 @@ class RiskOverlayManagerSafeEffectsTest {
 
     @Test
     fun `allow_whenInCallAndRepeatedCallSignals`() {
-        val result = RiskOverlayManager.shouldApplyCallSafeEffects(
+        val result = shouldApplyOverlayCallSafeEffects(
             inCall = true,
             signals = setOf(
                 RiskSignal.UNKNOWN_CALLER,
@@ -49,7 +63,7 @@ class RiskOverlayManagerSafeEffectsTest {
 
     @Test
     fun `deny_whenInCallAndAppDerivedSignalPresent`() {
-        val result = RiskOverlayManager.shouldApplyCallSafeEffects(
+        val result = shouldApplyOverlayCallSafeEffects(
             inCall = true,
             signals = setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED),
         )
@@ -58,7 +72,7 @@ class RiskOverlayManagerSafeEffectsTest {
 
     @Test
     fun `deny_whenInCallAndBankingAppSignalPresent`() {
-        val result = RiskOverlayManager.shouldApplyCallSafeEffects(
+        val result = shouldApplyOverlayCallSafeEffects(
             inCall = true,
             signals = setOf(RiskSignal.BANKING_APP_OPENED_AFTER_REMOTE_APP),
         )
@@ -69,11 +83,11 @@ class RiskOverlayManagerSafeEffectsTest {
 
     @Test
     fun `deny_whenNotInCall_regardlessOfSignals`() {
-        val callOnly = RiskOverlayManager.shouldApplyCallSafeEffects(
+        val callOnly = shouldApplyOverlayCallSafeEffects(
             inCall = false,
             signals = setOf(RiskSignal.UNKNOWN_CALLER, RiskSignal.LONG_CALL_DURATION),
         )
-        val appOnly = RiskOverlayManager.shouldApplyCallSafeEffects(
+        val appOnly = shouldApplyOverlayCallSafeEffects(
             inCall = false,
             signals = setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED),
         )
@@ -85,7 +99,7 @@ class RiskOverlayManagerSafeEffectsTest {
 
     @Test
     fun `deny_whenInCallAndMixedCallAndAppSignals`() {
-        val result = RiskOverlayManager.shouldApplyCallSafeEffects(
+        val result = shouldApplyOverlayCallSafeEffects(
             inCall = true,
             signals = setOf(
                 RiskSignal.UNKNOWN_CALLER,            // call-derived
@@ -100,7 +114,7 @@ class RiskOverlayManagerSafeEffectsTest {
 
     @Test
     fun `deny_whenTelebankingSignalPresent`() {
-        val result = RiskOverlayManager.shouldApplyCallSafeEffects(
+        val result = shouldApplyOverlayCallSafeEffects(
             inCall = true,
             signals = setOf(
                 RiskSignal.UNKNOWN_CALLER,
@@ -115,71 +129,113 @@ class RiskOverlayManagerSafeEffectsTest {
 
     @Test
     fun `deny_whenEmptySignals`() {
-        val result = RiskOverlayManager.shouldApplyCallSafeEffects(
+        val result = shouldApplyOverlayCallSafeEffects(
             inCall = true,
             signals = emptySet(),
         )
         assertFalse("empty signals → deny (방어 가드)", result)
     }
 
-    // ── performSafeCtaSideEffects 행동 검증 ───────────────────────────
+    // ── Coordinator-owned safe-confirm 행동 검증 ─────────────────────
     //
     // 클릭 경로의 부수효과 조합을 순서까지 검증한다.
     // snooze 축과 anchor suppression 축이 독립적으로 적용됨을 확인.
 
     /** A. inCall + app-derived (callSafe=false) → snooze만 적용, anchor 억제 스킵. */
     @Test
-    fun `sideEffects_inCallAppDerived_snoozeOnly`() {
-        val calls = mutableListOf<String>()
-        RiskOverlayManager.performSafeCtaSideEffects(
-            liveCallId = 111L,
-            callSafe = false,
-            reset = { calls.add("reset") },
-            clearEvent = { calls.add("clearEvent") },
-            snooze = { calls.add("snooze:$it") },
-            clearAnchor = { calls.add("clearAnchor") },
-            markSafe = { calls.add("markSafe:$it") },
-        )
-        // 순서 + 구성: reset → clearEvent → snooze만. anchor/markSafe 미호출 (회귀 방지 핵심).
-        assertEquals(
-            listOf("reset", "clearEvent", "snooze:111"),
-            calls,
-        )
+    fun `sideEffects_inCallAppDerived_snoozeOnly`() = runTest {
+        val fixture = startFixture(setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED), 111L)
+        try {
+            fixture.harness.callMonitor.scriptCurrentCallIds(111L)
+            assertTrue(fixture.binding.confirm(111L, fixture.event.signals.toSet()))
+
+            // Before: reset → event → snooze. After: reset → snooze → mirror → event → cleanup.
+            assertTrue(fixture.harness.sessionTracker.isSnoozedForCall(111L))
+            assertEquals(
+                listOf("mirror", "event", "overlay", "cooldown"),
+                fixture.harness.safeConfirmationOperations,
+            )
+            assertTrue(fixture.harness.callMonitor.markedSafeCallIds.isEmpty())
+        } finally {
+            fixture.coordinator.stop()
+        }
     }
 
     /** B. inCall + call-derived (callSafe=true) → 전체 부수효과 적용. */
     @Test
-    fun `sideEffects_inCallCallDerived_allApplied`() {
-        val calls = mutableListOf<String>()
-        RiskOverlayManager.performSafeCtaSideEffects(
-            liveCallId = 222L,
-            callSafe = true,
-            reset = { calls.add("reset") },
-            clearEvent = { calls.add("clearEvent") },
-            snooze = { calls.add("snooze:$it") },
-            clearAnchor = { calls.add("clearAnchor") },
-            markSafe = { calls.add("markSafe:$it") },
+    fun `sideEffects_inCallCallDerived_allApplied`() = runTest {
+        val fixture = startFixture(
+            setOf(RiskSignal.UNKNOWN_CALLER, RiskSignal.LONG_CALL_DURATION),
+            222L,
         )
-        // reset → clearEvent → snooze(respawn 억제) → clearAnchor + markSafe (anchor 억제 묶음)
-        assertEquals(
-            listOf("reset", "clearEvent", "snooze:222", "clearAnchor", "markSafe:222"),
-            calls,
-        )
+        try {
+            fixture.harness.callMonitor.scriptCurrentCallIds(222L, 222L)
+            assertTrue(fixture.binding.confirm(222L, fixture.event.signals.toSet()))
+
+            // Before: reset → event → snooze → clear → mark.
+            // After: reset → snooze → recheck → mark → clear → mirror → event → cleanup.
+            assertTrue(fixture.harness.sessionTracker.isSnoozedForCall(222L))
+            assertEquals(
+                listOf("mark:222", "source", "mirror", "event", "overlay", "cooldown"),
+                fixture.harness.safeConfirmationOperations,
+            )
+        } finally {
+            fixture.coordinator.stop()
+        }
     }
 
     /** C. not-inCall (liveCallId=null) → reset + clearEvent만. snooze/anchor 전부 스킵. */
     @Test
-    fun `sideEffects_notInCall_resetAndClearEventOnly`() {
-        val calls = mutableListOf<String>()
-        RiskOverlayManager.performSafeCtaSideEffects(
-            liveCallId = null,
-            callSafe = false,
-            reset = { calls.add("reset") },
-            clearEvent = { calls.add("clearEvent") },
-            snooze = { calls.add("snooze:$it") },
-            clearAnchor = { calls.add("clearAnchor") },
-            markSafe = { calls.add("markSafe:$it") },
-        )
-        assertEquals(listOf("reset", "clearEvent"), calls)
+    fun `sideEffects_notInCall_resetAndClearEventOnly`() = runTest {
+        val fixture = startFixture(setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED), null)
+        try {
+            assertTrue(fixture.binding.confirm(null, fixture.event.signals.toSet()))
+
+            // Before: reset → event. After: reset → mirror → event → cleanup.
+            assertEquals(
+                listOf("mirror", "event", "overlay", "cooldown"),
+                fixture.harness.safeConfirmationOperations,
+            )
+            assertFalse(fixture.harness.sessionTracker.isSnoozeActive())
+        } finally {
+            fixture.coordinator.stop()
+        }
     }
+
+    private fun TestScope.startFixture(signals: Set<RiskSignal>, callId: Long?): Fixture {
+        val harness = CoordinatorTestHarness()
+        val event = RiskEvent(
+            id = "overlay-contract-${signals.hashCode()}-${callId ?: "idle"}",
+            title = "test",
+            description = "test",
+            occurredAtMillis = 1L,
+            level = RiskLevel.CRITICAL,
+            signals = signals.toList(),
+        )
+        val eventFactory = mockk<RiskEventFactory>().also { factory ->
+            every { factory.create(any(), any()) } returns event
+        }
+        every { harness.overlayManager.dismissBeforeEpoch(any()) } answers {
+            harness.safeConfirmationOperations += "overlay"
+        }
+        every { harness.cooldownManager.dismissBeforeEpoch(any()) } answers {
+            harness.safeConfirmationOperations += "cooldown"
+        }
+        harness.callMonitor.anchorHot = true
+        harness.callMonitor.callId = callId
+        harness.appUsageMonitor.appSignals.value = listOf(RiskSignal.REMOTE_CONTROL_APP_OPENED)
+        val coordinator = with(harness) { start(eventFactoryOverride = eventFactory) }
+        val captured = mutableListOf<SafeConfirmationOverlayBinding>()
+        verify(atLeast = 1) { harness.overlayManager.show(any(), any(), capture(captured)) }
+        harness.safeConfirmationOperations.clear()
+        harness.callMonitor.logAnchorReads = true
+        return Fixture(harness, coordinator, event, captured.last())
+    }
+
+    private data class Fixture(
+        val harness: CoordinatorTestHarness,
+        val coordinator: DefaultRiskDetectionCoordinator,
+        val event: RiskEvent,
+        val binding: SafeConfirmationOverlayBinding,
+    )
 }

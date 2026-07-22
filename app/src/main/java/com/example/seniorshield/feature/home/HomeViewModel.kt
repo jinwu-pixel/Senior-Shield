@@ -3,7 +3,6 @@ package com.example.seniorshield.feature.home
 import android.content.Context
 import android.content.pm.PackageManager
 import android.provider.Settings
-import androidx.annotation.VisibleForTesting
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -12,11 +11,12 @@ import com.example.seniorshield.domain.model.Guardian
 import com.example.seniorshield.domain.model.RiskLevel
 import com.example.seniorshield.domain.model.RiskSignal
 import com.example.seniorshield.domain.repository.GuardianRepository
-import com.example.seniorshield.domain.repository.RiskEventSink
 import com.example.seniorshield.domain.repository.RiskRepository
-import com.example.seniorshield.monitoring.call.CallRiskMonitor
 import com.example.seniorshield.monitoring.orchestrator.AlertStateResolver
 import com.example.seniorshield.monitoring.orchestrator.RiskDetectionCoordinator
+import com.example.seniorshield.monitoring.orchestrator.SafeConfirmationOrigin
+import com.example.seniorshield.monitoring.orchestrator.SafeConfirmationSubject
+import com.example.seniorshield.monitoring.orchestrator.WarningNavigationPayload
 import com.example.seniorshield.monitoring.session.RiskSessionTracker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -29,20 +29,16 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChangedBy
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val riskRepository: RiskRepository,
-    private val eventSink: RiskEventSink,
     private val sessionTracker: RiskSessionTracker,
     private val alertStateResolver: AlertStateResolver,
     private val guardianRepository: GuardianRepository,
-    private val callRiskMonitor: CallRiskMonitor,
     private val coordinator: RiskDetectionCoordinator,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
@@ -133,18 +129,11 @@ class HomeViewModel @Inject constructor(
         return GuardedCardInfo(title = "주의 안내", body = body)
     }
 
-    // HIGH / CRITICAL 이벤트 감지 시 경고 화면으로 자동 이동하는 1회성 신호.
-    private val _navigateToWarning = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    // PUBLISHED HIGH / CRITICAL 이벤트 감지 시 경고 화면으로 자동 이동하는 1회성 신호.
+    private val _navigateToWarning = MutableSharedFlow<WarningNavigationPayload>(
+        extraBufferCapacity = 1,
+    )
     val navigateToWarning = _navigateToWarning.asSharedFlow()
-
-    /** 테스트용 시계 주입점. 프로덕션은 System.currentTimeMillis(). */
-    @VisibleForTesting
-    internal var clock: () -> Long = System::currentTimeMillis
-
-    // ViewModel 생성 시각. MainActivity가 재생성되면(뱅킹 쿨다운 OPAQUE 오버레이로 인한 window 재부착 등)
-    // HomeViewModel도 새로 만들어지고 StateFlow의 기존 currentRiskEvent가 replay된다.
-    // 이 replay 값으로 Warning 자동 네비가 재발화되는 것을 막기 위해 VM 생성 이전에 발생한 이벤트는 무시한다.
-    private val viewModelStartedAt = clock()
 
     init {
         viewModelScope.launch { loadWeeklySnapshot() }
@@ -162,12 +151,9 @@ class HomeViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            riskRepository.getCurrentRiskEvent()
-                .filterNotNull()
-                .filter { it.level.ordinal >= RiskLevel.HIGH.ordinal }
-                .filter { it.occurredAtMillis >= viewModelStartedAt }
-                .distinctUntilChangedBy { it.id }
-                .collect { _navigateToWarning.tryEmit(Unit) }
+            coordinator.warningNavigationEvents
+                .distinctUntilChanged()
+                .collect { payload -> _navigateToWarning.emit(payload) }
         }
     }
 
@@ -178,22 +164,28 @@ class HomeViewModel @Inject constructor(
     /**
      * 사용자가 홈 화면에서 "안전 확인"을 선택하면 현재 위험 세션을 완전히 종료한다.
      *
-     * 호출 순서 엄수:
-     *   1) sessionTracker.resetAfterUserConfirmedSafe()
-     *   2) callRiskMonitor.clearTelebankingAnchor()
-     *   3) coordinator.refreshAnchorHotNow()       ← mirror 즉시 false 동기화
-     *   4) eventSink.clearCurrentRiskEvent()       ← 항상 마지막
-     *
-     * 3과 4의 순서가 바뀌면 `currentRiskEvent=null && anchorHot=true` 중간 상태가 드러나
-     * Home이 GUARDED_ANCHOR를 짧게 다시 보여줘 UX가 어긋난다. 이 순서를 지키면 WARNING → SAFE로
-     * 직행한다.
+     * 상태 변경은 Coordinator의 typed command에 위임한다. 주간 스냅샷은 command가 성공한 뒤에만
+     * 갱신하여 실패한 안전확인을 성공처럼 보이지 않게 한다.
      */
-    fun confirmSafe() {
-        sessionTracker.resetAfterUserConfirmedSafe()
-        callRiskMonitor.clearTelebankingAnchor()
-        coordinator.refreshAnchorHotNow()
-        eventSink.clearCurrentRiskEvent()
+    fun confirmSafe(): Boolean {
+        val request = coordinator.captureSafeConfirmationRequest(SafeConfirmationOrigin.HOME)
+            ?: return false
+        if (!coordinator.confirmSafe(request)) return false
         viewModelScope.launch { loadWeeklySnapshot() }
+        return true
+    }
+
+    /** Revalidates Event provenance at the last boundary before automatic navigation. */
+    fun isWarningNavigationPayloadCurrent(payload: WarningNavigationPayload): Boolean {
+        val liveResetEpoch = sessionTracker.userResetEpoch
+        if (payload.expectedResetEpoch != liveResetEpoch) return false
+        val request = coordinator.captureSafeConfirmationRequest(SafeConfirmationOrigin.HOME)
+            ?: return false
+        val event = request.subject as? SafeConfirmationSubject.Event ?: return false
+        return event.eventId == payload.eventId &&
+            request.expectedEventId == payload.eventId &&
+            request.expectedResetEpoch == payload.expectedResetEpoch &&
+            sessionTracker.userResetEpoch == liveResetEpoch
     }
 
     private suspend fun loadWeeklySnapshot() {

@@ -7,6 +7,7 @@ import com.example.seniorshield.core.overlay.BankingCooldownManager
 import com.example.seniorshield.core.overlay.RiskOverlayManager
 import com.example.seniorshield.domain.model.AlertState
 import com.example.seniorshield.domain.model.Guardian
+import com.example.seniorshield.domain.model.RiskEvent
 import com.example.seniorshield.domain.model.RiskLevel
 import com.example.seniorshield.domain.model.RiskSignal
 import com.example.seniorshield.domain.model.SignalCategory
@@ -20,20 +21,27 @@ import com.example.seniorshield.monitoring.evaluator.RiskEvaluator
 import com.example.seniorshield.monitoring.event.RiskEventFactory
 import com.example.seniorshield.monitoring.model.Produced
 import com.example.seniorshield.monitoring.session.RiskSessionTracker
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -149,6 +157,34 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
     @VisibleForTesting
     internal var clock: () -> Long = System::currentTimeMillis
 
+    /** Test seam for the capture-to-publication race; production remains a no-op. */
+    @VisibleForTesting
+    internal var afterDebugEpochCapturedBeforePublish: suspend () -> Unit = {}
+
+    /** Test seam after publication commits but before Debug navigation/overlay effects. */
+    @VisibleForTesting
+    internal var afterDebugPublicationBeforeEffects: suspend (RiskEvent) -> Unit = {}
+
+    /** Test seam immediately before the Debug overlay's final publication/effect gate. */
+    @VisibleForTesting
+    internal var beforeDebugOverlayEffect: suspend (RiskEvent) -> Unit = {}
+
+    /** Test seam immediately before inactive-session cleanup revalidates protected state. */
+    @VisibleForTesting
+    internal var beforeInactiveSessionCleanupCommit: suspend () -> Unit = {}
+
+    /** Test seam after renewal transition but before downgrade cleanup commits. */
+    @VisibleForTesting
+    internal var beforeRenewalDowngradeCleanup: suspend () -> Unit = {}
+
+    /** Test seam after navigation publication but before notification state commits. */
+    @VisibleForTesting
+    internal var beforePublicationNotificationCommit: suspend (RiskEvent) -> Unit = {}
+
+    /** Test seam after overlay publication but before popup accounting commits. */
+    @VisibleForTesting
+    internal var beforePublicationPopupAccountingCommit: suspend (RiskEvent) -> Unit = {}
+
     private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
     private var job: Job? = null
     @Volatile private var previousBankingForeground = false
@@ -171,6 +207,383 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
 
     private val _anchorHotState = MutableStateFlow(false)
     override val anchorHotState: StateFlow<Boolean> = _anchorHotState.asStateFlow()
+    private val _warningNavigationEvents = MutableSharedFlow<WarningNavigationPayload>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    override val warningNavigationEvents: Flow<WarningNavigationPayload> =
+        _warningNavigationEvents.asSharedFlow()
+
+    private var currentSafeConfirmationEvent: SafeConfirmationEventContext? = null
+    private var currentSafeConfirmationDebug: SafeConfirmationDebugContext? = null
+    private var nextDebugSafeConfirmationToken = 0L
+    private val consumedSafeConfirmations = mutableSetOf<SafeConfirmationConsumeKey>()
+    private var pendingSafeConfirmationRetry: PendingSafeConfirmationRetry? = null
+    private val eventPublicationMutex = Mutex()
+    private var nextEventPublicationIntentSequence = 0L
+    private val activeEventPublicationIntents = mutableMapOf<Long, ActiveEventPublicationIntent>()
+
+    @Synchronized
+    override fun captureSafeConfirmationRequest(
+        origin: SafeConfirmationOrigin,
+    ): SafeConfirmationRequest? {
+        if (origin != SafeConfirmationOrigin.HOME && origin != SafeConfirmationOrigin.WARNING) {
+            return null
+        }
+        val liveResetEpoch = sessionTracker.userResetEpoch
+        pendingSafeConfirmationRetry?.let { pending ->
+            when {
+                pending.safeConfirmationEpoch < liveResetEpoch -> pendingSafeConfirmationRetry = null
+                pending.safeConfirmationEpoch > liveResetEpoch -> return null
+                sessionTracker.sessionState.value != null -> pendingSafeConfirmationRetry = null
+                hasActivePublicationIntentAtOrAfterEpoch(liveResetEpoch) -> return null
+                else -> return pending.request
+            }
+        }
+        pruneConsumedSafeConfirmations(liveResetEpoch)
+        val event = currentSafeConfirmationEvent
+        if (event != null) {
+            when {
+                event.publishedAtResetEpoch < liveResetEpoch -> {
+                    // Transitional legacy overlay resets can clear the sink directly. A trusted
+                    // Event from the prior epoch must not hide the new current Session. The same
+                    // rule applies to an old in-flight publication after the reset has won.
+                    currentSafeConfirmationEvent = null
+                }
+                event.publishedAtResetEpoch > liveResetEpoch -> return null
+                hasActivePublicationIntentAtOrAfter(
+                    event.publicationIntentSequence,
+                    liveResetEpoch,
+                ) -> return null
+                event.publicationState == SafeConfirmationPublicationState.PENDING -> return null
+                else -> {
+                    return SafeConfirmationRequest(
+                        origin = origin,
+                        subject = SafeConfirmationSubject.Event(event.eventId),
+                        expectedResetEpoch = event.publishedAtResetEpoch,
+                        liveCallId = callMonitor.currentCallId(),
+                        signals = event.signals,
+                        expectedEventId = event.eventId,
+                    )
+                }
+            }
+        }
+        if (hasActivePublicationIntentAtOrAfterEpoch(liveResetEpoch)) return null
+        val session = sessionTracker.sessionState.value ?: return null
+        return SafeConfirmationRequest(
+            origin = origin,
+            subject = SafeConfirmationSubject.Session(session.id),
+            expectedResetEpoch = liveResetEpoch,
+            liveCallId = callMonitor.currentCallId(),
+            signals = session.accumulatedSignals,
+        )
+    }
+
+    @Synchronized
+    override fun confirmSafe(request: SafeConfirmationRequest): Boolean {
+        val liveResetEpoch = sessionTracker.userResetEpoch
+        pendingSafeConfirmationRetry?.let { pending ->
+            when {
+                pending.safeConfirmationEpoch < liveResetEpoch -> pendingSafeConfirmationRetry = null
+                pending.safeConfirmationEpoch > liveResetEpoch -> return false
+                sessionTracker.sessionState.value != null -> pendingSafeConfirmationRetry = null
+                hasActivePublicationIntentAtOrAfterEpoch(liveResetEpoch) -> return false
+                safeConfirmationConsumeKey(pending.request) == safeConfirmationConsumeKey(request) ->
+                    return resumeSafeConfirmation(pending)
+            }
+        }
+
+        pruneConsumedSafeConfirmations(liveResetEpoch)
+        if (!isCurrentSafeConfirmationRequest(request)) return false
+        val consumeKey = safeConfirmationConsumeKey(request)
+        if (!consumedSafeConfirmations.add(consumeKey)) return false
+
+        return try {
+            sessionTracker.resetAfterUserConfirmedSafe()
+            val safeConfirmationEpoch = sessionTracker.userResetEpoch
+            val pending = PendingSafeConfirmationRetry(
+                request = request,
+                safeConfirmationEpoch = safeConfirmationEpoch,
+            )
+            pendingSafeConfirmationRetry = pending
+            resumeSafeConfirmation(pending)
+        } catch (error: Exception) {
+            // A reset failure has not established resumable post-reset state. Let the same logical
+            // request try again instead of consuming its one-shot permanently.
+            consumedSafeConfirmations.remove(consumeKey)
+            Log.e(TAG, "safe-confirm failed closed: origin=${request.origin}, subject=${request.subject}", error)
+            false
+        }
+    }
+
+    private fun safeConfirmationConsumeKey(request: SafeConfirmationRequest) =
+        SafeConfirmationConsumeKey(request.subject, request.expectedResetEpoch)
+
+    private fun resumeSafeConfirmation(pending: PendingSafeConfirmationRetry): Boolean {
+        return try {
+            while (true) {
+                when (pending.nextStep) {
+                    SafeConfirmationStep.INVALIDATE_PRESENTATION -> {
+                        overlayManager.invalidateBeforeEpoch(pending.safeConfirmationEpoch)
+                        cooldownManager.invalidateBeforeEpoch(pending.safeConfirmationEpoch)
+                        pending.nextStep = SafeConfirmationStep.SOURCE_EFFECTS
+                    }
+
+                    SafeConfirmationStep.SOURCE_EFFECTS -> {
+                        applySafeConfirmationSourceEffects(pending.request)
+                        pending.nextStep = SafeConfirmationStep.REFRESH_MIRROR
+                    }
+
+                    SafeConfirmationStep.REFRESH_MIRROR -> {
+                        refreshAnchorHotNow()
+                        pending.nextStep = SafeConfirmationStep.CLEAR_EVENT
+                    }
+
+                    SafeConfirmationStep.CLEAR_EVENT -> {
+                        clearCurrentRiskEventState()
+                        pending.nextStep = SafeConfirmationStep.DISMISS_OVERLAY
+                    }
+
+                    SafeConfirmationStep.DISMISS_OVERLAY -> {
+                        overlayManager.dismissBeforeEpoch(pending.safeConfirmationEpoch)
+                        pending.nextStep = SafeConfirmationStep.DISMISS_COOLDOWN
+                    }
+
+                    SafeConfirmationStep.DISMISS_COOLDOWN -> {
+                        cooldownManager.dismissBeforeEpoch(pending.safeConfirmationEpoch)
+                        pending.nextStep = SafeConfirmationStep.COMPLETE
+                    }
+
+                    SafeConfirmationStep.COMPLETE -> {
+                        if (pendingSafeConfirmationRetry === pending) pendingSafeConfirmationRetry = null
+                        return true
+                    }
+                }
+            }
+            @Suppress("UNREACHABLE_CODE")
+            false
+        } catch (error: Exception) {
+            Log.e(
+                TAG,
+                "safe-confirm failed closed at ${pending.nextStep}: " +
+                    "origin=${pending.request.origin}, subject=${pending.request.subject}",
+                error,
+            )
+            false
+        }
+    }
+
+    private fun applySafeConfirmationSourceEffects(request: SafeConfirmationRequest) {
+        when (request.origin) {
+            SafeConfirmationOrigin.HOME,
+            SafeConfirmationOrigin.WARNING,
+            -> callMonitor.clearTelebankingAnchor()
+
+            SafeConfirmationOrigin.OVERLAY_LIVE_CALL ->
+                applyLiveOverlaySafeEffects(requireNotNull(request.liveCallId), request.signals)
+
+            SafeConfirmationOrigin.OVERLAY_IDLE -> Unit
+            SafeConfirmationOrigin.DEBUG -> request.liveCallId?.let { liveCallId ->
+                applyLiveOverlaySafeEffects(liveCallId, request.signals)
+            }
+        }
+    }
+
+    @Synchronized
+    override fun showDebugOverlay(event: RiskEvent) {
+        val binding = issueDebugOverlayBinding(event, requiredPublishedEpoch = null) ?: run {
+            Log.w(TAG, "Debug overlay skipped: production Event publication is pending")
+            return
+        }
+        overlayManager.show(event, null, binding)
+    }
+
+    override suspend fun publishAndShowDebugOverlay(event: RiskEvent) {
+        val epoch = sessionTracker.userResetEpoch
+        afterDebugEpochCapturedBeforePublish()
+        val publication = publishCurrentRiskEvent(event, epoch) ?: return
+        afterDebugPublicationBeforeEffects(event)
+        if (sessionTracker.userResetEpoch != epoch) {
+            clearCurrentRiskEventStateIfExact(publication)
+            return
+        }
+        if (!emitWarningNavigationIfCurrent(event, publication)) return
+        beforeDebugOverlayEffect(event)
+        val shown = runCurrentPublicationEffectAfterHigherIntents(event, publication) {
+            val binding = requireNotNull(
+                issueDebugOverlayBinding(
+                    event = event,
+                    requiredPublishedEpoch = epoch,
+                    requiredPublicationSequence = publication.publicationIntentSequence,
+                ),
+            )
+            overlayManager.show(event, null, binding)
+        }
+        if (!shown) {
+            Log.w(TAG, "Debug overlay skipped: published Event was replaced before binding")
+        }
+    }
+
+    private fun issueDebugOverlayBinding(
+        event: RiskEvent,
+        requiredPublishedEpoch: Long?,
+        requiredPublicationSequence: Long? = null,
+    ): SafeConfirmationOverlayBinding? = synchronized(this) {
+            val currentEvent = currentSafeConfirmationEvent
+            val epoch = if (requiredPublishedEpoch == null) {
+                val liveResetEpoch = sessionTracker.userResetEpoch
+                pendingSafeConfirmationRetry?.let { pending ->
+                    if (pending.safeConfirmationEpoch < liveResetEpoch) {
+                        pendingSafeConfirmationRetry = null
+                    } else {
+                        // A show-only Debug surface has no acceptance callback. Do not destroy the
+                        // only retry capability until a real Event reaches fail-closed PENDING.
+                        return@synchronized null
+                    }
+                }
+                if ((currentEvent?.publishedAtResetEpoch ?: liveResetEpoch) > liveResetEpoch ||
+                    hasActivePublicationIntentAtOrAfterEpoch(liveResetEpoch) ||
+                    (currentEvent?.publishedAtResetEpoch == liveResetEpoch &&
+                        currentEvent.publicationState == SafeConfirmationPublicationState.PENDING)
+                ) {
+                    return@synchronized null
+                }
+                liveResetEpoch
+            } else {
+                if (requiredPublicationSequence == null ||
+                    sessionTracker.userResetEpoch != requiredPublishedEpoch ||
+                    currentEvent == null ||
+                    currentEvent.publicationState != SafeConfirmationPublicationState.PUBLISHED ||
+                    currentEvent.eventId != event.id ||
+                    currentEvent.publishedAtResetEpoch != requiredPublishedEpoch ||
+                    currentEvent.publicationIntentSequence != requiredPublicationSequence ||
+                    hasActivePublicationIntentAtOrAfter(
+                        currentEvent.publicationIntentSequence,
+                        requiredPublishedEpoch,
+                    ) ||
+                    currentEvent.signals != event.signals.toSet()
+                ) {
+                    return@synchronized null
+                }
+                requiredPublishedEpoch
+            }
+
+            nextDebugSafeConfirmationToken += 1
+            val subject = SafeConfirmationSubject.Debug(
+                "debug-safe-confirm-$nextDebugSafeConfirmationToken",
+            )
+            currentSafeConfirmationDebug = SafeConfirmationDebugContext(
+                subject = subject,
+                eventId = event.id,
+                issuedAtResetEpoch = epoch,
+                signals = event.signals.toSet(),
+            )
+            SafeConfirmationOverlayBinding(
+                subject = subject,
+                expectedEventId = event.id,
+                expectedResetEpoch = epoch,
+                expectedSignals = event.signals.toSet(),
+                kind = SafeConfirmationOverlayBindingKind.DEBUG,
+                consume = ::confirmSafe,
+            )
+        }
+
+    private fun isCurrentSafeConfirmationRequest(request: SafeConfirmationRequest): Boolean {
+        if (request.expectedResetEpoch != sessionTracker.userResetEpoch) return false
+
+        val subjectMatches = when (val subject = request.subject) {
+            is SafeConfirmationSubject.Event -> {
+                val current = currentSafeConfirmationEvent
+                current != null &&
+                    !hasActivePublicationIntentAtOrAfter(
+                        current.publicationIntentSequence,
+                        request.expectedResetEpoch,
+                    ) &&
+                    current.publicationState == SafeConfirmationPublicationState.PUBLISHED &&
+                    current.eventId == subject.eventId &&
+                    current.eventId == request.expectedEventId &&
+                    current.publishedAtResetEpoch == request.expectedResetEpoch &&
+                    current.signals == request.signals
+            }
+
+            is SafeConfirmationSubject.Session -> {
+                val current = sessionTracker.sessionState.value
+                !hasActivePublicationIntentAtOrAfterEpoch(request.expectedResetEpoch) &&
+                    currentSafeConfirmationEvent == null &&
+                    request.expectedEventId == null &&
+                    current != null &&
+                    current.id == subject.sessionId &&
+                    current.accumulatedSignals == request.signals
+            }
+
+            is SafeConfirmationSubject.Debug -> {
+                val current = currentSafeConfirmationDebug
+                !hasActivePublicationIntentAtOrAfterEpoch(request.expectedResetEpoch) &&
+                    current != null &&
+                    current.subject == subject &&
+                    current.eventId == request.expectedEventId &&
+                    current.issuedAtResetEpoch == request.expectedResetEpoch &&
+                    current.signals == request.signals
+            }
+        }
+        if (!subjectMatches) return false
+
+        return when (request.origin) {
+            SafeConfirmationOrigin.HOME,
+            SafeConfirmationOrigin.WARNING,
+            -> request.subject is SafeConfirmationSubject.Event ||
+                request.subject is SafeConfirmationSubject.Session
+
+            SafeConfirmationOrigin.OVERLAY_LIVE_CALL ->
+                request.subject is SafeConfirmationSubject.Event &&
+                    request.liveCallId != null &&
+                    callMonitor.currentCallId() == request.liveCallId
+
+            SafeConfirmationOrigin.OVERLAY_IDLE ->
+                request.subject is SafeConfirmationSubject.Event &&
+                    request.liveCallId == null &&
+                    callMonitor.currentCallId() == null
+
+            SafeConfirmationOrigin.DEBUG ->
+                request.subject is SafeConfirmationSubject.Debug &&
+                    if (request.liveCallId == null) {
+                        callMonitor.currentCallId() == null
+                    } else {
+                        callMonitor.currentCallId() == request.liveCallId
+                    }
+        }
+    }
+
+    private fun applyLiveOverlaySafeEffects(liveCallId: Long, signals: Set<RiskSignal>) {
+        // reset clears snooze; re-arm it afterwards for the same physical call.
+        sessionTracker.snoozeForCall(liveCallId)
+        if (shouldApplyOverlayCallSafeEffects(inCall = true, signals = signals) &&
+            callMonitor.currentCallId() == liveCallId
+        ) {
+            // Bounded existing-surface mitigation. A transition can still occur after this
+            // recheck; closing that residual needs a monitor API change.
+            callMonitor.markCurrentCallConfirmedSafe(liveCallId)
+            callMonitor.clearTelebankingAnchor()
+        }
+    }
+
+    /** Caller holds the Coordinator monitor; earlier epochs can never become current again. */
+    private fun pruneConsumedSafeConfirmations(liveResetEpoch: Long) {
+        consumedSafeConfirmations.removeAll { it.expectedResetEpoch < liveResetEpoch }
+    }
+
+    /** Caller holds the Coordinator monitor; lower stale intents never block the current winner. */
+    private fun hasActivePublicationIntentAtOrAfter(
+        publicationIntentSequence: Long,
+        publishedAtResetEpoch: Long,
+    ): Boolean = activeEventPublicationIntents.any { (activeSequence, activeIntent) ->
+        activeSequence >= publicationIntentSequence &&
+            activeIntent.publishedAtResetEpoch >= publishedAtResetEpoch
+    }
+
+    /** Caller holds the Coordinator monitor; prior-epoch work cannot block a fresh generation. */
+    private fun hasActivePublicationIntentAtOrAfterEpoch(resetEpoch: Long): Boolean =
+        activeEventPublicationIntents.values.any { it.publishedAtResetEpoch >= resetEpoch }
 
     private suspend fun firstGuardian(): Guardian? =
         guardianRepository.observeGuardians().first().firstOrNull()
@@ -476,9 +889,15 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                         if (alertState.ordinal < AlertState.INTERRUPT.ordinal &&
                             inheritedAlertOrdinal >= AlertState.INTERRUPT.ordinal
                         ) {
-                            Log.d(TAG, "renewal downgraded to $alertState — dismiss stale popup/current event")
-                            overlayManager.dismiss()
-                            eventSink.clearCurrentRiskEvent()
+                            val cleanupCutoff = synchronized(this@DefaultRiskDetectionCoordinator) {
+                                captureNonSafeCleanupCutoff()
+                            }
+                            beforeRenewalDowngradeCleanup()
+                            clearRenewalDowngradedPresentation(
+                                alertState,
+                                epochAtTickStart,
+                                cleanupCutoff,
+                            )
                         }
                         // 승계된 통보 상한이 현 상태보다 높으면 현 상태로 클램프 — 이번 tick에는
                         // 아무것도 발화하지 않지만(동치), 이후의 진짜 재상승이 다시 알림/이력을
@@ -563,7 +982,12 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                             Log.d(TAG, "뱅킹 쿨다운 생략: 세션당 1회 정책 (sessionId=${session.id}, alertState=$alertState)")
                         } else {
                             val reason = buildCooldownReason(session.accumulatedSignals)
-                            cooldownManager.triggerIfNotActive(score.level, reason, isCallActive)
+                            cooldownManager.triggerIfNotActive(
+                                score.level,
+                                reason,
+                                isCallActive,
+                                expectedResetEpoch = epochAtTickStart,
+                            )
                             overlayManager.ensureCriticalOnTop()
                             cooldownConsumedSessionId = session.id
                             Log.d(TAG, "cooldownConsumedSessionId set=${session.id}: banking cooldown fired (level=${score.level}, isCallActive=$isCallActive)")
@@ -586,6 +1010,7 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                                 score.level,
                                 "은행 ARS 전화가 감지되었습니다.\n잠시 멈추고 다시 생각해 보세요.",
                                 isCallActive,
+                                expectedResetEpoch = epochAtTickStart,
                             )
                             overlayManager.ensureCriticalOnTop()
                             cooldownConsumedSessionId = session.id
@@ -613,23 +1038,49 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                         val event = eventFactory.create(score)
                         // currentEvent 승격은 INTERRUPT+ 전용 — GUARDED 세션은 이력·notification만.
                         // (승격하면 홈이 WARNING으로 표시되고 Warning 화면 중립 헤더가 죽는다.)
-                        if (alertState.ordinal >= AlertState.INTERRUPT.ordinal) {
-                            eventSink.pushRiskEvent(event)
+                        val publication = if (alertState.ordinal >= AlertState.INTERRUPT.ordinal) {
+                            publishCurrentRiskEvent(event, epochAtTickStart) ?: run {
+                                Log.d(TAG, "event publication superseded — abort escalation effects")
+                                previousBankingForeground = bankingForeground
+                                return@collect
+                            }
                         } else {
                             eventSink.recordRiskEvent(event)
+                            null
                         }
                         // suspend(Room 쓰기) 재개 후 재검증 — 사용자 clear "이후"에 push가
                         // currentEvent를 되살렸을 수 있으므로 회수하고 잔여 효과를 중단한다.
                         if (userResetIntervened(epochAtTickStart, "escalation post-push")) {
-                            eventSink.clearCurrentRiskEvent()
+                            clearCurrentRiskEventStateIfExact(publication)
                             previousBankingForeground = bankingForeground
                             return@collect
                         }
-                        if (alertEscalated) sessionTracker.markAlertStateNotified(alertState)
-                        sessionTracker.markNotified(score.level)
-                        Log.d(TAG, "notification escalation: alertState=${session.notifiedAlertState}→$alertState, level=${session.notifiedLevel}→${score.level}")
-
-                        notificationManager.notify(event)
+                        if (publication != null &&
+                            !emitWarningNavigationIfCurrent(event, publication)
+                        ) {
+                            Log.d(TAG, "publication replaced — abort notification escalation")
+                            previousBankingForeground = bankingForeground
+                            return@collect
+                        }
+                        if (publication != null &&
+                            userResetIntervened(epochAtTickStart, "escalation post-navigation gate")
+                        ) {
+                            clearCurrentRiskEventStateIfExact(publication)
+                            previousBankingForeground = bankingForeground
+                            return@collect
+                        }
+                        beforePublicationNotificationCommit(event)
+                        if (!commitNotificationIfCurrent(event, publication) {
+                                if (alertEscalated) sessionTracker.markAlertStateNotified(alertState)
+                                sessionTracker.markNotified(score.level)
+                                Log.d(TAG, "notification escalation: alertState=${session.notifiedAlertState}→$alertState, level=${session.notifiedLevel}→${score.level}")
+                                notificationManager.notify(event)
+                            }
+                        ) {
+                            Log.d(TAG, "publication replaced — abort notification commit")
+                            previousBankingForeground = bankingForeground
+                            return@collect
+                        }
 
                         if (alertState.ordinal >= AlertState.INTERRUPT.ordinal &&
                             !cooldownManager.isShowing() && !cooldownFiredThisTick
@@ -642,15 +1093,29 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                                 // suspend(DataStore 첫 읽기) 재개 후 재검증 — 사용자 확인 이후
                                 // 팝업이 다시 떠서는 안 된다.
                                 if (userResetIntervened(epochAtTickStart, "escalation popup show")) {
-                                    eventSink.clearCurrentRiskEvent()
+                                    clearCurrentRiskEventStateIfExact(publication)
                                     previousBankingForeground = bankingForeground
                                     return@collect
                                 }
-                                overlayManager.show(event, guardian)
-                                s2RecRefireState = s2RecRefireStateAfterFiring(rawTickSignals, nowMs)
-                                sessionTracker.markActiveThreatsNotified(triggers)
-                                popupShownThisTick = true
-                                Log.d(TAG, "popup shown on state transition → $alertState (s2Snapshot=${s2RecRefireState.snapshot})")
+                                val interruptPublication = publication ?: run {
+                                    previousBankingForeground = bankingForeground
+                                    return@collect
+                                }
+                                beforePublicationPopupAccountingCommit(event)
+                                if (!showPublishedEventOverlay(
+                                        event,
+                                        guardian,
+                                        interruptPublication,
+                                    ) {
+                                        s2RecRefireState = s2RecRefireStateAfterFiring(rawTickSignals, nowMs)
+                                        sessionTracker.markActiveThreatsNotified(triggers)
+                                        popupShownThisTick = true
+                                        Log.d(TAG, "popup shown on state transition → $alertState (s2Snapshot=${s2RecRefireState.snapshot})")
+                                    }
+                                ) {
+                                    previousBankingForeground = bankingForeground
+                                    return@collect
+                                }
                             }
                         } else if (cooldownFiredThisTick && alertState.ordinal >= AlertState.INTERRUPT.ordinal) {
                             Log.d(TAG, "popup suppressed: cooldown fired this tick")
@@ -676,26 +1141,60 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                                 Log.d(TAG, "popup suppressed by S2 REC-REFIRE debounce (new-trigger path) — new=$newTriggers, snapshot=${s2RecRefireState.snapshot}")
                             } else {
                                 val event = eventFactory.create(score, triggerSignals = newTriggers)
-                                eventSink.pushRiskEvent(event)
+                                val publication = publishCurrentRiskEvent(event, epochAtTickStart) ?: run {
+                                    Log.d(TAG, "event publication superseded — abort new-trigger effects")
+                                    previousBankingForeground = bankingForeground
+                                    return@collect
+                                }
                                 // suspend(Room 쓰기) 재개 후 재검증 — push가 사용자 clear 이후
                                 // currentEvent를 되살렸으면 회수하고 중단.
                                 if (userResetIntervened(epochAtTickStart, "new-trigger post-push")) {
-                                    eventSink.clearCurrentRiskEvent()
+                                    clearCurrentRiskEventStateIfExact(publication)
                                     previousBankingForeground = bankingForeground
                                     return@collect
                                 }
-                                notificationManager.notify(event)
+                                if (!emitWarningNavigationIfCurrent(event, publication)) {
+                                    Log.d(TAG, "publication replaced — abort new-trigger effects")
+                                    previousBankingForeground = bankingForeground
+                                    return@collect
+                                }
+                                if (userResetIntervened(epochAtTickStart, "new-trigger post-navigation gate")) {
+                                    clearCurrentRiskEventStateIfExact(publication)
+                                    previousBankingForeground = bankingForeground
+                                    return@collect
+                                }
+                                beforePublicationNotificationCommit(event)
+                                if (!commitNotificationIfCurrent(event, publication) {
+                                        notificationManager.notify(event)
+                                    }
+                                ) {
+                                    Log.d(TAG, "publication replaced — abort new-trigger notification")
+                                    previousBankingForeground = bankingForeground
+                                    return@collect
+                                }
                                 val guardian = firstGuardian()
                                 // suspend(DataStore) 재개 후 재검증 — 사용자 확인 이후 팝업 금지.
                                 if (userResetIntervened(epochAtTickStart, "new-trigger popup show")) {
-                                    eventSink.clearCurrentRiskEvent()
+                                    clearCurrentRiskEventStateIfExact(publication)
                                     previousBankingForeground = bankingForeground
                                     return@collect
                                 }
-                                overlayManager.show(event, guardian)
-                                s2RecRefireState = s2RecRefireStateAfterFiring(rawTickSignals, nowMs)
-                                sessionTracker.markActiveThreatsNotified(syncedSession.notifiedActiveThreats + newTriggers)
-                                Log.d(TAG, "새 trigger 팝업: new=$newTriggers (s2Snapshot=${s2RecRefireState.snapshot})")
+                                beforePublicationPopupAccountingCommit(event)
+                                if (!showPublishedEventOverlay(
+                                        event,
+                                        guardian,
+                                        publication,
+                                    ) {
+                                        s2RecRefireState = s2RecRefireStateAfterFiring(rawTickSignals, nowMs)
+                                        sessionTracker.markActiveThreatsNotified(
+                                            syncedSession.notifiedActiveThreats + newTriggers,
+                                        )
+                                        Log.d(TAG, "새 trigger 팝업: new=$newTriggers (s2Snapshot=${s2RecRefireState.snapshot})")
+                                    }
+                                ) {
+                                    previousBankingForeground = bankingForeground
+                                    return@collect
+                                }
                             }
                         }
                     }
@@ -725,15 +1224,326 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
         return intervened
     }
 
-    private fun clearInactiveSessionPresentation(reason: String) {
-        Log.d(TAG, "$reason — dismiss overlay/cooldown and clear current event")
-        overlayManager.dismiss()
-        cooldownManager.dismissIfShowing()
-        eventSink.clearCurrentRiskEvent()
-        if (cooldownConsumedSessionId != null) {
-            Log.d(TAG, "cooldownConsumedSessionId cleared: session disappeared (was=$cooldownConsumedSessionId)")
-            cooldownConsumedSessionId = null
+    private suspend fun publishCurrentRiskEvent(
+        event: RiskEvent,
+        publishedAtResetEpoch: Long,
+    ): SafeConfirmationPublicationReceipt? {
+        val registration = synchronized(this) {
+            if (sessionTracker.userResetEpoch != publishedAtResetEpoch) {
+                null
+            } else {
+                nextEventPublicationIntentSequence += 1
+                val intent = ActiveEventPublicationIntent(
+                    publishedAtResetEpoch = publishedAtResetEpoch,
+                    completion = CompletableDeferred(),
+                )
+                activeEventPublicationIntents[nextEventPublicationIntentSequence] = intent
+                EventPublicationRegistration(nextEventPublicationIntentSequence, intent)
+            }
+        } ?: return null
+        val publicationIntentSequence = registration.sequence
+        try {
+            return eventPublicationMutex.withLock {
+                val pending = synchronized(this) {
+                    val currentSequence = currentSafeConfirmationEvent?.publicationIntentSequence
+                    if (sessionTracker.userResetEpoch != publishedAtResetEpoch ||
+                        (currentSequence != null && currentSequence > publicationIntentSequence)
+                    ) {
+                        null
+                    } else {
+                        SafeConfirmationEventContext(
+                            eventId = event.id,
+                            publishedAtResetEpoch = publishedAtResetEpoch,
+                            signals = event.signals.toSet(),
+                            publicationState = SafeConfirmationPublicationState.PENDING,
+                            publicationIntentSequence = publicationIntentSequence,
+                        ).also {
+                            currentSafeConfirmationEvent = it
+                            // Registration alone is reversible. PENDING is the first fail-closed
+                            // replacement point, so only now supersede prior Debug/retry capability.
+                            if ((currentSafeConfirmationDebug?.issuedAtResetEpoch ?: Long.MAX_VALUE) <=
+                                publishedAtResetEpoch
+                            ) {
+                                currentSafeConfirmationDebug = null
+                            }
+                            pendingSafeConfirmationRetry?.let { safeConfirmation ->
+                                if (safeConfirmation.safeConfirmationEpoch <= publishedAtResetEpoch) {
+                                    pendingSafeConfirmationRetry = null
+                                }
+                            }
+                        }
+                    }
+                } ?: return@withLock null
+
+                // Room-backed publication may suspend, so never hold the Coordinator monitor here.
+                // A coroutine Mutex serializes the complete sink/provenance publication lane instead.
+                // The sink contract cannot reveal whether an exception happened before or after its
+                // mutation. Do not roll provenance back on throw/cancel: PENDING remains fail-closed.
+                try {
+                    eventSink.pushRiskEvent(event)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    // The sink cannot reveal whether it mutated before throwing. Retain PENDING
+                    // fail-closed, but isolate an ordinary storage failure so the long-lived
+                    // coordinator collection can process and supersede it with a later threat.
+                    Log.e(TAG, "event publication failed; PENDING provenance retained", error)
+                    return@withLock null
+                }
+                val receipt = synchronized(this) {
+                    if (currentSafeConfirmationEvent === pending &&
+                        sessionTracker.userResetEpoch == publishedAtResetEpoch
+                    ) {
+                        currentSafeConfirmationEvent = pending.copy(
+                            publicationState = SafeConfirmationPublicationState.PUBLISHED,
+                        )
+                        SafeConfirmationPublicationReceipt(
+                            eventId = event.id,
+                            publishedAtResetEpoch = publishedAtResetEpoch,
+                            signals = pending.signals,
+                            publicationIntentSequence = publicationIntentSequence,
+                        )
+                    } else {
+                        null
+                    }
+                }
+                if (receipt == null) {
+                    // push returned normally, so a reset/context loss can be recovered exactly.
+                    // This lane still owns the publication Mutex; no newer sink writer can exist.
+                    eventSink.clearCurrentRiskEvent()
+                    synchronized(this) {
+                        if (currentSafeConfirmationEvent === pending) {
+                            currentSafeConfirmationEvent = null
+                        }
+                    }
+                }
+                receipt
+            }
+        } finally {
+            synchronized(this) {
+                activeEventPublicationIntents.remove(publicationIntentSequence)
+            }
+            registration.intent.completion.complete(Unit)
         }
+    }
+
+    private suspend fun emitWarningNavigationIfCurrent(
+        event: RiskEvent,
+        publication: SafeConfirmationPublicationReceipt,
+    ): Boolean = runCurrentPublicationEffectAfterHigherIntents(event, publication) { current ->
+        if (event.level.ordinal >= RiskLevel.HIGH.ordinal) {
+            _warningNavigationEvents.tryEmit(
+                WarningNavigationPayload(
+                    eventId = current.eventId,
+                    expectedResetEpoch = current.publishedAtResetEpoch,
+                ),
+            )
+        }
+    }
+
+    private suspend fun showPublishedEventOverlay(
+        event: RiskEvent,
+        guardian: Guardian?,
+        publication: SafeConfirmationPublicationReceipt,
+        commitAccounting: () -> Unit,
+    ): Boolean {
+        val shown = runCurrentPublicationEffectAfterHigherIntents(event, publication) { current ->
+            val binding = SafeConfirmationOverlayBinding(
+                subject = SafeConfirmationSubject.Event(event.id),
+                expectedEventId = event.id,
+                expectedResetEpoch = current.publishedAtResetEpoch,
+                expectedSignals = current.signals,
+                kind = SafeConfirmationOverlayBindingKind.EVENT,
+                consume = ::confirmSafe,
+            )
+            overlayManager.show(event, guardian, binding)
+            commitAccounting()
+        }
+        if (!shown) {
+            Log.w(TAG, "overlay show skipped: trusted Event binding is not current (${event.id})")
+        }
+        return shown
+    }
+
+    private suspend fun commitNotificationIfCurrent(
+        event: RiskEvent,
+        publication: SafeConfirmationPublicationReceipt?,
+        commit: () -> Unit,
+    ): Boolean {
+        if (publication == null) {
+            commit()
+            return true
+        }
+        return runCurrentPublicationEffectAfterHigherIntents(event, publication) { commit() }
+    }
+
+    /**
+     * A queued newer publisher temporarily blocks effects from an already-PUBLISHED Event. Wait for
+     * every such intent to finish, then revalidate the exact publication under the same monitor that
+     * registers intents. A cancelled pre-mutation intent therefore restores the older current Event;
+     * a successful or fail-closed newer publication supersedes it.
+     */
+    private suspend fun runCurrentPublicationEffectAfterHigherIntents(
+        event: RiskEvent,
+        publication: SafeConfirmationPublicationReceipt,
+        effect: (SafeConfirmationEventContext) -> Unit,
+    ): Boolean {
+        while (true) {
+            var executed = false
+            val blockers = synchronized(this) {
+                val current = currentSafeConfirmationEvent
+                if (publication.eventId != event.id ||
+                    publication.signals != event.signals.toSet() ||
+                    current == null ||
+                    current.publicationState != SafeConfirmationPublicationState.PUBLISHED ||
+                    current.eventId != event.id ||
+                    current.eventId != publication.eventId ||
+                    current.publishedAtResetEpoch != publication.publishedAtResetEpoch ||
+                    current.publicationIntentSequence != publication.publicationIntentSequence ||
+                    current.publishedAtResetEpoch != sessionTracker.userResetEpoch ||
+                    current.signals != event.signals.toSet()
+                ) {
+                    return false
+                }
+                activeEventPublicationIntents
+                    .filter { (sequence, intent) ->
+                        sequence > current.publicationIntentSequence &&
+                            intent.publishedAtResetEpoch >= current.publishedAtResetEpoch
+                    }
+                    .values
+                    .map { it.completion }
+                    .also { activeBlockers ->
+                        if (activeBlockers.isEmpty()) {
+                            effect(current)
+                            executed = true
+                        }
+                    }
+            }
+            if (executed) return true
+            blockers.forEach { it.await() }
+        }
+    }
+
+    /** Sink and provenance clear share the same monitor as capture/consume validation. */
+    @Synchronized
+    private fun clearCurrentRiskEventState() {
+        eventSink.clearCurrentRiskEvent()
+        currentSafeConfirmationEvent = null
+        currentSafeConfirmationDebug = null
+    }
+
+    @Synchronized
+    private fun clearCurrentRiskEventStateIfExact(publication: SafeConfirmationPublicationReceipt?) {
+        if (publication == null) return
+        val current = currentSafeConfirmationEvent ?: return
+        if (current.eventId != publication.eventId ||
+            current.publishedAtResetEpoch != publication.publishedAtResetEpoch ||
+            current.publicationIntentSequence != publication.publicationIntentSequence
+        ) {
+            return
+        }
+        if (hasLivePendingSafeConfirmationRetry()) {
+            Log.w(TAG, "exact Event cleanup deferred: safe-confirm retry retains ${publication.eventId}")
+            return
+        }
+        eventSink.clearCurrentRiskEvent()
+        currentSafeConfirmationEvent = null
+    }
+
+    private suspend fun clearInactiveSessionPresentation(reason: String) {
+        val cleanupCutoff = synchronized(this) { captureNonSafeCleanupCutoff() }
+        beforeInactiveSessionCleanupCommit()
+        synchronized(this) {
+            if (shouldDeferNonSafeCleanup(reason, cleanupCutoff)) return
+            Log.d(TAG, "$reason — dismiss overlay/cooldown and clear current event")
+            overlayManager.dismiss()
+            cooldownManager.dismissIfShowing()
+            clearCurrentRiskEventState()
+            if (cooldownConsumedSessionId != null) {
+                Log.d(TAG, "cooldownConsumedSessionId cleared: session disappeared (was=$cooldownConsumedSessionId)")
+                cooldownConsumedSessionId = null
+            }
+        }
+    }
+
+    /** Runs the production inactive-session cleanup path without manufacturing a tracker timeout. */
+    @VisibleForTesting
+    internal suspend fun runInactiveSessionCleanupForTest() {
+        clearInactiveSessionPresentation("test inactive-session cleanup")
+    }
+
+    @Synchronized
+    private fun clearRenewalDowngradedPresentation(
+        alertState: AlertState,
+        expectedResetEpoch: Long,
+        cleanupCutoff: NonSafeCleanupCutoff,
+    ) {
+        if (sessionTracker.userResetEpoch != expectedResetEpoch ||
+            shouldDeferNonSafeCleanup("renewal downgrade", cleanupCutoff)
+        ) {
+            return
+        }
+        Log.d(TAG, "renewal downgraded to $alertState — dismiss stale popup/current event")
+        overlayManager.dismiss()
+        clearCurrentRiskEventState()
+    }
+
+    /** Caller holds the Coordinator monitor. */
+    private fun shouldDeferNonSafeCleanup(
+        reason: String,
+        cleanupCutoff: NonSafeCleanupCutoff,
+    ): Boolean {
+        val liveResetEpoch = sessionTracker.userResetEpoch
+        if (hasLivePendingSafeConfirmationRetry()) {
+            Log.w(TAG, "$reason — fail-closed safe-confirm warning retained for retry")
+            return true
+        }
+        if (hasActivePublicationIntentAtOrAfterEpoch(liveResetEpoch)) {
+            Log.w(TAG, "$reason — active Event publication retained")
+            return true
+        }
+        val event = currentSafeConfirmationEvent
+        if (event != null && event !== cleanupCutoff.eventContext) {
+            Log.w(TAG, "$reason — newer Event context retained")
+            return true
+        }
+        if (event != null &&
+            event.publicationIntentSequence > cleanupCutoff.eventPublicationIntentSequence
+        ) {
+            Log.w(TAG, "$reason — newer PUBLISHED Event retained")
+            return true
+        }
+        val debug = currentSafeConfirmationDebug
+        if (debug != null && debug !== cleanupCutoff.debugContext) {
+            Log.w(TAG, "$reason — newer Debug binding retained")
+            return true
+        }
+        if (event != null &&
+            event.publishedAtResetEpoch >= liveResetEpoch &&
+            event.publicationState == SafeConfirmationPublicationState.PENDING
+        ) {
+            Log.w(TAG, "$reason — fail-closed PENDING Event retained")
+            return true
+        }
+        return false
+    }
+
+    /** Caller holds the Coordinator monitor. */
+    private fun captureNonSafeCleanupCutoff(): NonSafeCleanupCutoff = NonSafeCleanupCutoff(
+        eventPublicationIntentSequence = nextEventPublicationIntentSequence,
+        eventContext = currentSafeConfirmationEvent,
+        debugContext = currentSafeConfirmationDebug,
+    )
+
+    /** Caller holds the Coordinator monitor. */
+    private fun hasLivePendingSafeConfirmationRetry(): Boolean {
+        val pending = pendingSafeConfirmationRetry ?: return false
+        val liveResetEpoch = sessionTracker.userResetEpoch
+        if (pending.safeConfirmationEpoch < liveResetEpoch) {
+            pendingSafeConfirmationRetry = null
+            return false
+        }
+        return true
     }
 
     private fun refreshAnchorHotMirror() {
@@ -866,3 +1676,72 @@ private data class RenewalToken(
     val remaining: Map<SourceId, Set<RiskSignal>>,
     val renewedAtMs: Long,
 )
+
+private data class SafeConfirmationEventContext(
+    val eventId: String,
+    val publishedAtResetEpoch: Long,
+    val signals: Set<RiskSignal>,
+    val publicationState: SafeConfirmationPublicationState,
+    val publicationIntentSequence: Long,
+)
+
+private data class SafeConfirmationPublicationReceipt(
+    val eventId: String,
+    val publishedAtResetEpoch: Long,
+    val signals: Set<RiskSignal>,
+    val publicationIntentSequence: Long,
+)
+
+private data class ActiveEventPublicationIntent(
+    val publishedAtResetEpoch: Long,
+    val completion: CompletableDeferred<Unit>,
+)
+
+private data class EventPublicationRegistration(
+    val sequence: Long,
+    val intent: ActiveEventPublicationIntent,
+)
+
+private data class SafeConfirmationDebugContext(
+    val subject: SafeConfirmationSubject.Debug,
+    val eventId: String,
+    val issuedAtResetEpoch: Long,
+    val signals: Set<RiskSignal>,
+)
+
+private data class NonSafeCleanupCutoff(
+    val eventPublicationIntentSequence: Long,
+    val eventContext: SafeConfirmationEventContext?,
+    val debugContext: SafeConfirmationDebugContext?,
+)
+
+private enum class SafeConfirmationPublicationState { PENDING, PUBLISHED }
+
+private data class SafeConfirmationConsumeKey(
+    val subject: SafeConfirmationSubject,
+    val expectedResetEpoch: Long,
+)
+
+private data class PendingSafeConfirmationRetry(
+    val request: SafeConfirmationRequest,
+    val safeConfirmationEpoch: Long,
+    var nextStep: SafeConfirmationStep = SafeConfirmationStep.INVALIDATE_PRESENTATION,
+)
+
+private enum class SafeConfirmationStep {
+    INVALIDATE_PRESENTATION,
+    SOURCE_EFFECTS,
+    REFRESH_MIRROR,
+    CLEAR_EVENT,
+    DISMISS_OVERLAY,
+    DISMISS_COOLDOWN,
+    COMPLETE,
+}
+
+/** Positive allowlist retained from the pre-command Overlay contract. */
+@VisibleForTesting
+internal fun shouldApplyOverlayCallSafeEffects(
+    inCall: Boolean,
+    signals: Set<RiskSignal>,
+): Boolean =
+    inCall && signals.isNotEmpty() && signals.all { it in AlertStateResolver.CALL_SIGNALS }

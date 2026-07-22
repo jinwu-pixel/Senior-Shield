@@ -3,6 +3,8 @@ package com.example.seniorshield.monitoring.orchestrator
 import com.example.seniorshield.core.notification.RiskNotificationManager
 import com.example.seniorshield.core.overlay.BankingCooldownManager
 import com.example.seniorshield.core.overlay.RiskOverlayManager
+import com.example.seniorshield.domain.model.RiskEvent
+import com.example.seniorshield.domain.model.RiskLevel
 import com.example.seniorshield.domain.model.RiskSignal
 import com.example.seniorshield.monitoring.appinstall.AppInstallRiskMonitor
 import com.example.seniorshield.monitoring.appusage.AppUsageRiskMonitor
@@ -22,6 +24,7 @@ import io.mockk.clearMocks
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -100,7 +103,7 @@ class DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest {
             assertNull(sessionTracker.sessionState.value)
             assertCleanupExactlyOnce()
             verify(exactly = 0) { notificationManager.notify(any()) }
-            verify(exactly = 0) { overlayManager.show(any(), any()) }
+            verify(exactly = 0) { overlayManager.show(any(), any(), any()) }
         } finally {
             coordinator.stop()
             runCurrent()
@@ -135,7 +138,7 @@ class DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest {
             assertNull(sessionTracker.sessionState.value)
             assertCleanupExactlyOnce()
             verify(exactly = 0) { notificationManager.notify(any()) }
-            verify(exactly = 0) { overlayManager.show(any(), any()) }
+            verify(exactly = 0) { overlayManager.show(any(), any(), any()) }
         } finally {
             coordinator.stop()
             runCurrent()
@@ -167,7 +170,7 @@ class DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest {
             assertEquals(setOf(RiskSignal.REMOTE_CONTROL_APP_OPENED), newSession.accumulatedSignals)
             assertNotNull("fresh episode의 push가 currentEvent를 채운다", eventSink.currentEvent)
             assertCleanupExactlyOnce() // 구 세션 presentation은 새 효과 이전에 정리
-            verify(exactly = 1) { overlayManager.show(any(), any()) }
+            verify(exactly = 1) { overlayManager.show(any(), any(), any()) }
 
             runMaintenanceTick()
             assertEquals(newSession.id, sessionTracker.sessionState.value?.id)
@@ -246,7 +249,7 @@ class DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest {
             assertEquals(pushedBefore, eventSink.pushed.size)
             assertEquals(recordedBefore, eventSink.recorded.size)
             verify(exactly = 0) { notificationManager.notify(any()) }
-            verify(exactly = 0) { overlayManager.show(any(), any()) }
+            verify(exactly = 0) { overlayManager.show(any(), any(), any()) }
             assertNoCleanup()
             assertFalse("rollover 중 중간 null 방출 금지", emissions.contains(false))
 
@@ -276,7 +279,7 @@ class DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest {
             assertEquals("같은 세션 ID → GUARDED 카드 재노출도 구조적으로 차단", originalId, renewed.id)
             assertEquals(recordedBefore, eventSink.recorded.size)
             verify(exactly = 0) { notificationManager.notify(any()) }
-            verify(exactly = 0) { overlayManager.show(any(), any()) }
+            verify(exactly = 0) { overlayManager.show(any(), any(), any()) }
             assertNoCleanup()
             assertNull(eventSink.currentEvent)
         } finally {
@@ -316,6 +319,87 @@ class DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest {
         }
     }
 
+    @Test
+    fun `renewal downgrade after failed safe confirmation retains the fail-closed Event`() = runTest {
+        val clock = FakeClock(now = 1_000_000L)
+        val coordinator = startCoordinator(clock)
+        val cleanupReady = CompletableDeferred<Unit>()
+        val releaseCleanup = CompletableDeferred<Unit>()
+
+        try {
+            callSignalTick(listOf(RiskSignal.UNKNOWN_CALLER))
+            appSignalTick(listOf(RiskSignal.REMOTE_CONTROL_APP_OPENED))
+            appSignalTick(emptyList())
+            val request = requireNotNull(
+                coordinator.captureSafeConfirmationRequest(SafeConfirmationOrigin.HOME),
+            )
+            val eventId = (request.subject as SafeConfirmationSubject.Event).eventId
+            coordinator.beforeRenewalDowngradeCleanup = {
+                cleanupReady.complete(Unit)
+                releaseCleanup.await()
+            }
+
+            clock.advanceMs(TRIGGER_IDLE_TIMEOUT_MS + 1L)
+            runMaintenanceTick()
+            cleanupReady.await()
+
+            callMonitor.failClearTelebankingAnchor = true
+            assertFalse(coordinator.confirmSafe(request))
+            releaseCleanup.complete(Unit)
+            runCurrent()
+
+            assertEquals(eventId, eventSink.currentEvent?.id)
+        } finally {
+            releaseCleanup.complete(Unit)
+            callMonitor.failClearTelebankingAnchor = false
+            coordinator.beforeRenewalDowngradeCleanup = {}
+            coordinator.stop()
+            runCurrent()
+        }
+    }
+
+    @Test
+    fun `renewal downgrade preserves a newer Event published while cleanup is suspended`() = runTest {
+        val clock = FakeClock(now = 1_000_000L)
+        val coordinator = startCoordinator(clock)
+        val cleanupReady = CompletableDeferred<Unit>()
+        val releaseCleanup = CompletableDeferred<Unit>()
+        val newer = RiskEvent(
+            id = "newer-during-renewal-cleanup",
+            title = "test",
+            description = "test",
+            occurredAtMillis = 2L,
+            level = RiskLevel.CRITICAL,
+            signals = listOf(RiskSignal.REMOTE_CONTROL_APP_OPENED),
+        )
+
+        try {
+            callSignalTick(listOf(RiskSignal.UNKNOWN_CALLER))
+            appSignalTick(listOf(RiskSignal.REMOTE_CONTROL_APP_OPENED))
+            appSignalTick(emptyList())
+            coordinator.beforeRenewalDowngradeCleanup = {
+                cleanupReady.complete(Unit)
+                releaseCleanup.await()
+            }
+
+            clock.advanceMs(TRIGGER_IDLE_TIMEOUT_MS + 1L)
+            runMaintenanceTick()
+            cleanupReady.await()
+            coordinator.publishAndShowDebugOverlay(newer)
+            assertEquals(newer.id, eventSink.currentEvent?.id)
+
+            releaseCleanup.complete(Unit)
+            runCurrent()
+
+            assertEquals(newer.id, eventSink.currentEvent?.id)
+        } finally {
+            releaseCleanup.complete(Unit)
+            coordinator.beforeRenewalDowngradeCleanup = {}
+            coordinator.stop()
+            runCurrent()
+        }
+    }
+
     /** 필수 테스트 4: isShowing=true인 실제 카운트다운 중 renewal이 쿨다운을 끊지 않는다. */
     @Test
     fun `renewal during an actively showing cooldown never cuts the countdown`() = runTest {
@@ -330,7 +414,7 @@ class DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest {
             clock.advanceMs(DEFAULT_IDLE_TIMEOUT_MS - 10_000L)
             appUsageMonitor.bankingForeground.value = true
             runCurrent()
-            verify(exactly = 1) { cooldownManager.triggerIfNotActive(any(), any(), any()) }
+            verify(exactly = 1) { cooldownManager.triggerIfNotActive(any(), any(), any(), any()) }
             every { cooldownManager.isShowing() } returns true
             resetInteractionCounts()
 
@@ -339,7 +423,7 @@ class DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest {
 
             assertEquals("renewal은 같은 ID — 쿨다운 세션당 1회 정책도 그대로 유효", originalId, sessionTracker.sessionState.value?.id)
             verify(exactly = 0) { cooldownManager.dismissIfShowing() }
-            verify(exactly = 0) { cooldownManager.triggerIfNotActive(any(), any(), any()) }
+            verify(exactly = 0) { cooldownManager.triggerIfNotActive(any(), any(), any(), any()) }
         } finally {
             coordinator.stop()
             runCurrent()
@@ -426,7 +510,7 @@ class DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest {
             assertNull(eventSink.currentEvent)
             assertEquals(0, eventSink.pushed.size)
             verify(exactly = 0) { notificationManager.notify(any()) }
-            verify(exactly = 0) { overlayManager.show(any(), any()) }
+            verify(exactly = 0) { overlayManager.show(any(), any(), any()) }
         } finally {
             coordinator.stop()
             runCurrent()
@@ -455,8 +539,8 @@ class DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest {
             assertNull(eventSink.currentEvent)
             assertEquals("push 등 외부 효과 전부 중단", 0, eventSink.pushed.size)
             verify(exactly = 0) { notificationManager.notify(any()) }
-            verify(exactly = 0) { overlayManager.show(any(), any()) }
-            verify(exactly = 0) { cooldownManager.triggerIfNotActive(any(), any(), any()) }
+            verify(exactly = 0) { overlayManager.show(any(), any(), any()) }
+            verify(exactly = 0) { cooldownManager.triggerIfNotActive(any(), any(), any(), any()) }
         } finally {
             coordinator.stop()
             runCurrent()
@@ -485,7 +569,7 @@ class DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest {
             assertEquals(originalId, sessionTracker.sessionState.value?.id)
             assertNotNull(eventSink.currentEvent)
             assertEquals(0, eventSink.clearCurrentCount)
-            verify(exactly = 1) { cooldownManager.triggerIfNotActive(any(), any(), any()) }
+            verify(exactly = 1) { cooldownManager.triggerIfNotActive(any(), any(), any(), any()) }
 
             // +1ms 실측 tick: 같은 tick 안에서 renewal(같은 ID)과 downgrade 정리가 일관 수행 —
             // 절반 상태(만료는 됐는데 정리는 안 됨) 없음. 쿨다운은 유지.
@@ -623,7 +707,7 @@ class DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest {
             assertNull("reset 이전 캐시가 세션을 되살리면 안 됨", sessionTracker.sessionState.value)
             assertCleanupExactlyOnce()
             verify(exactly = 0) { notificationManager.notify(any()) }
-            verify(exactly = 0) { overlayManager.show(any(), any()) }
+            verify(exactly = 0) { overlayManager.show(any(), any(), any()) }
         } finally {
             coordinator.stop()
             runCurrent()
@@ -673,7 +757,7 @@ class DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest {
             runCurrent()
 
             assertNull("stale CALL 값이 세션을 되살리면 안 됨", sessionTracker.sessionState.value)
-            verify(exactly = 0) { cooldownManager.triggerIfNotActive(any(), any(), any()) }
+            verify(exactly = 0) { cooldownManager.triggerIfNotActive(any(), any(), any(), any()) }
             verify(exactly = 0) { notificationManager.notify(any()) }
         } finally {
             coordinator.stop()
@@ -696,7 +780,7 @@ class DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest {
             runCurrent()
 
             assertNull("stale APP trigger가 세션을 되살리면 안 됨", sessionTracker.sessionState.value)
-            verify(exactly = 0) { overlayManager.show(any(), any()) }
+            verify(exactly = 0) { overlayManager.show(any(), any(), any()) }
             verify(exactly = 0) { notificationManager.notify(any()) }
         } finally {
             coordinator.stop()
@@ -823,7 +907,7 @@ class DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest {
             // fresh CALL 재방출로 세션이 정당히 재생성돼도 stale banking은 쿨다운을 못 만든다
             callSignalTick(listOf(RiskSignal.UNKNOWN_CALLER, RiskSignal.LONG_CALL_DURATION))
             assertNotNull(sessionTracker.sessionState.value)
-            verify(exactly = 0) { cooldownManager.triggerIfNotActive(any(), any(), any()) }
+            verify(exactly = 0) { cooldownManager.triggerIfNotActive(any(), any(), any(), any()) }
         } finally {
             coordinator.stop()
             runCurrent()
@@ -960,7 +1044,7 @@ class DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest {
             appUsageMonitor.bankingForeground.value = true // 쿨다운 발동 tick 도중 사용자 확인
             runCurrent()
 
-            verify(exactly = 0) { cooldownManager.triggerIfNotActive(any(), any(), any()) }
+            verify(exactly = 0) { cooldownManager.triggerIfNotActive(any(), any(), any(), any()) }
             assertNull(sessionTracker.sessionState.value)
         } finally {
             coordinator.stop()
@@ -996,7 +1080,7 @@ class DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest {
 
             verify(exactly = 1) { notificationManager.notify(any()) }
             assertEquals("재상승은 이력에 다시 기록되어야 함", recordedBefore + 1, eventSink.recorded.size)
-            verify(exactly = 0) { overlayManager.show(any(), any()) } // GUARDED — 팝업 없음
+            verify(exactly = 0) { overlayManager.show(any(), any(), any()) } // GUARDED — 팝업 없음
         } finally {
             coordinator.stop()
             runCurrent()
@@ -1073,7 +1157,7 @@ class DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest {
             // reset 후 세션의 GUARDED escalation 이력이 정확히 1건 기록된다.
             assertEquals("banking tick 처리 증거", 1, sink.recorded.size)
             assertEquals("세션 ID 유지", sessionAfterReset.id, tracker.sessionState.value?.id)
-            verify(exactly = 0) { cooldown.triggerIfNotActive(any(), any(), any()) }
+            verify(exactly = 0) { cooldown.triggerIfNotActive(any(), any(), any(), any()) }
         } finally {
             coordinator.stop()
             runCurrent()
@@ -1149,7 +1233,7 @@ class DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest {
             assertEquals("이력 0", 0, sink.recorded.size)
             assertEquals("승격 0", 0, sink.pushed.size)
             verify(exactly = 0) { notif.notify(any()) }
-            verify(exactly = 0) { overlay.show(any(), any()) }
+            verify(exactly = 0) { overlay.show(any(), any(), any()) }
 
             // liveness: reset "이후" 생산된 같은 신호는 정상적으로 세션을 만든다
             assertTrue(
@@ -1231,7 +1315,7 @@ class DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest {
             banking.value = Produced(true, 0L) // banking edge → ghost 조회 (조회 도중 reset 주입)
             runCurrent()
 
-            verify(exactly = 0) { cooldown.triggerIfNotActive(any(), any(), any()) }
+            verify(exactly = 0) { cooldown.triggerIfNotActive(any(), any(), any(), any()) }
             assertNull("사용자 확인 결과가 유지되어야 함", tracker.sessionState.value)
         } finally {
             coordinator.stop()
