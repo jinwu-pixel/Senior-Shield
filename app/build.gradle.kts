@@ -58,6 +58,21 @@ kapt {
     }
 }
 
+providers.gradleProperty("composeCompilerReportsDir").orNull?.let { reportsDir ->
+    val absoluteReportsDir = file(reportsDir).absolutePath.replace('\\', '/')
+
+    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+        if (name == "compileDebugKotlin") {
+            kotlinOptions.freeCompilerArgs += listOf(
+                "-P",
+                "plugin:androidx.compose.compiler.plugins.kotlin:reportsDestination=$absoluteReportsDir",
+                "-P",
+                "plugin:androidx.compose.compiler.plugins.kotlin:metricsDestination=$absoluteReportsDir",
+            )
+        }
+    }
+}
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
     implementation(composeBom)
