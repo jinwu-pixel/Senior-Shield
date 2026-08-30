@@ -253,6 +253,7 @@ class WarningViewModelTest {
         viewModel.answerBehaviorCheck(4, yes = true)
 
         // monitoring command 부수효과 0 — 자가확인 응답은 safe-confirm을 호출하지 않는다.
+        assertEquals(0, coordinator.refreshAnchorHotNowCallCount)
         assertEquals(0, coordinator.captureCallCount)
         assertEquals(0, coordinator.confirmCallCount)
     }

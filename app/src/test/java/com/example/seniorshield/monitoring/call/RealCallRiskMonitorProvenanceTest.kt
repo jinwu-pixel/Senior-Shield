@@ -141,7 +141,7 @@ class RealCallRiskMonitorProvenanceTest {
         assertEquals("SEED epoch는 callState 관측 시점", 0L, first.producedAtEpoch)
         assertNotNull("상태 복원 — snooze 바인딩용 callId", monitor.currentCallId())
         assertTrue("반복호출 버퍼 미기록 (부수효과 금지)", monitor.recentUnknownCalls.isEmpty())
-        assertNull("anchor 미장전", monitor.lastSuspiciousCallEndedAt)
+        assertNull("anchor 미장전", monitor.lastSuspiciousCallEndedElapsedMs)
         assertNoFurtherEmission()
     }
 
@@ -190,7 +190,7 @@ class RealCallRiskMonitorProvenanceTest {
                 recordedAt,
                 monitor.recentUnknownCalls.toList(),
             )
-            assertNull("anchor 미장전 유지", monitor.lastSuspiciousCallEndedAt)
+            assertNull("anchor 미장전 유지", monitor.lastSuspiciousCallEndedElapsedMs)
         } finally {
             job2.cancel()
         }
@@ -254,12 +254,12 @@ class RealCallRiskMonitorProvenanceTest {
         fakeClock.advanceMs(1_000L)
         drive(TelephonyManager.CALL_STATE_IDLE, "01011112222")
         awaitEmissionWhere { it.value.isEmpty() }
-        assertNull("안전확인된 통화의 첫 IDLE은 anchor를 장전하지 않음", monitor.lastSuspiciousCallEndedAt)
+        assertNull("안전확인된 통화의 첫 IDLE은 anchor를 장전하지 않음", monitor.lastSuspiciousCallEndedElapsedMs)
 
         testModeEnabled.value = true
 
         assertNoFurtherEmission()
-        assertNull("완료된 IDLE을 설정 flip으로 재처리해 anchor를 되살리면 안 됨", monitor.lastSuspiciousCallEndedAt)
+        assertNull("완료된 IDLE을 설정 flip으로 재처리해 anchor를 되살리면 안 됨", monitor.lastSuspiciousCallEndedElapsedMs)
     }
 
     @Test
@@ -293,7 +293,7 @@ class RealCallRiskMonitorProvenanceTest {
         releaseIdleSettings.complete(Unit)
 
         assertNoFurtherEmission(waitMs = 1_000)
-        assertNull("reset 뒤 stale IDLE 재개가 anchor를 다시 장전하면 안 됨", monitor.lastSuspiciousCallEndedAt)
+        assertNull("reset 뒤 stale IDLE 재개가 anchor를 다시 장전하면 안 됨", monitor.lastSuspiciousCallEndedElapsedMs)
     }
 
     /**
@@ -914,7 +914,7 @@ class RealCallRiskMonitorProvenanceTest {
             awaitContext {
                 it is CallMonitorState.Active && it.context.state == CallState.IDLE
             }
-            assertNull("신호 구독 전에는 anchor 부수효과가 실행되지 않음", monitor.lastSuspiciousCallEndedAt)
+            assertNull("신호 구독 전에는 anchor 부수효과가 실행되지 않음", monitor.lastSuspiciousCallEndedElapsedMs)
 
             elapsedClock.advanceMs(5 * 60 * 1000L + 30_000L)
             startCollector()
@@ -923,7 +923,7 @@ class RealCallRiskMonitorProvenanceTest {
             assertEquals(
                 "늦은 replay 소비가 아니라 callback IDLE 생산시각을 anchor로 유지",
                 producedEndElapsed,
-                monitor.lastSuspiciousCallEndedAt,
+                monitor.lastSuspiciousCallEndedElapsedMs,
             )
             assertFalse("생산시각 기준 5분30초 경과 후 anchor는 만료", monitor.isTelebankingWindow())
         } finally {
@@ -1019,7 +1019,7 @@ class RealCallRiskMonitorProvenanceTest {
             if (++matchCalls == 2) tracker.resetAfterUserConfirmedSafe()
             true
         }
-        monitor.lastSuspiciousCallEndedAt = fakeClock.provider() // 텔레뱅킹 윈도우 hot
+        monitor.lastSuspiciousCallEndedElapsedMs = fakeClock.provider() // 텔레뱅킹 윈도우 hot
         OutgoingCallReceiver().onReceive(
             mockk(relaxed = true),
             mockk {
@@ -1048,7 +1048,7 @@ class RealCallRiskMonitorProvenanceTest {
     fun `seed offhook is not treated as an outgoing call`() = runBlocking {
         // 텔레뱅킹 윈도우 hot + 선캡처 번호 존재 — 과거 결함(seed→isOutgoing=true)이라면
         // 발신 분기가 번호를 매칭해 TELEBANKING을 방출했을 조합.
-        monitor.lastSuspiciousCallEndedAt = fakeClock.provider()
+        monitor.lastSuspiciousCallEndedElapsedMs = fakeClock.provider()
         OutgoingCallReceiver().onReceive(
             mockk(relaxed = true),
             mockk {

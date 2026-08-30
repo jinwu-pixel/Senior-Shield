@@ -81,7 +81,7 @@ class RealCallRiskMonitorTest {
     /** T-P1-1: 텔레뱅킹 윈도우는 의심 통화 종료 5분 이내 true, 초과 시 false. */
     @Test
     fun `텔레뱅킹 윈도우 5분 이내 true, 초과 시 false`() {
-        monitor.lastSuspiciousCallEndedAt = 1_000_000L     // 의심 통화 종료 시각
+        monitor.lastSuspiciousCallEndedElapsedMs = 1_000_000L // 의심 통화 종료 elapsed 시각
 
         fakeClock.advanceMs(4 * 60 * 1000L + 59 * 1000L)   // now = 1_299_000 (4분 59초)
         assertTrue("4분 59초 → 윈도우 내", monitor.isTelebankingWindow())
@@ -122,7 +122,7 @@ class RealCallRiskMonitorTest {
     fun `wall clock forward jump does not expire the telebanking window early`() {
         val elapsedClock = FakeClock(now = 1_000_000L)
         monitor.monotonicClock = elapsedClock.provider
-        monitor.lastSuspiciousCallEndedAt = elapsedClock.provider()
+        monitor.lastSuspiciousCallEndedElapsedMs = elapsedClock.provider()
 
         elapsedClock.advanceMs(4 * 60 * 1000L + 30_000L)
         fakeClock.advanceMs(5 * 60 * 1000L + 30_000L) // 실제 경과 + wall clock 60초 도약
@@ -134,7 +134,7 @@ class RealCallRiskMonitorTest {
     fun `wall clock rollback does not revive an expired telebanking window`() {
         val elapsedClock = FakeClock(now = 1_000_000L)
         monitor.monotonicClock = elapsedClock.provider
-        monitor.lastSuspiciousCallEndedAt = elapsedClock.provider()
+        monitor.lastSuspiciousCallEndedElapsedMs = elapsedClock.provider()
 
         elapsedClock.advanceMs(5 * 60 * 1000L + 30_000L)
         fakeClock.advanceMs(4 * 60 * 1000L + 30_000L) // 실제 경과 - wall clock 60초 역행
