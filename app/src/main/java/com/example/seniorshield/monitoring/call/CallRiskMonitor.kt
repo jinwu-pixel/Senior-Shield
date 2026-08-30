@@ -29,7 +29,7 @@ interface CallRiskMonitor {
     fun currentCallId(): Long?
 
     /**
-     * 텔레뱅킹 윈도우 anchor(lastSuspiciousCallEndedAt)를 즉시 무효화한다.
+     * 텔레뱅킹 윈도우 anchor(lastSuspiciousCallEndedElapsedMs)를 즉시 무효화한다.
      * 사용자가 위험 경고를 안전 종료할 때 호출되어, 종료 후 5분 내
      * 정상 은행 ARS 발신이 텔레뱅킹으로 오발화하는 것을 막는다.
      * 이미 anchor가 null이면 no-op.
@@ -38,7 +38,7 @@ interface CallRiskMonitor {
 
     /**
      * 현재 통화([callId])를 "사용자 안전 확인 완료" 상태로 마킹한다.
-     * 다음 IDLE 전이 시 lastSuspiciousCallEndedAt을 설정하지 않는다 (anchor 스킵).
+     * 다음 IDLE 전이 시 lastSuspiciousCallEndedElapsedMs를 설정하지 않는다 (anchor 스킵).
      * 통화 종료 후 자동으로 클리어된다 — 다른 통화에는 영향 없음.
      *
      * 호출 위치: B-3 (RiskOverlayManager 통화 중 "통화 경고 닫기").
@@ -46,7 +46,7 @@ interface CallRiskMonitor {
     fun markCurrentCallConfirmedSafe(callId: Long)
 
     /**
-     * 텔레뱅킹 anchor(lastSuspiciousCallEndedAt)가 5분 윈도우 내에 살아 있는지 동기 조회.
+     * 텔레뱅킹 anchor(lastSuspiciousCallEndedElapsedMs)가 5분 윈도우 내에 살아 있는지 동기 조회.
      * Home의 GUARDED_ANCHOR 표시 판단용 (anchor는 TTL 만료가 시간 기반이라 Flow로 자연 emit되지 않음).
      * Coordinator tick에서 이 값을 읽어 UI-facing mirror StateFlow로 반영한다.
      * anchor가 null이거나 5분 경과 → false.

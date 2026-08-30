@@ -449,7 +449,8 @@ class RiskSessionTracker @Inject constructor() : ResetEpochProvider {
      * session-null race 또는 빈 snapshot은 arm하지 않는다 — 빈 set이 저장되면 모든 non-call 재발화가
      * 구조적으로 억제되는 의도치 않은 동작을 초래한다.
      *
-     * 호출부: B-3(RiskOverlayManager), B-5(HomeViewModel), B-6(WarningViewModel).
+     * 프로덕션 호출부: [DefaultRiskDetectionCoordinator.confirmSafe] 단일 경로.
+     * Overlay·Home·Warning의 안전 확인 진입점은 모두 Coordinator command를 경유한다.
      * debug/admin reset(DebugViewModel)은 [reset]을 그대로 사용한다.
      */
     @Synchronized

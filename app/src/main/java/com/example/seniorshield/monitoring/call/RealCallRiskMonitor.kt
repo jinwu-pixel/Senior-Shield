@@ -184,14 +184,14 @@ class RealCallRiskMonitor @Inject constructor(
     )
 
     /**
-     * 마지막 의심 통화 종료의 elapsed realtime. 기존 필드명은 테스트 범위 호환을 위해 유지한다.
+     * 마지막 의심 통화 종료의 elapsed realtime.
      * 외부 wall timestamp는 [CallContext.endedAtMillis]에 별도로 보존된다.
      */
-    @Volatile @VisibleForTesting internal var lastSuspiciousCallEndedAt: Long? = null
+    @Volatile @VisibleForTesting internal var lastSuspiciousCallEndedElapsedMs: Long? = null
 
     /**
      * 사용자가 안전 확인한 통화의 callId.
-     * 다음 IDLE 전이 시 lastSuspiciousCallEndedAt 설정을 1회 스킵한다.
+     * 다음 IDLE 전이 시 lastSuspiciousCallEndedElapsedMs 설정을 1회 스킵한다.
      * IDLE 처리 후 자동 클리어 — 다른 통화에 영향 없음.
      * (B-3 공백 메우기. RealCallRiskMonitor 내부 상태로 국소화 — C-3 미확장.)
      */
@@ -303,9 +303,9 @@ class RealCallRiskMonitor @Inject constructor(
     override fun currentCallId(): Long? = callOwnership.get().currentCallId
 
     override fun clearTelebankingAnchor() {
-        if (lastSuspiciousCallEndedAt == null) return
+        if (lastSuspiciousCallEndedElapsedMs == null) return
         Log.d(TAG, "telebanking anchor cleared (user-initiated safe-confirm)")
-        lastSuspiciousCallEndedAt = null
+        lastSuspiciousCallEndedElapsedMs = null
     }
 
     override fun markCurrentCallConfirmedSafe(callId: Long) {
@@ -438,7 +438,7 @@ class RealCallRiskMonitor @Inject constructor(
                                 if ((ctx.isUnknownCaller == true || ctx.isVerifiedCaller == false) && !confirmedSafe) {
                                     val endedAtElapsedRealtime = sourced.endedAtElapsedRealtime
                                     if (endedAtElapsedRealtime != null) {
-                                        lastSuspiciousCallEndedAt = endedAtElapsedRealtime
+                                        lastSuspiciousCallEndedElapsedMs = endedAtElapsedRealtime
                                         Log.d(
                                             TAG,
                                             "의심 통화 종료 기록: wall=${ctx.endedAtMillis}, elapsed=$endedAtElapsedRealtime",
@@ -1195,7 +1195,7 @@ class RealCallRiskMonitor @Inject constructor(
         // 세션이 없으면 이전 버퍼를 초기화 (안전 확인 후 클린 슬레이트)
         if (sessionTracker.sessionState.value == null) {
             recentUnknownCalls.clear()
-            lastSuspiciousCallEndedAt = null
+            lastSuspiciousCallEndedElapsedMs = null
         }
         val now = monotonicClock()
         val cutoff = now - REPEATED_CALL_WINDOW_MS
@@ -1207,7 +1207,7 @@ class RealCallRiskMonitor @Inject constructor(
     /** 텔레뱅킹 윈도우: 의심 통화 종료 후 5분 이내. anchor가 null이면 false. */
     @VisibleForTesting
     internal fun isTelebankingWindow(): Boolean {
-        val lastSuspicious = lastSuspiciousCallEndedAt ?: return false
+        val lastSuspicious = lastSuspiciousCallEndedElapsedMs ?: return false
         return monotonicClock() - lastSuspicious <= TELEBANKING_WINDOW_MS
     }
 
