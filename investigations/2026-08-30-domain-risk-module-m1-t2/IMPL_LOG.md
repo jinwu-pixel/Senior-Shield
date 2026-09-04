@@ -138,8 +138,8 @@ absolute assessment of release performance.
 
 The approved retry retained root `build.gradle.kts` unchanged, added only
 `:domain:risk` to settings, and used versionless `java-library`, Kotlin JVM,
-and Android Lint module plugins. Its module production dependency set is empty;
-JUnit 4.13.2 is test-only.
+and Android Lint module plugins. It has no explicit non-test production
+dependencies; JUnit 4.13.2 is test-only.
 
 With JDK 21, offline dependency resolution, and serial Gradle workers:
 

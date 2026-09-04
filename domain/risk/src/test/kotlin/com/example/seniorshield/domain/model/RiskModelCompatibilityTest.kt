@@ -1,6 +1,8 @@
 package com.example.seniorshield.domain.model
 
+import java.lang.reflect.Modifier
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RiskModelCompatibilityTest {
@@ -59,6 +61,30 @@ class RiskModelCompatibilityTest {
             ),
             RiskSignal.values().map { it.name to it.category.name },
         )
+    }
+
+    @Test
+    fun `enum instance-field shape preserves compose stability contract`() {
+        listOf(AlertState::class.java, RiskLevel::class.java, SignalCategory::class.java)
+            .forEach { enumClass ->
+                val instanceFields = enumClass.declaredFields
+                    .filterNot { field -> Modifier.isStatic(field.modifiers) }
+
+                assertEquals(
+                    "${enumClass.simpleName} must not declare instance fields",
+                    0,
+                    instanceFields.size,
+                )
+            }
+
+        val instanceFields = RiskSignal::class.java.declaredFields
+            .filterNot { field -> Modifier.isStatic(field.modifiers) }
+
+        assertEquals("RiskSignal must declare exactly one instance field", 1, instanceFields.size)
+        val category = instanceFields.single()
+        assertEquals("category", category.name)
+        assertEquals(SignalCategory::class.java, category.type)
+        assertTrue("RiskSignal.category must be final", Modifier.isFinal(category.modifiers))
     }
 
     @Test
