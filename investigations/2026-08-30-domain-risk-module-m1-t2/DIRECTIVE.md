@@ -73,6 +73,6 @@ Android/Compose/Hilt    Kotlin/JVM, bytecode 17
 3. fresh `clean :domain:risk:check :app:testDebugUnitTest :app:assembleDebug :app:checkDebugDuplicateClasses` GREEN.
 4. app unit test가 35 suites / 454 tests 이상이며 failures/errors/skipped 0.
 5. `:app:lintDebug`가 기존 5E/67W 지문 대비 신규 진단 0.
-6. 안정성 설정 적용 직전과 적용 후의 동일 debug Compose canary가 정확히 `226 total / 225 restartable / 142 skippable / 36 known unstable arguments / 49 inferred unstable classes / 89 total classes`를 유지하고, 모델 이동 후에도 해당 상대 지표 회귀가 0이다.
+6. 안정성 설정 적용 전후의 pre-move debug Compose canary는 역사적 기준 `226 total / 225 restartable / 142 skippable / 36 known unstable arguments / 49 inferred unstable classes / 89 total classes`와 기존 artifact SHA-256을 유지한다. 모델 이동 후에는 UI compiler surface인 total composables `226`, restartable `225`, skippable `142`, known unstable arguments `36`이 exact 유지되고, composables CSV/TXT가 pre-move와 byte-identical이어야 한다. app compiler의 class scope는 정확히 `49/89 -> 47/87`이어야 하며 사라진 class block은 외부 모듈로 이동한 `RiskEvent`와 `RiskScore` 두 개만 허용한다. `inferredStableClasses=37`, `inferredUncertainClasses=3` 및 module JSON의 그 밖의 필드는 동일해야 한다. `StatusCard`는 restartable+skippable이고 nullable `RiskLevel`은 stable, `HistoryContent`의 `List<RiskEvent>` parameter와 `SettingsContent`/`DebugPanel`/`SessionStateCard`의 `RiskScore?` parameter는 unstable이어야 한다. 안정성 config에는 enum 4개만 있고 `RiskEvent`/`RiskScore`는 없어야 한다. 이는 게이트 완화가 아니라 외부 모듈 이동에 따른 분석 범위 delta와 UI 회귀를 분리하는 판정이다.
 7. 위험 모델 class major version 61(Java 17), 중복 class 0.
 8. `git diff --check` 통과, 허용 경로 외 변경 0.

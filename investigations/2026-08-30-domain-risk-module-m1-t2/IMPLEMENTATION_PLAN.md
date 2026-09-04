@@ -179,7 +179,7 @@ Expected: domain lint 실제 실행·진단 0. app lint는 기존 5E/67W와 exac
 
 - [ ] **Step 3: post Compose metrics와 bytecode 검증**
 
-Task 1과 같은 debug variant로 post metrics를 생성해 안정성 config 적용 직후 pre-move canary와 비교한다. `226 total / 225 restartable / 142 skippable / 36 known unstable arguments / 49 inferred unstable classes / 89 total classes`에서 회귀가 없어야 한다. 이 비교는 production 절대평가가 아닌 동일 조건 상대 canary다. `javap -verbose`로 대상 class의 major version이 61인지 확인한다.
+Task 1과 같은 debug variant로 post metrics를 생성해 안정성 config 적용 직후 pre-move canary와 비교한다. Pre-move `226/225/142/36/49/89`와 기존 artifact hash는 역사적 기준으로 보존한다. Post-move UI surface는 total composables `226`, restartable `225`, skippable `142`, known unstable arguments `36`이 exact 유지되고 composables CSV/TXT가 pre-move와 byte-identical이어야 한다. app compiler class scope는 `inferredUnstableClasses/totalClasses=47/87`로 정확히 두 개씩 줄며, pre-move class report에서 사라진 block은 외부 모듈로 이동한 `RiskEvent`와 `RiskScore`만 허용한다. `inferredStableClasses=37`, `inferredUncertainClasses=3`과 module JSON의 나머지 필드는 동일해야 한다. `StatusCard`는 restartable+skippable이고 nullable `RiskLevel`은 stable이어야 하며, `HistoryContent`의 `List<RiskEvent>` parameter와 `SettingsContent`/`DebugPanel`/`SessionStateCard`의 `RiskScore?` parameter는 unstable이어야 한다. `compose-stability.conf`는 enum 4개만 포함하고 `RiskEvent`/`RiskScore`를 제외한다. 이는 production 절대평가나 허용치 완화가 아니라 외부 모듈 이동으로 달라진 compiler 분석 범위와 UI 회귀를 분리하는 동일 조건 상대 canary다. 이후 `javap -verbose`로 대상 class의 major version이 61인지 확인한다.
 
 - [ ] **Step 4: 범위와 whitespace 검증**
 
