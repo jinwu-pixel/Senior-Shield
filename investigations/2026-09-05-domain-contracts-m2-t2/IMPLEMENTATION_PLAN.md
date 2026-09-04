@@ -87,10 +87,13 @@
 - Produces: 최신 아키텍처 문서와 post-move 상대 회귀 증거.
 
 - [ ] AGENTS 모듈 구조를 `:app + :domain:risk + :domain:contracts`로 갱신하고 책임·의존 방향·UI 모델 잔류를 명시한다. 제품 원칙은 수정하지 않는다.
-- [ ] P2 post-move Compose report를 같은 조건으로 생성한다. P1과 UI metrics/composables CSV/TXT exact 유지, common class blocks exact 동일, 제거 block은 P1에서 사전 동결한 집합만 허용한다. module JSON은 그 제거 block의 분류로 설명되는 exact class-count delta 외 모든 필드가 동일해야 한다.
+- [ ] P2 post-move Compose report를 같은 조건으로 생성한다. P1과 UI metrics/composables CSV/TXT를 exact 유지한다. B+ projection은 Guardian 제거 1/추가 0, 공통 78 block exact, 열거된 8 class의 11 repository field `runtime -> unstable`, OnboardingViewModel result 전이, exact 5-field module JSON delta만 허용한다. 영향받는 type parameter는 0이어야 한다.
 - [ ] `GuardianCard`가 restartable/skippable이고 `Guardian` 인자가 stable인지 확인한다.
+- [ ] P1/P2 4종 report와 ABI pre를 추적 evidence로 byte-preserve하고 P1 raw SHA를 validator에 동결한다. validator는 JSON key를 양방향 검사하고 class omission/duplicate를 거부하며, optional `EvidenceRoot`로 fresh post reports를 받을 수 있어야 한다. P2-only JSON key와 미승인 field transition mutation probe가 모두 RED인지 확인한다.
 - [ ] 이동 대상의 post `javap -public -s`가 공개 선언·generic 표기·descriptor까지 pre projection과 동일한지 기록한다. pre에서 exact `Guardian.$stable:I` block만 제거한다. 별도 `javap -v`로 Guardian의 class-level `StabilityInferred(parameters=1)` 제거를 기록하고, path/timestamp/size/checksum/constant-pool/bytecode index는 비교하지 않는다. `Guardian$Companion`을 포함한 contracts main 전체 class의 major version 61을 확인한다.
 - [ ] 위에 열거한 DI/implementation 5개 파일 SHA가 pre와 동일한지 확인한다. `observeSmsAlertEnabled`/`setSmsAlertEnabled`의 interface 선언과 implementation override를 제외한 production invocation site가 baseline 0/post 0인지 확인한다.
+- [ ] 현재 compiler reports에서 recomposition contract 회귀가 검출되지 않았다고만 판정한다. runtime recomposition과 generated-bytecode identity는 이번 metadata gate의 측정 대상이 아니다.
+- [ ] 문서·추적 evidence·validator/probe patch를 독립 검토로 넘기고 멈춘다. 수정된 DIRECTIVE 검토 전에는 Task 5를 실행하지 않는다.
 
 ### Task 5: fresh 완료 게이트·독립 리뷰·Ready PR
 

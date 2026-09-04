@@ -1,0 +1,1166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<issues format="6" by="lint 8.5.2">
+
+    <issue
+        id="MissingPermission"
+        severity="Error"
+        message="Call requires permission which may be rejected by user: code should explicitly check to see if permission is available (with `checkPermission`) or explicitly handle a potential `SecurityException`"
+        category="Correctness"
+        priority="9"
+        summary="Missing Permissions"
+        explanation="This check scans through your code and libraries and looks at the APIs being used, and checks this against the set of permissions required to access those APIs. If the code using those APIs is called at runtime, then the program will crash.&#xA;&#xA;Furthermore, for permissions that are revocable (with `targetSdkVersion` 23), client code must also be prepared to handle the calls throwing an exception if the user rejects the request for permission at runtime."
+        errorLine1="                    telecom?.showInCallScreen(false)"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\src\main\java\com\example\seniorshield\core\overlay\BankingCooldownManager.kt"
+            line="452"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="MissingPermission"
+        severity="Error"
+        message="Call requires permission which may be rejected by user: code should explicitly check to see if permission is available (with `checkPermission`) or explicitly handle a potential `SecurityException`"
+        category="Correctness"
+        priority="9"
+        summary="Missing Permissions"
+        explanation="This check scans through your code and libraries and looks at the APIs being used, and checks this against the set of permissions required to access those APIs. If the code using those APIs is called at runtime, then the program will crash.&#xA;&#xA;Furthermore, for permissions that are revocable (with `targetSdkVersion` 23), client code must also be prepared to handle the calls throwing an exception if the user rejects the request for permission at runtime."
+        errorLine1="        return telecom?.isInCall ?: false"
+        errorLine2="               ~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\src\main\java\com\example\seniorshield\core\util\CallEndHelper.kt"
+            line="21"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="MissingPermission"
+        severity="Error"
+        message="Call requires permission which may be rejected by user: code should explicitly check to see if permission is available (with `checkPermission`) or explicitly handle a potential `SecurityException`"
+        category="Correctness"
+        priority="9"
+        summary="Missing Permissions"
+        explanation="This check scans through your code and libraries and looks at the APIs being used, and checks this against the set of permissions required to access those APIs. If the code using those APIs is called at runtime, then the program will crash.&#xA;&#xA;Furthermore, for permissions that are revocable (with `targetSdkVersion` 23), client code must also be prepared to handle the calls throwing an exception if the user rejects the request for permission at runtime."
+        errorLine1="        NotificationManagerCompat.from(context).notify(event.id.hashCode(), notification)"
+        errorLine2="        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\src\main\java\com\example\seniorshield\core\notification\RiskNotificationManager.kt"
+            line="71"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="MissingPermission"
+        severity="Error"
+        message="Call requires permission which may be rejected by user: code should explicitly check to see if permission is available (with `checkPermission`) or explicitly handle a potential `SecurityException`"
+        category="Correctness"
+        priority="9"
+        summary="Missing Permissions"
+        explanation="This check scans through your code and libraries and looks at the APIs being used, and checks this against the set of permissions required to access those APIs. If the code using those APIs is called at runtime, then the program will crash.&#xA;&#xA;Furthermore, for permissions that are revocable (with `targetSdkVersion` 23), client code must also be prepared to handle the calls throwing an exception if the user rejects the request for permission at runtime."
+        errorLine1="                    telecom?.showInCallScreen(false)"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\src\main\java\com\example\seniorshield\core\overlay\RiskOverlayManager.kt"
+            line="622"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="OldTargetApi"
+        severity="Warning"
+        message="Not targeting the latest versions of Android; compatibility modes apply. Consider testing and updating this version. Consult the `android.os.Build.VERSION_CODES` javadoc for details."
+        category="Correctness"
+        priority="6"
+        summary="Target SDK attribute is not targeting latest version"
+        explanation="When your application runs on a version of Android that is more recent than your `targetSdkVersion` specifies that it has been tested with, various compatibility modes kick in. This ensures that your application continues to work, but it may look out of place. For example, if the `targetSdkVersion` is less than 14, your app may get an option button in the UI.&#xA;&#xA;To fix this issue, set the `targetSdkVersion` to the highest available value. Then test your app to make sure everything works correctly. You may want to consult the compatibility notes to see what changes apply to each version you are adding support for: https://developer.android.com/reference/android/os/Build.VERSION_CODES.html as well as follow this guide:&#xA;https://developer.android.com/distribute/best-practices/develop/target-sdk.html"
+        url="https://developer.android.com/distribute/best-practices/develop/target-sdk.html"
+        urls="https://developer.android.com/distribute/best-practices/develop/target-sdk.html,https://developer.android.com/reference/android/os/Build.VERSION_CODES.html"
+        errorLine1="        targetSdk = 34"
+        errorLine2="        ~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="16"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="AndroidGradlePluginVersion"
+        severity="Warning"
+        message="A newer version of com.android.application than 9.0.1 is available: 9.4.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Android Gradle Plugin Version"
+        explanation="This detector looks for usage of the Android Gradle Plugin where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="agp = &quot;9.0.1&quot;"
+        errorLine2="      ~~~~~~~">
+        <location
+            file="gradle\libs.versions.toml"
+            line="2"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="AndroidGradlePluginVersion"
+        severity="Warning"
+        message="A newer version of com.android.application than 9.0.1 is available: 9.4.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Android Gradle Plugin Version"
+        explanation="This detector looks for usage of the Android Gradle Plugin where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="agp = &quot;9.0.1&quot;"
+        errorLine2="      ~~~~~~~">
+        <location
+            file="gradle\libs.versions.toml"
+            line="2"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="AndroidGradlePluginVersion"
+        severity="Warning"
+        message="A newer version of com.android.application than 9.0.1 is available: 9.4.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Android Gradle Plugin Version"
+        explanation="This detector looks for usage of the Android Gradle Plugin where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="agp = &quot;9.0.1&quot;"
+        errorLine2="      ~~~~~~~">
+        <location
+            file="gradle\libs.versions.toml"
+            line="2"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.core:core-ktx than 1.13.1 is available: 1.19.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="    implementation(&quot;androidx.core:core-ktx:1.13.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="92"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-ktx than 2.8.4 is available: 2.11.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="    implementation(&quot;androidx.lifecycle:lifecycle-runtime-ktx:2.8.4&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="93"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.8.4 is available: 2.11.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="    implementation(&quot;androidx.lifecycle:lifecycle-runtime-compose:2.8.4&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="94"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.8.4 is available: 2.11.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="    implementation(&quot;androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="95"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.activity:activity-compose than 1.9.1 is available: 1.13.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="    implementation(&quot;androidx.activity:activity-compose:1.9.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="96"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.navigation:navigation-compose than 2.7.7 is available: 2.10.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="    implementation(&quot;androidx.navigation:navigation-compose:2.7.7&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="97"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-android than 1.8.1 is available: 1.11.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="    implementation(&quot;org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="105"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.datastore:datastore-preferences than 1.1.1 is available: 1.2.1"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="    implementation(&quot;androidx.datastore:datastore-preferences:1.1.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="106"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of com.google.android.material:material than 1.12.0 is available: 1.14.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="    implementation(&quot;com.google.android.material:material:1.12.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="108"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.hilt:hilt-navigation-compose than 1.2.0 is available: 1.4.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="    implementation(&quot;androidx.hilt:hilt-navigation-compose:1.2.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="112"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.room:room-runtime than 2.6.1 is available: 2.8.4"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="    implementation(&quot;androidx.room:room-runtime:2.6.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="115"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.room:room-ktx than 2.6.1 is available: 2.8.4"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="    implementation(&quot;androidx.room:room-ktx:2.6.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="116"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.room:room-compiler than 2.6.1 is available: 2.8.4"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="    kapt(&quot;androidx.room:room-compiler:2.6.1&quot;)"
+        errorLine2="         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="117"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-test than 1.8.1 is available: 1.11.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="    testImplementation(&quot;org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1&quot;)"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="120"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.core:core-ktx than 1.18.0 is available: 1.19.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="coreKtx = &quot;1.18.0&quot;"
+        errorLine2="          ~~~~~~~~">
+        <location
+            file="gradle\libs.versions.toml"
+            line="3"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.core:core-ktx than 1.18.0 is available: 1.19.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="coreKtx = &quot;1.18.0&quot;"
+        errorLine2="          ~~~~~~~~">
+        <location
+            file="gradle\libs.versions.toml"
+            line="3"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.core:core-ktx than 1.18.0 is available: 1.19.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="coreKtx = &quot;1.18.0&quot;"
+        errorLine2="          ~~~~~~~~">
+        <location
+            file="gradle\libs.versions.toml"
+            line="3"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-ktx than 2.10.0 is available: 2.11.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="lifecycleRuntimeKtx = &quot;2.10.0&quot;"
+        errorLine2="                      ~~~~~~~~">
+        <location
+            file="gradle\libs.versions.toml"
+            line="7"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-ktx than 2.10.0 is available: 2.11.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="lifecycleRuntimeKtx = &quot;2.10.0&quot;"
+        errorLine2="                      ~~~~~~~~">
+        <location
+            file="gradle\libs.versions.toml"
+            line="7"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-ktx than 2.10.0 is available: 2.11.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="lifecycleRuntimeKtx = &quot;2.10.0&quot;"
+        errorLine2="                      ~~~~~~~~">
+        <location
+            file="gradle\libs.versions.toml"
+            line="7"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of org.jetbrains.kotlin.plugin.compose than 2.0.21 is available: 2.3.10"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="kotlin = &quot;2.0.21&quot;"
+        errorLine2="         ~~~~~~~~">
+        <location
+            file="gradle\libs.versions.toml"
+            line="9"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of org.jetbrains.kotlin.plugin.compose than 2.0.21 is available: 2.3.10"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="kotlin = &quot;2.0.21&quot;"
+        errorLine2="         ~~~~~~~~">
+        <location
+            file="gradle\libs.versions.toml"
+            line="9"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of org.jetbrains.kotlin.plugin.compose than 2.0.21 is available: 2.3.10"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="kotlin = &quot;2.0.21&quot;"
+        errorLine2="         ~~~~~~~~">
+        <location
+            file="gradle\libs.versions.toml"
+            line="9"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.compose:compose-bom than 2024.09.00 is available: 2026.08.00"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="composeBom = &quot;2024.09.00&quot;"
+        errorLine2="             ~~~~~~~~~~~~">
+        <location
+            file="gradle\libs.versions.toml"
+            line="10"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.compose:compose-bom than 2024.09.00 is available: 2026.08.00"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="composeBom = &quot;2024.09.00&quot;"
+        errorLine2="             ~~~~~~~~~~~~">
+        <location
+            file="gradle\libs.versions.toml"
+            line="10"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.compose:compose-bom than 2024.09.00 is available: 2026.08.00"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="composeBom = &quot;2024.09.00&quot;"
+        errorLine2="             ~~~~~~~~~~~~">
+        <location
+            file="gradle\libs.versions.toml"
+            line="10"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="PermissionImpliesUnsupportedChromeOsHardware"
+        severity="Error"
+        message="Permission exists without corresponding hardware `&lt;uses-feature android:name=&quot;android.hardware.telephony&quot; required=&quot;false&quot;>` tag"
+        category="Correctness:Chrome OS"
+        priority="3"
+        summary="Permission Implies Unsupported Chrome OS Hardware"
+        explanation="The `&lt;uses-permission>` element should not require a permission that implies an unsupported large screen hardware feature. Google Play assumes that certain hardware related permissions indicate that the underlying hardware features are required by default. To fix the issue, consider declaring the corresponding &lt;uses-feature> element with `required=&quot;false&quot;` attribute."
+        url="https://developer.android.com/topic/arc/manifest.html#implied-features"
+        urls="https://developer.android.com/topic/arc/manifest.html#implied-features"
+        errorLine1="    &lt;uses-permission android:name=&quot;android.permission.PROCESS_OUTGOING_CALLS&quot;"
+        errorLine2="     ~~~~~~~~~~~~~~~">
+        <location
+            file="app\src\main\AndroidManifest.xml"
+            line="29"
+            column="6"/>
+    </issue>
+
+    <issue
+        id="KaptUsageInsteadOfKsp"
+        severity="Warning"
+        message="This library supports using KSP instead of kapt, which greatly improves performance. Learn more: https://developer.android.com/studio/build/migrate-to-ksp"
+        category="Performance"
+        priority="4"
+        summary="Kapt usage should be replaced with KSP"
+        explanation="KSP is a more efficient replacement for kapt. For libraries that support both, KSP should be used to improve build times."
+        url="https://developer.android.com/studio/build/migrate-to-ksp"
+        urls="https://developer.android.com/studio/build/migrate-to-ksp"
+        errorLine1="    kapt(&quot;androidx.room:room-compiler:2.6.1&quot;)"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="117"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        severity="Warning"
+        message="The resource `R.xml.backup_rules` appears to be unused"
+        category="Performance"
+        priority="3"
+        summary="Unused resources"
+        explanation="Unused resources make applications larger and slow down builds.&#xA;&#xA;&#xA;The unused resource check can ignore tests. If you want to include resources that are only referenced from tests, consider packaging them in a test source set instead.&#xA;&#xA;You can include test sources in the unused resource check by setting the system property lint.unused-resources.include-tests =true, and to exclude them (usually for performance reasons), use lint.unused-resources.exclude-tests =true.&#xA;,"
+        errorLine1="&lt;full-backup-content>"
+        errorLine2="^">
+        <location
+            file="app\src\main\res\xml\backup_rules.xml"
+            line="8"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        severity="Warning"
+        message="The resource `R.color.purple_200` appears to be unused"
+        category="Performance"
+        priority="3"
+        summary="Unused resources"
+        explanation="Unused resources make applications larger and slow down builds.&#xA;&#xA;&#xA;The unused resource check can ignore tests. If you want to include resources that are only referenced from tests, consider packaging them in a test source set instead.&#xA;&#xA;You can include test sources in the unused resource check by setting the system property lint.unused-resources.include-tests =true, and to exclude them (usually for performance reasons), use lint.unused-resources.exclude-tests =true.&#xA;,"
+        errorLine1="    &lt;color name=&quot;purple_200&quot;>#FFBB86FC&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\src\main\res\values\colors.xml"
+            line="3"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        severity="Warning"
+        message="The resource `R.color.purple_500` appears to be unused"
+        category="Performance"
+        priority="3"
+        summary="Unused resources"
+        explanation="Unused resources make applications larger and slow down builds.&#xA;&#xA;&#xA;The unused resource check can ignore tests. If you want to include resources that are only referenced from tests, consider packaging them in a test source set instead.&#xA;&#xA;You can include test sources in the unused resource check by setting the system property lint.unused-resources.include-tests =true, and to exclude them (usually for performance reasons), use lint.unused-resources.exclude-tests =true.&#xA;,"
+        errorLine1="    &lt;color name=&quot;purple_500&quot;>#FF6200EE&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\src\main\res\values\colors.xml"
+            line="4"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        severity="Warning"
+        message="The resource `R.color.purple_700` appears to be unused"
+        category="Performance"
+        priority="3"
+        summary="Unused resources"
+        explanation="Unused resources make applications larger and slow down builds.&#xA;&#xA;&#xA;The unused resource check can ignore tests. If you want to include resources that are only referenced from tests, consider packaging them in a test source set instead.&#xA;&#xA;You can include test sources in the unused resource check by setting the system property lint.unused-resources.include-tests =true, and to exclude them (usually for performance reasons), use lint.unused-resources.exclude-tests =true.&#xA;,"
+        errorLine1="    &lt;color name=&quot;purple_700&quot;>#FF3700B3&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\src\main\res\values\colors.xml"
+            line="5"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        severity="Warning"
+        message="The resource `R.color.teal_200` appears to be unused"
+        category="Performance"
+        priority="3"
+        summary="Unused resources"
+        explanation="Unused resources make applications larger and slow down builds.&#xA;&#xA;&#xA;The unused resource check can ignore tests. If you want to include resources that are only referenced from tests, consider packaging them in a test source set instead.&#xA;&#xA;You can include test sources in the unused resource check by setting the system property lint.unused-resources.include-tests =true, and to exclude them (usually for performance reasons), use lint.unused-resources.exclude-tests =true.&#xA;,"
+        errorLine1="    &lt;color name=&quot;teal_200&quot;>#FF03DAC5&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~">
+        <location
+            file="app\src\main\res\values\colors.xml"
+            line="6"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        severity="Warning"
+        message="The resource `R.color.teal_700` appears to be unused"
+        category="Performance"
+        priority="3"
+        summary="Unused resources"
+        explanation="Unused resources make applications larger and slow down builds.&#xA;&#xA;&#xA;The unused resource check can ignore tests. If you want to include resources that are only referenced from tests, consider packaging them in a test source set instead.&#xA;&#xA;You can include test sources in the unused resource check by setting the system property lint.unused-resources.include-tests =true, and to exclude them (usually for performance reasons), use lint.unused-resources.exclude-tests =true.&#xA;,"
+        errorLine1="    &lt;color name=&quot;teal_700&quot;>#FF018786&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~">
+        <location
+            file="app\src\main\res\values\colors.xml"
+            line="7"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        severity="Warning"
+        message="The resource `R.color.black` appears to be unused"
+        category="Performance"
+        priority="3"
+        summary="Unused resources"
+        explanation="Unused resources make applications larger and slow down builds.&#xA;&#xA;&#xA;The unused resource check can ignore tests. If you want to include resources that are only referenced from tests, consider packaging them in a test source set instead.&#xA;&#xA;You can include test sources in the unused resource check by setting the system property lint.unused-resources.include-tests =true, and to exclude them (usually for performance reasons), use lint.unused-resources.exclude-tests =true.&#xA;,"
+        errorLine1="    &lt;color name=&quot;black&quot;>#FF000000&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~">
+        <location
+            file="app\src\main\res\values\colors.xml"
+            line="8"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        severity="Warning"
+        message="The resource `R.color.white` appears to be unused"
+        category="Performance"
+        priority="3"
+        summary="Unused resources"
+        explanation="Unused resources make applications larger and slow down builds.&#xA;&#xA;&#xA;The unused resource check can ignore tests. If you want to include resources that are only referenced from tests, consider packaging them in a test source set instead.&#xA;&#xA;You can include test sources in the unused resource check by setting the system property lint.unused-resources.include-tests =true, and to exclude them (usually for performance reasons), use lint.unused-resources.exclude-tests =true.&#xA;,"
+        errorLine1="    &lt;color name=&quot;white&quot;>#FFFFFFFF&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~">
+        <location
+            file="app\src\main\res\values\colors.xml"
+            line="9"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        severity="Warning"
+        message="The resource `R.xml.data_extraction_rules` appears to be unused"
+        category="Performance"
+        priority="3"
+        summary="Unused resources"
+        explanation="Unused resources make applications larger and slow down builds.&#xA;&#xA;&#xA;The unused resource check can ignore tests. If you want to include resources that are only referenced from tests, consider packaging them in a test source set instead.&#xA;&#xA;You can include test sources in the unused resource check by setting the system property lint.unused-resources.include-tests =true, and to exclude them (usually for performance reasons), use lint.unused-resources.exclude-tests =true.&#xA;,"
+        errorLine1="&lt;data-extraction-rules>"
+        errorLine2="^">
+        <location
+            file="app\src\main\res\xml\data_extraction_rules.xml"
+            line="6"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        severity="Warning"
+        message="The resource `R.string.app_name` appears to be unused"
+        category="Performance"
+        priority="3"
+        summary="Unused resources"
+        explanation="Unused resources make applications larger and slow down builds.&#xA;&#xA;&#xA;The unused resource check can ignore tests. If you want to include resources that are only referenced from tests, consider packaging them in a test source set instead.&#xA;&#xA;You can include test sources in the unused resource check by setting the system property lint.unused-resources.include-tests =true, and to exclude them (usually for performance reasons), use lint.unused-resources.exclude-tests =true.&#xA;,"
+        errorLine1="    &lt;string name=&quot;app_name&quot;>Senior_Shield&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~">
+        <location
+            file="app\src\main\res\values\strings.xml"
+            line="2"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        severity="Warning"
+        message="Use version catalog instead (androidx.core:core-ktx is already available as `androidx-core-ktx`, but using version 1.18.0 instead)"
+        category="Productivity"
+        priority="4"
+        summary="Use TOML Version Catalog Instead"
+        explanation="If your project is using a `libs.versions.toml` file, you should place all Gradle dependencies in the TOML file. This lint check looks for version declarations outside of the TOML file and suggests moving them (and in the IDE, provides a quickfix to performing the operation automatically)."
+        errorLine1="    implementation(&quot;androidx.core:core-ktx:1.13.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="92"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        severity="Warning"
+        message="Use version catalog instead (androidx.lifecycle:lifecycle-runtime-ktx is already available as `androidx-lifecycle-runtime-ktx`, but using version 2.10.0 instead)"
+        category="Productivity"
+        priority="4"
+        summary="Use TOML Version Catalog Instead"
+        explanation="If your project is using a `libs.versions.toml` file, you should place all Gradle dependencies in the TOML file. This lint check looks for version declarations outside of the TOML file and suggests moving them (and in the IDE, provides a quickfix to performing the operation automatically)."
+        errorLine1="    implementation(&quot;androidx.lifecycle:lifecycle-runtime-ktx:2.8.4&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="93"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        severity="Warning"
+        message="Use version catalog instead"
+        category="Productivity"
+        priority="4"
+        summary="Use TOML Version Catalog Instead"
+        explanation="If your project is using a `libs.versions.toml` file, you should place all Gradle dependencies in the TOML file. This lint check looks for version declarations outside of the TOML file and suggests moving them (and in the IDE, provides a quickfix to performing the operation automatically)."
+        errorLine1="    implementation(&quot;androidx.lifecycle:lifecycle-runtime-compose:2.8.4&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="94"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        severity="Warning"
+        message="Use version catalog instead"
+        category="Productivity"
+        priority="4"
+        summary="Use TOML Version Catalog Instead"
+        explanation="If your project is using a `libs.versions.toml` file, you should place all Gradle dependencies in the TOML file. This lint check looks for version declarations outside of the TOML file and suggests moving them (and in the IDE, provides a quickfix to performing the operation automatically)."
+        errorLine1="    implementation(&quot;androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="95"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        severity="Warning"
+        message="Use version catalog instead (androidx.activity:activity-compose is already available as `androidx-activity-compose`, but using version 1.13.0 instead)"
+        category="Productivity"
+        priority="4"
+        summary="Use TOML Version Catalog Instead"
+        explanation="If your project is using a `libs.versions.toml` file, you should place all Gradle dependencies in the TOML file. This lint check looks for version declarations outside of the TOML file and suggests moving them (and in the IDE, provides a quickfix to performing the operation automatically)."
+        errorLine1="    implementation(&quot;androidx.activity:activity-compose:1.9.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="96"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        severity="Warning"
+        message="Use version catalog instead"
+        category="Productivity"
+        priority="4"
+        summary="Use TOML Version Catalog Instead"
+        explanation="If your project is using a `libs.versions.toml` file, you should place all Gradle dependencies in the TOML file. This lint check looks for version declarations outside of the TOML file and suggests moving them (and in the IDE, provides a quickfix to performing the operation automatically)."
+        errorLine1="    implementation(&quot;androidx.navigation:navigation-compose:2.7.7&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="97"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        severity="Warning"
+        message="Use version catalog instead"
+        category="Productivity"
+        priority="4"
+        summary="Use TOML Version Catalog Instead"
+        explanation="If your project is using a `libs.versions.toml` file, you should place all Gradle dependencies in the TOML file. This lint check looks for version declarations outside of the TOML file and suggests moving them (and in the IDE, provides a quickfix to performing the operation automatically)."
+        errorLine1="    implementation(&quot;androidx.compose.ui:ui&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="99"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        severity="Warning"
+        message="Use version catalog instead"
+        category="Productivity"
+        priority="4"
+        summary="Use TOML Version Catalog Instead"
+        explanation="If your project is using a `libs.versions.toml` file, you should place all Gradle dependencies in the TOML file. This lint check looks for version declarations outside of the TOML file and suggests moving them (and in the IDE, provides a quickfix to performing the operation automatically)."
+        errorLine1="    implementation(&quot;androidx.compose.ui:ui-tooling-preview&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="100"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        severity="Warning"
+        message="Use version catalog instead"
+        category="Productivity"
+        priority="4"
+        summary="Use TOML Version Catalog Instead"
+        explanation="If your project is using a `libs.versions.toml` file, you should place all Gradle dependencies in the TOML file. This lint check looks for version declarations outside of the TOML file and suggests moving them (and in the IDE, provides a quickfix to performing the operation automatically)."
+        errorLine1="    debugImplementation(&quot;androidx.compose.ui:ui-tooling&quot;)"
+        errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="101"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        severity="Warning"
+        message="Use version catalog instead"
+        category="Productivity"
+        priority="4"
+        summary="Use TOML Version Catalog Instead"
+        explanation="If your project is using a `libs.versions.toml` file, you should place all Gradle dependencies in the TOML file. This lint check looks for version declarations outside of the TOML file and suggests moving them (and in the IDE, provides a quickfix to performing the operation automatically)."
+        errorLine1="    implementation(&quot;androidx.compose.material3:material3&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="102"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        severity="Warning"
+        message="Use version catalog instead"
+        category="Productivity"
+        priority="4"
+        summary="Use TOML Version Catalog Instead"
+        explanation="If your project is using a `libs.versions.toml` file, you should place all Gradle dependencies in the TOML file. This lint check looks for version declarations outside of the TOML file and suggests moving them (and in the IDE, provides a quickfix to performing the operation automatically)."
+        errorLine1="    implementation(&quot;androidx.compose.material:material-icons-extended&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="103"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        severity="Warning"
+        message="Use version catalog instead"
+        category="Productivity"
+        priority="4"
+        summary="Use TOML Version Catalog Instead"
+        explanation="If your project is using a `libs.versions.toml` file, you should place all Gradle dependencies in the TOML file. This lint check looks for version declarations outside of the TOML file and suggests moving them (and in the IDE, provides a quickfix to performing the operation automatically)."
+        errorLine1="    implementation(&quot;org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="105"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        severity="Warning"
+        message="Use version catalog instead"
+        category="Productivity"
+        priority="4"
+        summary="Use TOML Version Catalog Instead"
+        explanation="If your project is using a `libs.versions.toml` file, you should place all Gradle dependencies in the TOML file. This lint check looks for version declarations outside of the TOML file and suggests moving them (and in the IDE, provides a quickfix to performing the operation automatically)."
+        errorLine1="    implementation(&quot;androidx.datastore:datastore-preferences:1.1.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="106"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        severity="Warning"
+        message="Use version catalog instead"
+        category="Productivity"
+        priority="4"
+        summary="Use TOML Version Catalog Instead"
+        explanation="If your project is using a `libs.versions.toml` file, you should place all Gradle dependencies in the TOML file. This lint check looks for version declarations outside of the TOML file and suggests moving them (and in the IDE, provides a quickfix to performing the operation automatically)."
+        errorLine1="    implementation(&quot;com.google.android.material:material:1.12.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="108"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        severity="Warning"
+        message="Use version catalog instead"
+        category="Productivity"
+        priority="4"
+        summary="Use TOML Version Catalog Instead"
+        explanation="If your project is using a `libs.versions.toml` file, you should place all Gradle dependencies in the TOML file. This lint check looks for version declarations outside of the TOML file and suggests moving them (and in the IDE, provides a quickfix to performing the operation automatically)."
+        errorLine1="    implementation(&quot;com.google.dagger:hilt-android:2.52&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="110"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        severity="Warning"
+        message="Use version catalog instead"
+        category="Productivity"
+        priority="4"
+        summary="Use TOML Version Catalog Instead"
+        explanation="If your project is using a `libs.versions.toml` file, you should place all Gradle dependencies in the TOML file. This lint check looks for version declarations outside of the TOML file and suggests moving them (and in the IDE, provides a quickfix to performing the operation automatically)."
+        errorLine1="    kapt(&quot;com.google.dagger:hilt-android-compiler:2.52&quot;)"
+        errorLine2="         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="111"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        severity="Warning"
+        message="Use version catalog instead"
+        category="Productivity"
+        priority="4"
+        summary="Use TOML Version Catalog Instead"
+        explanation="If your project is using a `libs.versions.toml` file, you should place all Gradle dependencies in the TOML file. This lint check looks for version declarations outside of the TOML file and suggests moving them (and in the IDE, provides a quickfix to performing the operation automatically)."
+        errorLine1="    implementation(&quot;androidx.hilt:hilt-navigation-compose:1.2.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="112"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        severity="Warning"
+        message="Use version catalog instead"
+        category="Productivity"
+        priority="4"
+        summary="Use TOML Version Catalog Instead"
+        explanation="If your project is using a `libs.versions.toml` file, you should place all Gradle dependencies in the TOML file. This lint check looks for version declarations outside of the TOML file and suggests moving them (and in the IDE, provides a quickfix to performing the operation automatically)."
+        errorLine1="    implementation(&quot;javax.inject:javax.inject:1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="113"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        severity="Warning"
+        message="Use version catalog instead"
+        category="Productivity"
+        priority="4"
+        summary="Use TOML Version Catalog Instead"
+        explanation="If your project is using a `libs.versions.toml` file, you should place all Gradle dependencies in the TOML file. This lint check looks for version declarations outside of the TOML file and suggests moving them (and in the IDE, provides a quickfix to performing the operation automatically)."
+        errorLine1="    implementation(&quot;androidx.room:room-runtime:2.6.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="115"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        severity="Warning"
+        message="Use version catalog instead"
+        category="Productivity"
+        priority="4"
+        summary="Use TOML Version Catalog Instead"
+        explanation="If your project is using a `libs.versions.toml` file, you should place all Gradle dependencies in the TOML file. This lint check looks for version declarations outside of the TOML file and suggests moving them (and in the IDE, provides a quickfix to performing the operation automatically)."
+        errorLine1="    implementation(&quot;androidx.room:room-ktx:2.6.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="116"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        severity="Warning"
+        message="Use version catalog instead"
+        category="Productivity"
+        priority="4"
+        summary="Use TOML Version Catalog Instead"
+        explanation="If your project is using a `libs.versions.toml` file, you should place all Gradle dependencies in the TOML file. This lint check looks for version declarations outside of the TOML file and suggests moving them (and in the IDE, provides a quickfix to performing the operation automatically)."
+        errorLine1="    kapt(&quot;androidx.room:room-compiler:2.6.1&quot;)"
+        errorLine2="         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="117"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        severity="Warning"
+        message="Use the existing version catalog reference (`libs.junit`) instead"
+        category="Productivity"
+        priority="4"
+        summary="Use TOML Version Catalog Instead"
+        explanation="If your project is using a `libs.versions.toml` file, you should place all Gradle dependencies in the TOML file. This lint check looks for version declarations outside of the TOML file and suggests moving them (and in the IDE, provides a quickfix to performing the operation automatically)."
+        errorLine1="    testImplementation(&quot;junit:junit:4.13.2&quot;)"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="119"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        severity="Warning"
+        message="Use version catalog instead"
+        category="Productivity"
+        priority="4"
+        summary="Use TOML Version Catalog Instead"
+        explanation="If your project is using a `libs.versions.toml` file, you should place all Gradle dependencies in the TOML file. This lint check looks for version declarations outside of the TOML file and suggests moving them (and in the IDE, provides a quickfix to performing the operation automatically)."
+        errorLine1="    testImplementation(&quot;org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1&quot;)"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="120"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        severity="Warning"
+        message="Use version catalog instead"
+        category="Productivity"
+        priority="4"
+        summary="Use TOML Version Catalog Instead"
+        explanation="If your project is using a `libs.versions.toml` file, you should place all Gradle dependencies in the TOML file. This lint check looks for version declarations outside of the TOML file and suggests moving them (and in the IDE, provides a quickfix to performing the operation automatically)."
+        errorLine1="    testImplementation(&quot;io.mockk:mockk:1.13.13&quot;)"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\build.gradle.kts"
+            line="121"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        severity="Warning"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        category="Internationalization"
+        priority="6"
+        summary="TextView Internationalization"
+        explanation="When calling `TextView#setText`&#xA;* Never call `Number#toString()` to format numbers; it will not handle fraction separators and locale-specific digits properly. Consider using `String#format` with proper format specifications (`%d` or `%f`) instead.&#xA;* Do not pass a string literal (e.g. &quot;Hello&quot;) to display text. Hardcoded text can not be properly translated to other languages. Consider using Android resource strings instead.&#xA;* Do not build messages by concatenating text chunks. Such messages can not be properly translated."
+        url="https://developer.android.com/guide/topics/resources/localization.html"
+        urls="https://developer.android.com/guide/topics/resources/localization.html"
+        errorLine1="                        bottomText.text = &quot;${remaining}초 후 앱 사용 가능합니다&quot;"
+        errorLine2="                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\src\main\java\com\example\seniorshield\core\overlay\BankingCooldownManager.kt"
+            line="249"
+            column="43"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        severity="Warning"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        category="Internationalization"
+        priority="6"
+        summary="TextView Internationalization"
+        explanation="When calling `TextView#setText`&#xA;* Never call `Number#toString()` to format numbers; it will not handle fraction separators and locale-specific digits properly. Consider using `String#format` with proper format specifications (`%d` or `%f`) instead.&#xA;* Do not pass a string literal (e.g. &quot;Hello&quot;) to display text. Hardcoded text can not be properly translated to other languages. Consider using Android resource strings instead.&#xA;* Do not build messages by concatenating text chunks. Such messages can not be properly translated."
+        url="https://developer.android.com/guide/topics/resources/localization.html"
+        urls="https://developer.android.com/guide/topics/resources/localization.html"
+        errorLine1="            text = &quot;${countdownSec}초 후 앱 사용 가능합니다&quot;"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="app\src\main\java\com\example\seniorshield\core\overlay\BankingCooldownManager.kt"
+            line="410"
+            column="20"/>
+    </issue>
+
+</issues>

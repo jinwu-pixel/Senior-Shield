@@ -191,9 +191,11 @@ BUILD SUCCESSFUL in 1m 9s; 23 actionable tasks, 23 executed
 
 `lintAnalyzeJvmMain` and `lintAnalyzeJvmTest` both executed. Their source
 partial-result files contain zero incidents. The aggregate lint report has
-zero errors and one build-script-only `GradleDependency` warning for the
-deliberately pinned Task 2 `kotlinx-coroutines-core:1.8.1`; it is not a main or
-test source diagnostic and predates this task's source move.
+zero errors and one contracts build-script-only `GradleDependency` warning for
+the deliberately pinned Task 2 `kotlinx-coroutines-core:1.8.1`. To correct the
+earlier ambiguity: this is a contracts-module instance of a dependency-update
+debt category already present in the app baseline; it is not a main/test source
+diagnostic, and M2 does not authorize a version upgrade.
 
 The app boundary gate completed with all requested tasks executed:
 
@@ -244,3 +246,168 @@ The final pre-commit verification reran all Task 3 gates in one invocation and
 completed `BUILD SUCCESSFUL in 2m 23s` with 42/42 actionable tasks executed.
 Fresh XML counts were contracts 4 and risk 7 tests, with failures, errors, and
 skipped all zero; fresh contracts main/test source lint incidents were 0/0.
+
+## Task 4 — documentation sync and post-move canary
+
+### Architecture documentation
+
+The `AGENTS.md` architecture section now reflects the actual three compiled
+modules: `:app`, `:domain:risk`, and `:domain:contracts` (plus the source-less
+`:domain` container). It records the direct `app -> risk` edge and
+`app -> contracts -> risk`, with no reverse dependency. Contracts owns exactly
+`Guardian` and the four repository interfaces; `PermissionType`,
+`PermissionStatus`, and `PolicySummary` remain in app. Product principles were
+not changed.
+
+### P2 Compose canary — S5
+
+The P2 report was generated directly into durable ignored storage at
+`.superpowers/sdd/IMPLEMENTATION_PLAN/compose-p2` with JDK 21, offline mode, no
+daemon, no parallel execution, one worker, `--rerun-tasks`, and the same
+`composeCompilerReportsDir` property as P1. The compile completed
+`BUILD SUCCESSFUL in 1m 54s`; all 24 actionable tasks executed. The two
+`MOVE_TO_FOREGROUND` deprecation warnings are pre-existing.
+
+| Artifact | P1 SHA-256 | P2 SHA-256 | Result |
+|---|---|---|---|
+| `app_debug-module.json` | `08D35BD5D9D7BB371B3399AFF1CC331A6EB329DBE49D00C412560E9683AAF243` | `A9BB516B9B5AC59CA3BCD317BC4514D7FF3B3D4F10C422B2DC00389D9E800DBD` | differs |
+| `app_debug-composables.csv` | `F8D8CEF8F38F4A66254DE4029A7E431A6AF2F21C0535E387717B2E7A2D455F37` | same | exact |
+| `app_debug-composables.txt` | `C392734170FA2A877005ADD953CABB216DE348BEC71AC5FA31F47F15C51E5B58` | same | exact |
+| `app_debug-classes.txt` | `BE2C9A2B55979C84816563EA33158A12B95B023F014806C533FCC112FE0A285E` | `AFCC5BE57258D07B8098F9846AFFC052824A9D70E5323CCC027D964A21320EB9` | differs |
+
+UI/composable metrics remain exact at 226 total / 225 restartable / 142
+skippable / 36 known unstable arguments. Both composables artifacts are
+byte-identical. `GuardianCard` remains exact, restartable/skippable, with
+`stable guardian: Guardian`; the canonical block remains 150 bytes and SHA-256
+`454704B4868C507918831DD63F8386A9F61997FE5A9DF73664DE874F57A704AA`,
+and its 89-byte CSV row remains
+`AE056D154F44CAC887345473E69C61F3A6F27EB783405555A2430FD394BB8988`.
+
+The removed P1 class-block set is exactly `{Guardian}` and no block was added.
+The removed block reproduces its frozen 174-byte SHA-256
+`4D4A12E5CB9A945D5479A362F96FBC4133AA92E2ACC51ED52EAF8556EE4F66F0`.
+However, only 78 of 86 common blocks are exact. Eight blocks changed because
+repository interface properties changed from `runtime` to `unstable` after the
+module move: `DebugViewModel`, `DefaultRiskDetectionCoordinator`,
+`GuardianAddViewModel`, `GuardianViewModel`, `HomeViewModel`,
+`OnboardingViewModel`, `RealCallRiskMonitor`, and `SplashViewModel`.
+
+Guardian removal explains `inferredStableClasses 37 -> 36`,
+`effectivelyStableClasses 37 -> 36`, and `totalClasses 87 -> 86`. It does not
+explain `inferredUnstableClasses 47 -> 48` or
+`inferredUncertainClasses 3 -> 2`. The common-block and module-JSON gates
+therefore fail and trigger S5; no scope-expanding fix or commit was made.
+
+### ABI, bytecode, frozen SHA, and SMS checks
+
+The post `javap -public -s` declaration/generic/descriptor projection matches
+the pre projection after removing exactly one Guardian `$stable:I` block.
+After line-ending normalization, removal of blank separator formatting, and
+one terminal LF, both projections have SHA-256
+`DDF3E6C869DF2FBCC93A55D77354BEACFB7B594605E6E560708FC2CCA0B72DAE`.
+
+Targeted `javap -v` finds Guardian's class-level `StabilityInferred` absent.
+The complete contracts main inventory contains six class files, including
+`Guardian$Companion`; every class has major version 61.
+
+The five Task 2 implementation/DI SHA-256 values remain exact:
+`DataModule.kt` `1B086CC21CB7C612B9D89691DAAE3429EAAD549B815AA18BA9D13313C2F66661`,
+`RiskRepositoryImpl.kt` `A3A581055FD92212E09A351DE5FBEC11075005C9DE25FDA93634027AFF9AC5A5`,
+`SettingsRepositoryImpl.kt` `297833792C188E4A4214090E94469EAEEBFEA1BE3E4E6C120D3E6A3921D47027`,
+`GuardianRepositoryImpl.kt` `3614743067E39F44FB43C3A7B8A0818B2D6DF9DE2DC65C6B9CA24731A51147DF`,
+and `RoomRiskEventStore.kt`
+`CA41BD5371E485AA4668EE9A679F0FD7ACE89CCE3048AC258138DF90DFF2490B`.
+
+Production search finds only the two SMS legacy interface declarations and two
+implementation overrides. Excluding them leaves baseline 0 / post 0 invocation
+sites for `observeSmsAlertEnabled` and `setSmsAlertEnabled`.
+
+### User-approved B+ correction and tracked evidence
+
+On 2026-09-05 the user approved the B+ exact projection for Task 4: Guardian
+removal only, additions 0, 78 exact common blocks, exactly 11 named repository
+field transitions across the eight recorded classes, the linked
+OnboardingViewModel result transition, and the exact five module JSON deltas.
+No broader `runtime -> unstable` allowance was approved. The affected type
+parameter count is 0. Repository interfaces remain absent from the Compose
+stability config.
+
+The prior S5 is retained above as the historical reason approval was required.
+DIRECTIVE section 4, completion gate 6, Implementation Plan Task 4, and DESIGN
+now express the approved projection consistently. `.gitignore` adds only the
+exact `/domain/contracts/build/` path, and the DIRECTIVE allowlist includes
+that one change.
+
+All four P1 and all four P2 reports were copied byte-for-byte into
+`evidence/compose-p1` and `evidence/compose-p2`. The three ABI pre artifacts
+were copied into `evidence/abi-p0`. Their raw hashes match the already recorded
+ignored originals; `evidence/.gitattributes` disables line-ending conversion
+for the hashed evidence. The raw baseline lint XML remains ignored with SHA-256
+`499DB3BD480687C5AB9C50FD45414FAF94574CF549E2A498944CEACCC038A588`.
+The separately identified tracked sanitized copy removed exactly 72 absolute
+worktree prefixes, retained 72 diagnostics and canonical fingerprint
+`8F301A319E9158B66072DAD70DEB4E72BDB3D08F2C9076B4E5ADAC636F3ACFCD`,
+and has raw SHA-256
+`FFD8F2A8D22A845C26C5794315441ABF9D58A3121724B63A562BF570167A1961`.
+
+The tracked `validate-compose-bplus.ps1` defaults to committed evidence and
+accepts an optional `EvidenceRoot` for fresh post reports. It freezes all four
+P1 raw hashes, checks module JSON keys bidirectionally, rejects missing or
+duplicate class names, enforces exact 87/86 class counts, the exact 78/8/11
+projection, the Onboarding result, and the frozen Guardian/GuardianCard
+anchors. Its committed-evidence run returned:
+
+```text
+B+ exact projection PASS
+removed Guardian; added 0; exact common 78; projected changed 8
+repository field transitions 11; affected type parameters 0
+```
+
+`probe-compose-bplus.ps1` executed two negative probes. A P2-only module JSON
+key was rejected with a 24-versus-23 property-count error, and an unexpected
+repository field transition was rejected as an extra DebugViewModel delta.
+
+The contracts build-script `GradleDependency` warning for coroutines 1.8.1 is
+narrowly accepted only pending Task 5 fresh confirmation. The version stays at
+the plan-mandated 1.8.1, and the last executed contracts main/test source lint
+remains 0/0. No Task 5 command was run during this approved Task 4 resumption.
+
+The evidence supports no detected recomposition-contract regression in the
+current Compose compiler reports. Runtime recomposition was not measured, and
+the metadata/ABI checks do not establish generated-bytecode identity.
+
+### Independent review fix — complete JSON key enumeration
+
+Independent review found that the first tracked validator enumerated module
+JSON keys only through its integer-value regex. A P2-only boolean, string, or
+null property could therefore be accepted by `ConvertFrom-Json` without
+entering the regex key set. `Read-ExactModuleJson` now derives the complete key
+set from `PSObject.Properties.Name` and checks it bidirectionally before
+retaining the existing frozen integer count/value checks.
+
+The positive committed-evidence validation still returns the exact 78/8/11 B+
+PASS. Regression probes for P2-only integer, boolean, string, and null keys all
+return `REJECTED` with `unexpected keys: unexpectedProbeKey`; the unexpected
+field transition probe also remains `REJECTED`.
+
+### Independent review fix — duplicate expected-key value type
+
+A second independent reproduction appended a duplicate expected
+`totalClasses` key whose later value was boolean, string, or null. The parsed
+object retained that later value while the numeric regex still compared the
+original integer. Before the retained regex checks, the validator now inspects
+every expected property on the parsed object, requires an `Int32` or `Int64`
+runtime value, and compares it exactly without string or boolean coercion.
+
+The positive 78/8/11 projection and all prior probes still pass their expected
+verdicts. New duplicate-`totalClasses` boolean, string, and null probes are all
+rejected by the parsed-value runtime-type check.
+
+### Task 4 independent review closure
+
+Independent senior-shield review of the amended DIRECTIVE and Task 4 patch
+returned Spec PASS / Quality PASS on 2026-09-05. The JSON key/type/value gap
+was closed through two scoped fix reviews; no open required or recommended
+finding remained. Reviewer independently rejected extra keys and duplicate
+non-integer/wrong integer values and confirmed positive B+ 78/8/11.
+Task 5 is authorized to start. This is a Task 4 gate, not the final whole-branch review.

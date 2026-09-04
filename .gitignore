@@ -5,6 +5,7 @@
 .DS_Store
 /build
 /domain/risk/build/
+/domain/contracts/build/
 /captures
 .externalNativeBuild
 .cxx

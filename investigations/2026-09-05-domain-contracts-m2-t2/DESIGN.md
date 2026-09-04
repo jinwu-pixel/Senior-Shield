@@ -31,9 +31,13 @@ M1은 위험 정책 모델을 `:domain:risk`로 분리해 순수 JVM 경계가 �
 - 현재 동작을 잠그는 계약 테스트는 실제 FQCN, data class default/component/immutability, 구현자 관점 compile fake와 소비자 관점의 명시적 non-null/local-type 대입을 함께 검사한다. 후자는 공변 반환형 때문에 fake만으로 놓칠 수 있는 nullability 확장을 차단한다.
 - M1 후속 불변성 테스트는 사전 SHA를 기록하고 각 모델의 대표 `val -> var` mutation으로 실패 능력을 증명한 뒤 동일 SHA와 production diff 0으로 복원한다.
 - M2 계약은 모듈 skeleton에서 대상 선언이 없어 RED가 난 뒤 실제 파일 이동으로 GREEN이 되어야 한다.
-- Compose는 P0 원본, P1 Guardian config, P2 이동의 세 단계를 고정한다. P1에서 제거 가능 block을 사전 동결하고, UI metrics와 composable 보고서를 exact 비교하며 class report의 분석 범위 변화만 그 block으로 설명한다. artifacts는 ignored SDD workspace와 추적 로그에 보존한다.
+- Compose는 P0 원본, P1 Guardian config, P2 이동의 세 단계를 고정한다. P1/P2 UI metrics와 composable 보고서는 exact 비교한다. 이동 뒤 외부·무annotation repository port를 Compose 1.5.14가 보수적으로 분류하는 차이는 B+ exact projection으로 제한한다: Guardian block만 제거, 추가 0, 공통 78 block exact, 열거된 8 class의 11 repository field `runtime -> unstable`, OnboardingViewModel result 전이, 정확히 설명된 module JSON 5개 delta만 허용한다. repository interface를 stability config에 넣지 않는다.
+- P1/P2 4종 reports는 checkout 변환을 막아 추적 evidence에 byte-preserve하고 P1 raw SHA를 validator에 동결한다. validator는 JSON key set을 양방향 검사하고 class omission/duplicate와 목록 밖 transition을 거부하며 fresh post report root도 받을 수 있다.
 - ABI는 `javap -public -s`의 공개 선언·generic 표기·descriptor를 비교하고 Kotlin nullability는 양방향 compile harness로 보완한다. pre 출력에서 exact `Guardian.$stable:I` block만 제거한 투영이 post와 같아야 한다. `javap -v`는 major version과 class-level Compose `StabilityInferred(parameters=1)`만 추출하며, 두 Compose 생성 요소의 제거를 예상 compiler-boundary delta로 기록한다. raw verbose의 path·checksum·constant-pool·bytecode index는 비교하지 않는다.
 - 전체 app unit/Hilt kapt/assemble/duplicate/lint와 domain standalone lint를 함께 실행한다.
+- `kotlinx-coroutines-core:1.8.1` 업데이트 부채 범주는 app baseline에도 있다. M2는 버전을 올리지 않고 contracts build-script의 동일 `GradleDependency` 1건만 Task 5 fresh lint 확인 전까지 허용하며, main/test source lint는 0을 유지한다.
+
+Compose metadata gate는 현재 compiler reports에서 recomposition contract 회귀가 검출되지 않았는지만 판정한다. runtime recomposition은 측정하지 않으며, ABI projection과 class major/annotation metadata만으로 generated-bytecode identity를 주장하지 않는다.
 
 ## 리뷰 반영 판정
 
