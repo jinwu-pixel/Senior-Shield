@@ -84,6 +84,7 @@ providers.gradleProperty("composeCompilerReportsDir").orNull?.let { reportsDir -
 
 dependencies {
     implementation(project(":domain:risk"))
+    implementation(project(":domain:contracts"))
 
     val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
     implementation(composeBom)

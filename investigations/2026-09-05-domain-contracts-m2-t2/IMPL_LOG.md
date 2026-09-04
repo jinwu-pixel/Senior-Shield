@@ -156,3 +156,91 @@ and the four repository interfaces have not moved yet. The additional
 `overrides nothing` diagnostics are compiler cascades from those unresolved
 interface supertypes; there was no plugin, dependency, JUnit, coroutines, or
 risk-model resolution failure. No contracts production source was created.
+
+## Task 3 — Guardian and repository contracts move / GREEN
+
+### TDD GREEN and app consumer compilation
+
+The five production declarations were moved byte-for-byte after line-ending
+normalization from `:app` into the matching package paths under
+`:domain:contracts`. `:app` now has a direct
+`implementation(project(":domain:contracts"))` dependency while retaining its
+direct `:domain:risk` dependency. No consumer import, repository
+implementation, DataModule, Manifest, permission, service, monitor, or
+navigation source changed.
+
+The same required RED command was rerun immediately before production changes.
+It reached `:domain:contracts:compileKotlin NO-SOURCE` and failed at
+`:domain:contracts:compileTestKotlin` only because `Guardian` and the four
+repository interfaces were unresolved. After the move, the same serial JDK 21
+offline command completed successfully:
+
+```text
+./gradlew.bat --offline --no-daemon --no-parallel --max-workers=1 --console=plain :domain:contracts:test --rerun-tasks
+BUILD SUCCESSFUL in 51s; 7 actionable tasks, 7 executed
+```
+
+The generated JUnit XML contains exactly 4 tests with failures 0, errors 0,
+and skipped 0. The combined domain gate also forced all analysis tasks rather
+than accepting cached results:
+
+```text
+./gradlew.bat --offline --no-daemon --no-parallel --max-workers=1 --console=plain :domain:contracts:test :domain:contracts:lint :domain:risk:check --rerun-tasks
+BUILD SUCCESSFUL in 1m 9s; 23 actionable tasks, 23 executed
+```
+
+`lintAnalyzeJvmMain` and `lintAnalyzeJvmTest` both executed. Their source
+partial-result files contain zero incidents. The aggregate lint report has
+zero errors and one build-script-only `GradleDependency` warning for the
+deliberately pinned Task 2 `kotlinx-coroutines-core:1.8.1`; it is not a main or
+test source diagnostic and predates this task's source move.
+
+The app boundary gate completed with all requested tasks executed:
+
+```text
+./gradlew.bat --offline --no-daemon --no-parallel --max-workers=1 --console=plain :app:compileDebugKotlin :app:kaptDebugKotlin :app:checkDebugDuplicateClasses --rerun-tasks
+BUILD SUCCESSFUL in 2m 21s; 25 actionable tasks, 25 executed
+```
+
+The only compiler output was two existing Java deprecation warnings in
+`RealAppUsageRiskMonitor.kt` for `MOVE_TO_FOREGROUND`; that file is unchanged.
+
+### Graph, purity, and frozen-baseline checks
+
+`:domain:contracts:dependencies --configuration api` completed successfully
+and showed exactly the two expected exported dependencies: `project risk` and
+`kotlinx-coroutines-core:1.8.1`. App dependency insight showed both
+`:domain:contracts` and `:domain:risk` on `debugCompileClasspath`, including
+the transitive `contracts -> risk` edge. The risk `compileClasspath` contained
+only Kotlin stdlib/annotations and no contracts dependency. Source/Gradle
+search found zero reverse references from risk and zero Android, AndroidX,
+Compose, Hilt, Inject, or coroutines-android references in contracts main.
+
+All five moved declarations compare exact after CRLF/LF and terminal-newline
+normalization. Their normalized SHA-256 values are:
+
+| Declaration | SHA-256 |
+|---|---|
+| `Guardian.kt` | `0EBFDAD2574447E551E1E465165A1E01F65558EE3DE7F1CA4827347B25F7442B` |
+| `RiskRepository.kt` | `D5F7E2B876946712DAEF12D8BAF6BE4A4372F95604029F1ABB1665990317159D` |
+| `RiskEventSink.kt` | `7C0CCC825E9D6A5FA3DADEEA4E5B1B868BC2F998B2159D906446783C4C817C17` |
+| `SettingsRepository.kt` | `4085304C1E0F63C4A4216716666E46F2681FAC656D570845281243118C68A830` |
+| `GuardianRepository.kt` | `1E4616399A26780F38E688767CDBBFBAC2FA5AF54CCDD8A7957E928C23772FAB` |
+
+The Task 2 ABI artifacts remain unchanged: `javap-public-s.txt`
+`3471D4E650B72F06310954C1D4FF105590662E5EDB6863DFCB4B341BF00EF59B`,
+`javap-targeted-verbose.txt`
+`AC40658B8F8AC3F7359A00E9F08AF894B08224F9EF7B739A8AF46095988ED194`,
+and the implementation manifest
+`0EB93970E817A88ED03C6AE3F5D634C29DCF6B44E34094EF3C6406DB82A3C01D`.
+The five implementation/DI file hashes still match that manifest exactly.
+The four P1 Compose artifacts also retain their frozen Task 2 hashes.
+
+Self-review found no Critical or Important issue in the owned diff. The move
+does not change guardian contact behavior or reactivate automatic SMS; the
+legacy settings contract was moved unchanged. `git diff --check` is clean.
+
+The final pre-commit verification reran all Task 3 gates in one invocation and
+completed `BUILD SUCCESSFUL in 2m 23s` with 42/42 actionable tasks executed.
+Fresh XML counts were contracts 4 and risk 7 tests, with failures, errors, and
+skipped all zero; fresh contracts main/test source lint incidents were 0/0.
