@@ -85,13 +85,11 @@ artifacts are absent:
 
 The implementation artifacts themselves are cached. AGP
 `com.android.tools.build:gradle:8.5.2` contains the exact
-`META-INF/gradle-plugins/com.android.lint.properties` descriptor. Kotlin
-`org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24` contains the JVM plugin
-wrapper descriptors `META-INF/gradle-plugins/kotlin.properties` and
-`META-INF/gradle-plugins/kotlin-platform-jvm.properties`; it does not contain a
-file literally named `org.jetbrains.kotlin.jvm.properties`. Therefore the
-revised plan does not claim marker availability: the actual versionless
-application is accepted only if the next offline RED passes plugin
+`META-INF/gradle-plugins/com.android.lint.properties` descriptor. The Gradle
+8.2+ variant `kotlin-gradle-plugin-1.9.24-gradle82.jar` contains the canonical
+`META-INF/gradle-plugins/org.jetbrains.kotlin.jvm.properties` descriptor. This
+is distinct from the absent versioned marker artifacts. The actual versionless
+application is still accepted only if the next offline RED passes plugin
 configuration and fails solely on the six absent model references.
 
 The failed attempt changed no retained source or Gradle files, created no
@@ -124,6 +122,14 @@ pre-move canary exactly matches the original debug baseline:
 | inferred unstable classes | 49 | 49 |
 | total classes | 89 | 89 |
 
-The paired module JSON, composables CSV, and classes TXT files also have
-identical SHA-256 hashes. These debug numbers are a same-variant relative
-regression canary, not an absolute assessment of release performance.
+All four paired report artifacts have identical full SHA-256 values:
+
+| Artifact | Baseline SHA-256 | Stability-configured pre-move SHA-256 |
+|---|---|---|
+| `app_debug-module.json` | `1BA7F1EE417E37D64ADDC438A188C47EB41897621DC741A52E9B74A7D69F22F2` | `1BA7F1EE417E37D64ADDC438A188C47EB41897621DC741A52E9B74A7D69F22F2` |
+| `app_debug-composables.csv` | `F8D8CEF8F38F4A66254DE4029A7E431A6AF2F21C0535E387717B2E7A2D455F37` | `F8D8CEF8F38F4A66254DE4029A7E431A6AF2F21C0535E387717B2E7A2D455F37` |
+| `app_debug-composables.txt` | `C392734170FA2A877005ADD953CABB216DE348BEC71AC5FA31F47F15C51E5B58` | `C392734170FA2A877005ADD953CABB216DE348BEC71AC5FA31F47F15C51E5B58` |
+| `app_debug-classes.txt` | `9183AAE277F0309CC7F8241265558547605F5563554953D22F145777DBA56CD9` | `9183AAE277F0309CC7F8241265558547605F5563554953D22F145777DBA56CD9` |
+
+These debug numbers are a same-variant relative regression canary, not an
+absolute assessment of release performance.

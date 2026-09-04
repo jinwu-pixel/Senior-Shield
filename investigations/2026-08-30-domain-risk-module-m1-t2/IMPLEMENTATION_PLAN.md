@@ -35,7 +35,7 @@
 
 - [ ] **Step 1: 조건부 Compose compiler 보고 설정 추가**
 
-`app/build.gradle.kts`에 `composeCompilerReportsDir`가 지정된 경우에만 debug Kotlin compile의 `reportsDestination`과 `metricsDestination`을 같은 절대 경로로 전달한다. 일반 빌드의 compiler argument는 바꾸지 않는다.
+`app/build.gradle.kts`에 `composeCompilerReportsDir`가 지정된 경우에만 debug Kotlin compile의 `reportsDestination`과 `metricsDestination`을 같은 절대 경로로 전달한다. property가 없으면 reports/metrics용 compiler argument를 추가하지 않으며, `stabilityConfigurationPath`는 일반 Compose build에도 유지한다.
 
 - [ ] **Step 2: baseline metrics 생성**
 
