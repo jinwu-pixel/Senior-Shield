@@ -40,11 +40,19 @@ Kotlin / Jetpack Compose / Hilt / DataStore 기반이며,
 ## 아키텍처
 
 ```
-:app (single module, Clean Architecture)
+Gradle 모듈 구조
+  :app          → Android 애플리케이션 및 composition root
+  :domain       → Gradle 상위 container project (소스 컴파일 없음)
+  :domain:risk  → pure Kotlin/JVM 위험 도메인 모델
+
+의존 방향
+  :app → :domain:risk (단방향)
 
 domain/
-  model/        → RiskScore, RiskLevel, RiskSignal, RiskEvent, Guardian, PermissionStatus, PolicySummary
-  repository/   → RiskRepository, SettingsRepository, GuardianRepository (interfaces only)
+  model/
+    :domain:risk 소유 → AlertState, RiskEvent, RiskLevel, RiskScore, RiskSignal, SignalCategory
+    :app 유지         → Guardian, PermissionStatus, PolicySummary
+  repository/         → RiskRepository, SettingsRepository, GuardianRepository (interfaces only, :app 유지)
 
 data/
   local/        → SettingsDataStore, GuardianDataStore, LiveRiskEventStore (interface), RoomRiskEventStore, db/(RiskEventEntity, RiskEventDao, SeniorShieldDatabase)
@@ -83,6 +91,16 @@ core/
 
 di/             → AppModule
 ```
+
+`:domain:risk`는 Android, Compose, Hilt에 의존하지 않는다. 위 6개 모델은 기존
+`com.example.seniorshield.domain.model` FQCN을 유지하며, 후속 승인을 받지 않고
+다른 도메인 모델이나 repository/interface를 해당 모듈로 확장하지 않는다.
+
+### 위험 모델 호환성 제약
+
+- `RiskLevel.name`과 `RiskSignal.name`은 Room 저장·복원 값이므로 enum 이름을 변경하지 않는다.
+- `RiskLevel`과 `AlertState`의 ordinal/order는 위험도 비교에 사용되므로 선언 순서를 변경하지 않는다.
+- `RiskSignal.category` 매핑은 위험 평가 의미를 구성하므로 기존 값을 변경하지 않는다.
 
 Navigation: Splash → Onboarding → Permissions(fromOnboarding) → Home
   Home → {History, Warning, Permissions, Policy, Settings, Guardian, SimulationList}

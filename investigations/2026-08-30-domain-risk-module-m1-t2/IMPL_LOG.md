@@ -153,3 +153,35 @@ production models were unresolved — `AlertState`, `RiskEvent`, `RiskLevel`,
 `RiskScore`, `RiskSignal`, and `SignalCategory`. Any lambda or assertion
 overload diagnostics followed from those missing model types. No plugin,
 configuration, or dependency-resolution failure occurred.
+
+## Task 3 — move six risk models and restore GREEN
+
+Exactly six production models moved from the app source set to
+`:domain:risk`: `AlertState`, `RiskEvent`, `RiskLevel`, `RiskScore`,
+`RiskSignal`, and `SignalCategory`. Their package/FQCN, declarations, public
+constructor/component API, enum order/category, and KDoc were preserved. The
+app now has a one-way dependency on `:domain:risk`.
+
+The four moved files that previously lacked a terminal newline were normalized
+to end with a newline. This was newline-only normalization; their Kotlin
+declarations and behavior did not change.
+
+With JDK 21, offline dependency resolution, and serial Gradle workers:
+
+```text
+./gradlew.bat :domain:risk:test :domain:risk:lint --offline --no-daemon --no-parallel --max-workers=1 --console=plain --info
+```
+
+Result: `BUILD SUCCESSFUL`; 5 tests, 0 failures, 0 errors, and 0 skipped. The
+standalone lint graph executed `lintAnalyzeJvmMain` against all six Kotlin
+production sources (not `NO-SOURCE`), and its report contains 0 issues.
+
+App integration was checked separately:
+
+```text
+./gradlew.bat :app:compileDebugKotlin :app:checkDebugDuplicateClasses --offline --no-daemon --no-parallel --max-workers=1 --console=plain
+```
+
+Result: `BUILD SUCCESSFUL`; compilation and duplicate-class checking both
+completed successfully. Task 5 fresh full-build, test, lint-fingerprint, and
+post-move Compose canary verification remain pending.
