@@ -32,7 +32,16 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions { jvmTarget = "17" }
+    kotlinOptions {
+        jvmTarget = "17"
+        val stabilityConfiguration = rootProject.file("compose-stability.conf")
+            .absolutePath
+            .replace('\\', '/')
+        freeCompilerArgs += listOf(
+            "-P",
+            "plugin:androidx.compose.compiler.plugins.kotlin:stabilityConfigurationPath=$stabilityConfiguration",
+        )
+    }
 
     buildFeatures {
         compose = true
@@ -58,7 +67,24 @@ kapt {
     }
 }
 
+providers.gradleProperty("composeCompilerReportsDir").orNull?.let { reportsDir ->
+    val absoluteReportsDir = file(reportsDir).absolutePath.replace('\\', '/')
+
+    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+        if (name == "compileDebugKotlin") {
+            kotlinOptions.freeCompilerArgs += listOf(
+                "-P",
+                "plugin:androidx.compose.compiler.plugins.kotlin:reportsDestination=$absoluteReportsDir",
+                "-P",
+                "plugin:androidx.compose.compiler.plugins.kotlin:metricsDestination=$absoluteReportsDir",
+            )
+        }
+    }
+}
+
 dependencies {
+    implementation(project(":domain:risk"))
+
     val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
     implementation(composeBom)
     androidTestImplementation(composeBom)

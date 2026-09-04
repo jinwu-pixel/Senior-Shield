@@ -4,6 +4,7 @@
 /.idea/
 .DS_Store
 /build
+/domain/risk/build/
 /captures
 .externalNativeBuild
 .cxx
@@ -14,4 +15,5 @@ seniorshield_full_log.txt
 .env
 /dist/
 /pic/
+/.worktrees/
 SeniorShield_소개자료_v1.2*.pptx

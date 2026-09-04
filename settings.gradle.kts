@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "SeniorShield"
 include(":app")
+include(":domain:risk")
