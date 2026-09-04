@@ -52,7 +52,7 @@ domain/
   model/
     :domain:risk 소유 → AlertState, RiskEvent, RiskLevel, RiskScore, RiskSignal, SignalCategory
     :app 유지         → Guardian, PermissionStatus, PolicySummary
-  repository/         → RiskRepository, SettingsRepository, GuardianRepository (interfaces only, :app 유지)
+  repository/         → RiskRepository, RiskEventSink, SettingsRepository, GuardianRepository (interfaces only, :app 유지)
 
 data/
   local/        → SettingsDataStore, GuardianDataStore, LiveRiskEventStore (interface), RoomRiskEventStore, db/(RiskEventEntity, RiskEventDao, SeniorShieldDatabase)
