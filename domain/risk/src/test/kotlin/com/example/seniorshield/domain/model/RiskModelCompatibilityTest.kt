@@ -151,8 +151,17 @@ class RiskModelCompatibilityTest {
     }
 
     private fun assertImmutableProperties(modelClass: Class<*>, propertyNames: List<String>) {
-        propertyNames.forEach { propertyName ->
-            val backingField = modelClass.getDeclaredField(propertyName)
+        val backingFields = modelClass.declaredFields.filterNot { field ->
+            Modifier.isStatic(field.modifiers) || field.isSynthetic
+        }
+        assertEquals(
+            "${modelClass.simpleName} must declare exactly the intended instance backing fields",
+            propertyNames.toSet(),
+            backingFields.map { field -> field.name }.toSet(),
+        )
+
+        backingFields.forEach { backingField ->
+            val propertyName = backingField.name
             assertTrue(
                 "${modelClass.simpleName}.$propertyName backing field must be final",
                 Modifier.isFinal(backingField.modifiers),

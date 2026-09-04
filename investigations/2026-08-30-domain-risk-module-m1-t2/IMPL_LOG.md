@@ -429,5 +429,6 @@ unstaged and staged production diffs are both empty.
 With JDK 21, offline resolution, no daemon, no parallel execution, and one
 worker, `:domain:risk:test --rerun-tasks` passed with exactly 7 tests and 0
 failures / 0 errors / 0 skipped. `:domain:risk:lint --rerun-tasks --info`
-completed successfully with all nine lint tasks executed; its report states
+completed successfully with all nine lint tasks executed, including the actual
+`lintAnalyzeJvmMain` and `lintAnalyzeJvmTest` analysis tasks; its report states
 `No issues found.`
