@@ -133,3 +133,23 @@ All four paired report artifacts have identical full SHA-256 values:
 
 These debug numbers are a same-variant relative regression canary, not an
 absolute assessment of release performance.
+
+## Task 2 — versionless RED compatibility checkpoint
+
+The approved retry retained root `build.gradle.kts` unchanged, added only
+`:domain:risk` to settings, and used versionless `java-library`, Kotlin JVM,
+and Android Lint module plugins. Its module production dependency set is empty;
+JUnit 4.13.2 is test-only.
+
+With JDK 21, offline dependency resolution, and serial Gradle workers:
+
+```text
+./gradlew.bat --offline --no-daemon --no-parallel --max-workers=1 :domain:risk:test
+```
+
+Gradle configured the versionless plugins and resolved JUnit. The expected RED
+then occurred at `:domain:risk:compileTestKotlin`: only the six not-yet-moved
+production models were unresolved — `AlertState`, `RiskEvent`, `RiskLevel`,
+`RiskScore`, `RiskSignal`, and `SignalCategory`. Any lambda or assertion
+overload diagnostics followed from those missing model types. No plugin,
+configuration, or dependency-resolution failure occurred.

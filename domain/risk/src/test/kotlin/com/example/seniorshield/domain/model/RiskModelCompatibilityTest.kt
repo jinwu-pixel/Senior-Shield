@@ -72,7 +72,12 @@ class RiskModelCompatibilityTest {
             signals = listOf(RiskSignal.UNKNOWN_CALLER),
         )
 
-        val (id, title, description, occurredAtMillis, level, signals) = event
+        val id: String = event.component1()
+        val title: String = event.component2()
+        val description: String = event.component3()
+        val occurredAtMillis: Long = event.component4()
+        val level: RiskLevel = event.component5()
+        val signals: List<RiskSignal> = event.component6()
         assertEquals(
             listOf(
                 "event-id",
@@ -94,7 +99,9 @@ class RiskModelCompatibilityTest {
             signals = listOf(RiskSignal.REPEATED_UNKNOWN_CALLER),
         )
 
-        val (total, level, signals) = score
+        val total: Int = score.component1()
+        val level: RiskLevel = score.component2()
+        val signals: List<RiskSignal> = score.component3()
         assertEquals(
             listOf(
                 75,
