@@ -387,3 +387,47 @@ contains 17 paths; all 17 match the DIRECTIVE allowlist. Root build,
 AndroidManifest, permission, DI, service, monitoring, and navigation paths have
 zero changes. The main and feature worktrees remain the only registered
 worktrees.
+
+## M2 Task 1 — post-merge immutable data-class contract
+
+The earlier 5-test records above remain the historical M1 evidence. After PR
+#9 merged at `7754ebf5bd457e7fabeb6e9357d178df95fd01e9`, the M2 baseline ran
+the post-merge full gate with JDK 21, offline resolution, and serial workers:
+
+```text
+./gradlew.bat --offline --no-daemon --no-parallel --max-workers=1 --console=plain clean :domain:risk:check :app:testDebugUnitTest :app:assembleDebug :app:checkDebugDuplicateClasses
+```
+
+That gate completed successfully. Its JUnit XML aggregation records
+`:domain:risk` as 1 suite / 6 tests / 0 failures / 0 errors / 0 skipped, and
+`:app` as 35 suites / 454 tests / 0 failures / 0 errors / 0 skipped.
+
+Task 1 extends the domain compatibility suite with a reflection contract for
+every `RiskEvent` and `RiskScore` property backing field: each must be final
+and its Java-style setter must be absent. The test uses literal property name
+lists for the six `RiskEvent` and three `RiskScore` constructor properties.
+
+### Mutation proof and restoration
+
+Before either mutation, SHA-256 values were:
+
+| Production file | SHA-256 before | SHA-256 after restore |
+|---|---|---|
+| `RiskEvent.kt` | `D3B5DE39295C071244BF429A37C29A672A1C8DF535A33226062E801D8C52C758` | `D3B5DE39295C071244BF429A37C29A672A1C8DF535A33226062E801D8C52C758` |
+| `RiskScore.kt` | `00724145C982000823685B879CE671EF7B2A484A64AE5C7060C4C58EEAF40239` | `00724145C982000823685B879CE671EF7B2A484A64AE5C7060C4C58EEAF40239` |
+
+`RiskEvent.id` was temporarily changed from `val` to `var`, then
+`:domain:risk:test --rerun-tasks` produced the expected RED: the new immutable
+Java-bean contract failed at `RiskModelCompatibilityTest.kt:156` (7 tests, 1
+failure). It was restored immediately. The same one-property mutation and
+expected RED result were then repeated for `RiskScore.total`, followed by an
+immediate restore. Neither production file was staged or committed; final
+unstaged and staged production diffs are both empty.
+
+### Task 1 final domain gate
+
+With JDK 21, offline resolution, no daemon, no parallel execution, and one
+worker, `:domain:risk:test --rerun-tasks` passed with exactly 7 tests and 0
+failures / 0 errors / 0 skipped. `:domain:risk:lint --rerun-tasks --info`
+completed successfully with all nine lint tasks executed; its report states
+`No issues found.`
