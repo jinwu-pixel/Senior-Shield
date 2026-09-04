@@ -32,7 +32,16 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions { jvmTarget = "17" }
+    kotlinOptions {
+        jvmTarget = "17"
+        val stabilityConfiguration = rootProject.file("compose-stability.conf")
+            .absolutePath
+            .replace('\\', '/')
+        freeCompilerArgs += listOf(
+            "-P",
+            "plugin:androidx.compose.compiler.plugins.kotlin:stabilityConfigurationPath=$stabilityConfiguration",
+        )
+    }
 
     buildFeatures {
         compose = true

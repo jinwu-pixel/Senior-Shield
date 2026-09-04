@@ -15,7 +15,7 @@
 
 ## 1. 승인된 5줄 계획
 
-1. 수정 파일: Gradle 설정 4개 이내, 위험 모델 6개 이동, 호환 계약 테스트, `AGENTS.md`, 이 트랙 문서와 `.gitignore`만 수정한다.
+1. 수정 파일: `settings.gradle.kts`, `app/build.gradle.kts`, 신규 모듈 빌드 설정과 Compose 안정성 설정, 위험 모델 6개 이동, 호환 계약 테스트, `AGENTS.md`, 이 트랙 문서와 `.gitignore`만 수정한다.
 2. 변경 목적: `:app` 내부의 응집된 순수 위험 정책 모델을 `:domain:risk` Kotlin/JVM 모듈로 분리해 작은 물리 모듈 canary를 검증한다.
 3. 정책/권한 리스크: enum 이름·순서·category·FQCN 변경은 정책 및 저장 호환성 변경이므로 금지한다. Manifest, permission, DI, service, monitor, Navigation은 건드리지 않는다.
 4. 테스트 방법: 계약 테스트 RED→GREEN, `:domain:risk:test`, `:domain:risk:lint`, app 454 tests 유지, assemble/checkDuplicateClasses, lint 지문·Compose metrics 전후 비교, bytecode 17, `git diff --check`.
@@ -34,7 +34,13 @@ Android/Compose/Hilt    Kotlin/JVM, bytecode 17
 - 신규 모듈 production dependency는 Kotlin 표준 라이브러리 외 0이다.
 - `:app`만 `implementation(project(":domain:risk"))`로 의존한다.
 - JDK 21로 Gradle을 실행하되 `jvmTarget=17`을 사용한다. `jvmToolchain(17)`은 사용하지 않는다.
-- 오래된 version catalog의 AGP/Kotlin 값은 사용하지 않고 기존 AGP `8.5.2`, Kotlin `1.9.24`를 유지한다.
+- root `build.gradle.kts`에는 `org.jetbrains.kotlin.jvm` 또는 `com.android.lint`의 versioned plugin 선언을 추가하지 않는다. 기존 root classpath를 재사용해 모듈에서 versionless plugin을 적용한다.
+- `settings.gradle.kts`의 모듈 변경은 `include(":domain:risk")`만 허용한다.
+- `domain/risk/build.gradle.kts`의 plugin은 versionless `java-library`, `id("org.jetbrains.kotlin.jvm")`, `id("com.android.lint")`만 사용한다.
+- 오래된 version catalog의 AGP/Kotlin 값은 사용하지 않고 기존 AGP `8.5.2`, Kotlin `1.9.24` 구현을 유지한다.
+- Task 2의 offline RED는 plugin configuration을 통과한 뒤 대상 6개 모델의 unresolved reference만으로 실패해야 한다. plugin resolution/configuration 실패 또는 다른 원인의 실패는 S5다.
+- `compose-stability.conf`에는 불변 enum 4종 `AlertState`, `RiskLevel`, `RiskSignal`, `SignalCategory`의 exact FQCN만 등록한다. collection property가 있는 `RiskEvent`, `RiskScore`는 등록하지 않는다.
+- debug Compose metrics는 production 성능의 절대 평가가 아니라 같은 variant·compiler 조건의 전후 상대 canary로만 사용한다.
 
 ## 3. 호환 계약
 
@@ -49,8 +55,8 @@ Android/Compose/Hilt    Kotlin/JVM, bytecode 17
 
 - `.gitignore`
 - `settings.gradle.kts`
-- `build.gradle.kts`
 - `app/build.gradle.kts`
+- `compose-stability.conf`
 - `domain/risk/build.gradle.kts`
 - `app/src/main/java/com/example/seniorshield/domain/model/` 아래 대상 6개 삭제
 - `domain/risk/src/main/kotlin/com/example/seniorshield/domain/model/` 아래 대상 6개 생성
@@ -67,7 +73,6 @@ Android/Compose/Hilt    Kotlin/JVM, bytecode 17
 3. fresh `clean :domain:risk:check :app:testDebugUnitTest :app:assembleDebug :app:checkDebugDuplicateClasses` GREEN.
 4. app unit test가 35 suites / 454 tests 이상이며 failures/errors/skipped 0.
 5. `:app:lintDebug`가 기존 5E/67W 지문 대비 신규 진단 0.
-6. Compose compiler metrics에서 restartable/skippable 및 unstable parameter 지표 회귀 0.
+6. 안정성 설정 적용 직전과 적용 후의 동일 debug Compose canary가 정확히 `226 total / 225 restartable / 142 skippable / 36 known unstable arguments / 49 inferred unstable classes / 89 total classes`를 유지하고, 모델 이동 후에도 해당 상대 지표 회귀가 0이다.
 7. 위험 모델 class major version 61(Java 17), 중복 class 0.
 8. `git diff --check` 통과, 허용 경로 외 변경 0.
-

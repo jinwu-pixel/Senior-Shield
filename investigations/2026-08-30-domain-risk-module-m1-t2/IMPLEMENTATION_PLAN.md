@@ -4,7 +4,7 @@
 
 **Goal:** 위험 정책 모델 6종을 동작·API·저장 호환성 변화 없이 `:domain:risk` Kotlin/JVM 모듈로 분리한다.
 
-**Architecture:** `:app`이 순수 Kotlin/JVM 모듈 `:domain:risk`에 단방향 의존한다. 기존 package/FQCN과 enum 순서·이름·category를 그대로 유지하고 계약 테스트, standalone lint, Compose compiler metrics로 경계 이동 회귀를 검출한다.
+**Architecture:** `:app`이 순수 Kotlin/JVM 모듈 `:domain:risk`에 단방향 의존한다. 기존 package/FQCN과 enum 순서·이름·category를 그대로 유지하고 계약 테스트, standalone lint, 동일 debug variant의 상대 Compose compiler metrics canary로 경계 이동 회귀를 검출한다.
 
 **Tech Stack:** Gradle 8.7, AGP/Lint 8.5.2, Kotlin 1.9.24, JDK 21 실행, JVM bytecode 17, JUnit 4.13.2.
 
@@ -17,6 +17,8 @@
 - Manifest, permission, DI, service, monitor, Navigation과 제품 동작을 변경하지 않는다.
 - 신규 모듈 production dependency는 Kotlin 표준 라이브러리 외 0이다.
 - Gradle은 JDK 21로 실행하고 bytecode는 17로 생성한다. `jvmToolchain(17)`은 금지한다.
+- root `build.gradle.kts`에 신규 versioned plugin을 선언하지 않는다. 기존 root plugin implementation classpath를 이용해 신규 모듈의 Kotlin JVM과 standalone lint plugin을 versionless로 적용한다.
+- `compose-stability.conf`에는 불변 enum 4종의 exact FQCN만 허용하고 `RiskEvent`/`RiskScore`는 포함하지 않는다.
 - 기존 app lint 5E/67W에 신규 진단 0, app test 454개 미만 감소 금지, skipped 0이다.
 
 ---
@@ -43,13 +45,25 @@ Expected: `*-module.json`, `*-composables.csv`, `*-classes.txt`가 생성되고 
 
 - [ ] **Step 3: offline plugin cache 확인**
 
-Kotlin JVM `1.9.24`와 AGP/Lint `8.5.2` 캐시를 확인한다. 캐시 미존재로 네트워크가 필요하면 S5로 중단한다.
+Kotlin `1.9.24`와 AGP/Lint `8.5.2` 구현 JAR 및 plugin descriptor를 확인한다. marker artifact 부재는 기록하되, 실제 versionless plugin 적용 가능 여부는 Task 2 offline RED로 판정한다.
+
+- [ ] **Step 4: 외부 모듈 안정성 config와 pre-move canary 고정**
+
+루트 `compose-stability.conf`에 다음 exact FQCN만 기록하고 app Compose compiler의 일반 빌드에 `stabilityConfigurationPath`를 적용한다.
+
+```text
+com.example.seniorshield.domain.model.AlertState
+com.example.seniorshield.domain.model.RiskLevel
+com.example.seniorshield.domain.model.RiskSignal
+com.example.seniorshield.domain.model.SignalCategory
+```
+
+`RiskEvent`와 `RiskScore`는 `List` property가 있고 기존 baseline에서도 unstable이므로 등록하지 않는다. 설정 적용 후 Task 1과 같은 debug variant metrics를 재생성한다. `226 total / 225 restartable / 142 skippable / 36 known unstable arguments / 49 inferred unstable classes / 89 total classes`가 모두 정확히 유지되어야 하며 차이가 있으면 S5다. 이 수치는 release 성능의 절대평가가 아니라 같은 debug compiler 조건의 상대 canary다.
 
 ### Task 2: RED 호환 계약과 모듈 골격
 
 **Files:**
 - Modify: `settings.gradle.kts`
-- Modify: `build.gradle.kts`
 - Create: `domain/risk/build.gradle.kts`
 - Create: `domain/risk/src/test/kotlin/com/example/seniorshield/domain/model/RiskModelCompatibilityTest.kt`
 
@@ -57,9 +71,9 @@ Kotlin JVM `1.9.24`와 AGP/Lint `8.5.2` 캐시를 확인한다. 캐시 미존재
 - Consumes: 기존 모델의 exact FQCN과 enum 계약.
 - Produces: `:domain:risk:test`, `:domain:risk:lint`, bytecode 17의 순수 Kotlin/JVM 모듈.
 
-- [ ] **Step 1: 모듈을 settings와 plugin management에 등록**
+- [ ] **Step 1: settings에 모듈만 등록**
 
-Root plugins에 `org.jetbrains.kotlin.jvm` `1.9.24`와 `com.android.lint` `8.5.2`를 `apply false`로 추가하고 `settings.gradle.kts`에 `include(":domain:risk")`를 추가한다.
+`settings.gradle.kts`에 `include(":domain:risk")`만 추가한다. root `build.gradle.kts`와 plugin management는 변경하지 않고, versioned `org.jetbrains.kotlin.jvm`/`com.android.lint` 선언을 추가하지 않는다.
 
 - [ ] **Step 2: bytecode 17과 standalone lint 모듈 생성**
 
@@ -92,7 +106,7 @@ JUnit 테스트에서 6개 class의 FQCN, `AlertState`/`RiskLevel`/`SignalCatego
 
 Run: `./gradlew.bat --offline --no-daemon --no-parallel --max-workers=1 :domain:risk:test`
 
-Expected: 모듈에 production 모델이 아직 없으므로 unresolved reference로 실패한다. plugin resolution 실패는 테스트 RED가 아니라 S5다.
+Expected: versionless plugin configuration과 test dependency resolution을 통과한 뒤, 모듈에 production 모델이 아직 없어서 대상 6개 모델의 unresolved reference만으로 실패한다. plugin resolution/configuration 실패나 다른 원인의 실패는 테스트 RED가 아니라 S5다.
 
 ### Task 3: 위험 모델 이동과 app 단방향 의존
 
@@ -165,7 +179,7 @@ Expected: domain lint 실제 실행·진단 0. app lint는 기존 5E/67W와 exac
 
 - [ ] **Step 3: post Compose metrics와 bytecode 검증**
 
-post metrics를 baseline과 비교해 restartable/skippable/unstable 지표 회귀 0을 확인한다. `javap -verbose`로 대상 class의 major version이 61인지 확인한다.
+Task 1과 같은 debug variant로 post metrics를 생성해 안정성 config 적용 직후 pre-move canary와 비교한다. `226 total / 225 restartable / 142 skippable / 36 known unstable arguments / 49 inferred unstable classes / 89 total classes`에서 회귀가 없어야 한다. 이 비교는 production 절대평가가 아닌 동일 조건 상대 canary다. `javap -verbose`로 대상 class의 major version이 61인지 확인한다.
 
 - [ ] **Step 4: 범위와 whitespace 검증**
 
