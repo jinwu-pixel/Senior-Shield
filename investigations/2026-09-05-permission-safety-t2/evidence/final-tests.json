@@ -1,0 +1,26 @@
+[
+  {
+    "Module": "app",
+    "Tests": 544.0,
+    "Failures": 0.0,
+    "Errors": 0.0,
+    "Skipped": 0.0,
+    "EarliestSuiteUtc": "2026-09-05T06:29:51"
+  },
+  {
+    "Module": "domain/risk",
+    "Tests": 7.0,
+    "Failures": 0.0,
+    "Errors": 0.0,
+    "Skipped": 0.0,
+    "EarliestSuiteUtc": "2026-09-05T06:26:44"
+  },
+  {
+    "Module": "domain/contracts",
+    "Tests": 4.0,
+    "Failures": 0.0,
+    "Errors": 0.0,
+    "Skipped": 0.0,
+    "EarliestSuiteUtc": "2026-09-05T06:26:49"
+  }
+]

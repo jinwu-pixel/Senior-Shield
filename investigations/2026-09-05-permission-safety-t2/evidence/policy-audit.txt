@@ -1,0 +1,9 @@
+Permission policy audit 2026-09-05
+Base: 0d7b30990bf3f08eaf8d56b220e41019b9996c3a
+Changed production scope: core util/overlay/notification four files; Manifest telephony feature only.
+Protected data/DI/monitoring/navigation/domain/Application delta: 0
+Production SMS send APIs / GuardianSmsManager / ACTION_CALL / endCall call matches: 0
+Manifest SEND_SMS/READ_SMS permissions: 0
+External contact behavior: existing user-click request to phone UI; no outgoing call/message added.
+Existing self notification retained; SecurityException handling only.
+Merged manifest exact after sole telephony feature removal; permissions/components unchanged.

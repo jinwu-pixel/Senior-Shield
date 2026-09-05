@@ -1,0 +1,13 @@
+
+Name                                    Expected Accepted
+----                                    -------- --------
+Exactly approved five errors removed        True     True
+Old errors retained                        False    False
+Missing current report                     False    False
+New error rejected                         False    False
+Changed warning rejected                   False    False
+Missing warning rejected                   False    False
+Additional diagnostic location rejected    False    False
+Missing diagnostic location rejected       False    False
+
+PASS: 8 lint delta probes

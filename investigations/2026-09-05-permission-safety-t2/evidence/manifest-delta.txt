@@ -1,0 +1,2 @@
+PASS: merged manifest exact after removing sole telephony required=true feature; permission/component delta 0
+Final catalog configuration: merged manifest exact except sole telephony required=true feature; permission/component delta0
