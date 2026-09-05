@@ -411,3 +411,28 @@ was closed through two scoped fix reviews; no open required or recommended
 finding remained. Reviewer independently rejected extra keys and duplicate
 non-integer/wrong integer values and confirmed positive B+ 78/8/11.
 Task 5 is authorized to start. This is a Task 4 gate, not the final whole-branch review.
+
+## Task 5 — fresh completion verification
+
+Task 5 verification ran from commit `38cec4f`; the production implementation remains `5391210`. The mandated JDK 21, offline, serial full gate completed with exit 0 in 402.945 seconds (`BUILD SUCCESSFUL in 6m 42s`; 80 actionable tasks, 79 executed, 1 up-to-date). Fresh XML contains app 35 suites/454 tests, risk exactly 7 tests, and contracts exactly 4 tests, with failures/errors/skipped all 0.
+
+Metadata-enabled contracts lint completed with exit 0 in 52.666 seconds and executed all 15 tasks. Parsed domain partial results contain risk main/test 0/0 incidents and contracts main/test 0/0 incidents. Risk aggregate diagnostics are 0. Contracts aggregate diagnostics are exactly the narrowly allowed `GradleDependency` warning for `kotlinx-coroutines-core:1.8.1` (latest observed `1.11.0`), with 0 errors and no source diagnostics.
+
+Metadata-enabled app lint executed all 49 tasks and returned the expected exit 1 in 428.655 seconds with the unchanged 5 errors/67 warnings. The exact M1 fingerprint algorithm passed against both the untouched raw baseline and tracked sanitized baseline: 72/72 diagnostics, normalized multiset difference 0, SHA-256 `8F301A319E9158B66072DAD70DEB4E72BDB3D08F2C9076B4E5ADAC636F3ACFCD`. A portable script copy now defaults to the tracked sanitized baseline.
+
+Fresh Compose reports pass the tracked B+ validator at Guardian removal 1/additions 0/exact common 78/projected changed 8/repository field transitions 11/affected type parameters 0; all eight negative probes were rejected. All four fresh reports are byte-identical to tracked P2. The post `javap -public -s` projection matches pre after removing only Guardian `$stable:I`, with both canonical projections hashing to `DDF3E6C869DF2FBCC93A55D77354BEACFB7B594605E6E560708FC2CCA0B72DAE`. The contracts inventory is exactly six classes including `Guardian$Companion`; all are major 61 and Guardian has no `StabilityInferred` annotation.
+
+All five moved sources are exact modulo newline, all five implementation/DI hashes match the frozen manifest, forbidden contracts imports are 0, and fresh dependency reports show `contracts -> risk + coroutines-core:1.8.1` with no risk reverse edge. Production SMS search remains two interface declarations plus two overrides and no other invocation. Policy-forbidden SMS/call patterns are 0; ACTION_DIAL/manual ACTION_SENDTO remain. The 34-file diff is fully allowlisted, has no sensitive app source change, and both committed and worktree `git diff --check` pass.
+
+Detailed commands, results, limitations, and ignored raw-log locations are recorded in `VERIFICATION.md`; compact tracked evidence is in `evidence/task5/verification-results.txt`. Runtime recomposition was not measured, and no generated-bytecode identity claim is made. Whole-branch independent review and Ready PR publication remain pending for the controller; merge remains out of scope.
+
+### Independent final review — Ready PR
+
+On 2026-09-05 a fresh senior-shield reviewer inspected the full branch source/config
+change from 7754ebf through 38cec4f and the completed Task 5 report/evidence.
+Verdict: Ready PR Yes; Critical/Important 0; unresolved required/recommended findings 0.
+The reviewer independently ran fresh-report B+ (78/8/11), the current lint
+fingerprint (72/72, delta 0, frozen SHA), and diff whitespace checks. No Gradle
+build was repeated by the reviewer. Source/API/graph/policy conclusions align
+with the Task 5 evidence. Device/runtime recomposition/CI execution are not
+claimed. Publication remains the final step; main merge remains prohibited.
