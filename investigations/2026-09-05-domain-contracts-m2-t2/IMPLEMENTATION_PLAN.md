@@ -109,4 +109,4 @@
 - [x] 두 domain lint가 main source를 분석해 0 issues인지 확인한다. metadata-access app lint는 기존 5 errors 때문에 expected nonzero이며, 72 diagnostics의 issue/severity/message/relative path/source anchor를 보존하고 worktree prefix·line/column·latest-version 값만 정규화한 multiset이 canonical SHA `8F301A319E9158B66072DAD70DEB4E72BDB3D08F2C9076B4E5ADAC636F3ACFCD`와 동일하고 차이 0인지 비교한다.
 - [x] Compose/ABI/bytecode/import/graph/duplicate/allowlist/`git diff --check` 완료 게이트를 재확인한다.
 - [x] 전체 브랜치 독립 Senior Shield 리뷰에서 Critical/Important 0과 정책 통과를 확인한다.
-- [ ] 명시 파일만 stage·commit하고 `codex/domain-contracts-m2`를 push해 Ready PR을 생성한다. merge하지 않는다.
+- [x] 명시 파일만 stage·commit하고 `codex/domain-contracts-m2`를 push해 Ready PR을 생성한다. merge하지 않는다.
