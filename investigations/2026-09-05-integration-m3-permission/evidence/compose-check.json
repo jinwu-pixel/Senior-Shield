@@ -1,0 +1,22 @@
+[
+  {
+    "File": "app_debug-classes.txt",
+    "Sha256": "AA834CE9BBAE67B7BD054BC20AA381970AF34076885C92B31CD70D49E07EFD45",
+    "MatchesM3": true
+  },
+  {
+    "File": "app_debug-composables.csv",
+    "Sha256": "F8D8CEF8F38F4A66254DE4029A7E431A6AF2F21C0535E387717B2E7A2D455F37",
+    "MatchesM3": true
+  },
+  {
+    "File": "app_debug-composables.txt",
+    "Sha256": "C392734170FA2A877005ADD953CABB216DE348BEC71AC5FA31F47F15C51E5B58",
+    "MatchesM3": true
+  },
+  {
+    "File": "app_debug-module.json",
+    "Sha256": "7E95A5953693F51B93156F8EB9B714CFC6745DB439ACB2B15466B627DCDA3C15",
+    "MatchesM3": true
+  }
+]

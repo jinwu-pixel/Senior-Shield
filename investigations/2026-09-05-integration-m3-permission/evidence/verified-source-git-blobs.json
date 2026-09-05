@@ -1,0 +1,786 @@
+[
+  {
+    "Path": ".github/PULL_REQUEST_TEMPLATE.md",
+    "GitBlob": "4794b5b6843c020aea18b7079179c6e01e5b06a9"
+  },
+  {
+    "Path": ".github/S2_REVIEW_CHECKLIST.md",
+    "GitBlob": "974ccfea79d4c44a160cc2054bb8ac11a91d33f5"
+  },
+  {
+    "Path": ".gitignore",
+    "GitBlob": "bd247aa8dfc462493e9056dae17d4a833528ccc5"
+  },
+  {
+    "Path": "AGENTS.md",
+    "GitBlob": "2a861e8eecf93ce95a5b417d9eff474fe724a052"
+  },
+  {
+    "Path": "app/.gitignore",
+    "GitBlob": "42afabfd2abebf31384ca7797186a27a4b7dbee8"
+  },
+  {
+    "Path": "app/build.gradle.kts",
+    "GitBlob": "72f803a465e8b6e52f45e6d3ba33aa43021f6bfb"
+  },
+  {
+    "Path": "app/proguard-rules.pro",
+    "GitBlob": "481bb434814107eb79d7a30b676d344b0df2f8ce"
+  },
+  {
+    "Path": "app/src/androidTest/java/com/example/seniorshield/data/GuardianStorageTest.kt",
+    "GitBlob": "5d991a0ed33ca6a836bbb92e17500dda3da90c7c"
+  },
+  {
+    "Path": "app/src/androidTest/java/com/example/seniorshield/data/HiltRiskStorageTest.kt",
+    "GitBlob": "ffc189f8a7b2b91d44eefbb43d5ea999a1855dbd"
+  },
+  {
+    "Path": "app/src/androidTest/java/com/example/seniorshield/data/M3DatabaseModule.kt",
+    "GitBlob": "9d649caf6e54731a5a24a8cc812a4c3a03766909"
+  },
+  {
+    "Path": "app/src/androidTest/java/com/example/seniorshield/data/RoomDaoStorageTest.kt",
+    "GitBlob": "0ff19c6a9ee3111bdb5b0f7ea7f8be18335f48c4"
+  },
+  {
+    "Path": "app/src/androidTest/java/com/example/seniorshield/data/RoomRiskEventStoreStorageTest.kt",
+    "GitBlob": "d9840ae742836adb394259ebac61e97de5eb3d99"
+  },
+  {
+    "Path": "app/src/androidTest/java/com/example/seniorshield/data/SettingsStorageTest.kt",
+    "GitBlob": "2b5ba577ab6075575ab11e67575dceeda390810d"
+  },
+  {
+    "Path": "app/src/androidTest/java/com/example/seniorshield/data/StorageTestSupport.kt",
+    "GitBlob": "829f1971000a66d0264c1c55e827c919291e8a6f"
+  },
+  {
+    "Path": "app/src/androidTest/java/com/example/seniorshield/permission/PermissionDeviceSmokeTest.kt",
+    "GitBlob": "c76b8b392a233fe4162f6557f952c6b691737c67"
+  },
+  {
+    "Path": "app/src/androidTest/java/com/example/seniorshield/test/M3TestRunner.kt",
+    "GitBlob": "496062bc7ba9dc0fd8f59f2249401756ea0c63f6"
+  },
+  {
+    "Path": "app/src/main/AndroidManifest.xml",
+    "GitBlob": "350c94e1ae80d6ef4dc8bd613b04c445d0d5c1ab"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/core/designsystem/component/Buttons.kt",
+    "GitBlob": "16e729a5871fb61c7db668f29533270a14a9b97b"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/core/designsystem/component/DpadFocusHelper.kt",
+    "GitBlob": "081331f8bbe29065b0621a17e1689ede1679acf2"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/core/designsystem/component/PermissionStatusItem.kt",
+    "GitBlob": "0f7ae212f205e8f3838e3558972f5a8c6159230a"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/core/designsystem/component/SeniorShieldScaffold.kt",
+    "GitBlob": "f3fa3431b2b95dafb53cd212b23494834fdc319a"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/core/designsystem/component/StatusCard.kt",
+    "GitBlob": "a488b40427e25360635a5bafefe0353ffaf08630"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/core/designsystem/theme/Color.kt",
+    "GitBlob": "09de5dd6fa18827558d1c698a54eb93b7bafdac3"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/core/designsystem/theme/Theme.kt",
+    "GitBlob": "e911c98fb76df42a2ebbcf2924ad2367979f82b3"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/core/designsystem/theme/Type.kt",
+    "GitBlob": "ef16b71788bb15661c2344900f910cfeda724da0"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/core/navigation/NavigationEventBus.kt",
+    "GitBlob": "021494fe2792fb1ae842bc7710e5e76bd1de8d3e"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/core/navigation/SeniorShieldDestination.kt",
+    "GitBlob": "38ca0bdcdae875ab5438d4169e41a76330f7d573"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/core/navigation/SeniorShieldNavGraph.kt",
+    "GitBlob": "b5871788682e34b576a723a61903ab2bf0828e0a"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/core/notification/RiskNotificationManager.kt",
+    "GitBlob": "553ce704c42771237b7288326a9a4475f90dfd12"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/core/overlay/BankingCooldownManager.kt",
+    "GitBlob": "995c43afed603be44cc8bbe12503e53a82820095"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/core/overlay/RiskOverlayManager.kt",
+    "GitBlob": "2e493fb437008cba5e5bbe206fe153eadf8a521d"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/core/util/CallEndHelper.kt",
+    "GitBlob": "447972ca58355f78ea6ce0d25197147f03779087"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/core/util/ContactIntentHelper.kt",
+    "GitBlob": "7f53d5c3d23d80d7b08ea3a444322db0e66e0018"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/di/AppModule.kt",
+    "GitBlob": "79f4bd340ee578d97c5239c9d4ded15464fc0fb2"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/domain/model/PermissionStatus.kt",
+    "GitBlob": "91d78593f63ed5487b01b5bc0b199bbb27d05501"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/domain/model/PolicySummary.kt",
+    "GitBlob": "241bc4b5db6d904d94c96571b70964b22bff05ee"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/guardian/GuardianAddScreen.kt",
+    "GitBlob": "8e7a9bd353e149dd63a5889432c4938850ee8f19"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/guardian/GuardianAddViewModel.kt",
+    "GitBlob": "2563b88e6fdb42efee6507f65356f48dfff98011"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/guardian/GuardianScreen.kt",
+    "GitBlob": "ba2a399fb27ea833e38c0596d15d339d968b66cb"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/guardian/GuardianUiState.kt",
+    "GitBlob": "a503f07dc2e737a7d6f9ee8960b858376972d998"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/guardian/GuardianViewModel.kt",
+    "GitBlob": "dc6dc40f07b581fb6c8e1dc9c40b2cdc2aa05370"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/history/HistoryScreen.kt",
+    "GitBlob": "169e94da3d76c7a9377d147a30d9841b2321c4c1"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/history/HistoryViewModel.kt",
+    "GitBlob": "d3c9ec4a8509332150419ff0105b237839f85755"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/home/HomeScreen.kt",
+    "GitBlob": "9ffb394f69da46e794c25f40dec4137f08c0fa12"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/home/HomeUiState.kt",
+    "GitBlob": "2d6502d726e1b5dc301674278d0c883818814b04"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/home/HomeViewModel.kt",
+    "GitBlob": "d16d69417b8b3f2fb510634805f11130ba101a3f"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/onboarding/OnboardingScreen.kt",
+    "GitBlob": "6a3ef297d0c2d1b3bd5457f834d16b3dcce38b1b"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/onboarding/OnboardingViewModel.kt",
+    "GitBlob": "064789b7e7ca84b3a581c034552753a698cc8502"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/permissions/PermissionsScreen.kt",
+    "GitBlob": "6b5e034966b8e9501a54c7cba2a5d564e99624ee"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/permissions/PermissionsViewModel.kt",
+    "GitBlob": "f1f2804969328518e8f01d59140cbcbe4ae46823"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/policy/PolicyScreen.kt",
+    "GitBlob": "fa34c031037870e58a8a5f99e3048f49915c510b"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/policy/PolicyViewModel.kt",
+    "GitBlob": "657c183118e8735bf887c0e89f5726bfa7cf83a2"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/settings/DebugViewModel.kt",
+    "GitBlob": "f30b2630eb9530bf0e6b90be7f431a91e205c7aa"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/settings/SettingsScreen.kt",
+    "GitBlob": "f7f4cce3a78fec20dadddffbbacf3c44fd1802b1"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/simulation/FraudScenario.kt",
+    "GitBlob": "ed526e1a42db93550033f09ad7818d3e5cf018d5"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/simulation/SimulationScreen.kt",
+    "GitBlob": "298caf15bc26c7b4c477291151bb9141b90315b0"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/simulation/SimulationViewModel.kt",
+    "GitBlob": "4ba549e0b7a8c35cfc63a04c370b93329020c5ca"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/splash/SplashScreen.kt",
+    "GitBlob": "2e5b559e449ec0d6ccc6eb541d232490e90839a3"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/splash/SplashUiState.kt",
+    "GitBlob": "df7b34289141fd4f00a90e7dc03554711170fa73"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/splash/SplashViewModel.kt",
+    "GitBlob": "095bf4a1d0c4f97861e5559f3fc58bb9fbaef8f7"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/warning/WarningScreen.kt",
+    "GitBlob": "477914c57596edb0862b7e9c8f2e73067f7499e2"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/warning/WarningUiState.kt",
+    "GitBlob": "2ffec47f981371da9b80131d69a13d429d37ce67"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/feature/warning/WarningViewModel.kt",
+    "GitBlob": "a32907e18c0c35bcec97a15334dcb1bd50777636"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/MainActivity.kt",
+    "GitBlob": "3f542f76454f6bd86eae4e9b73412b81d51d058c"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/appinstall/AppInstallRiskMonitor.kt",
+    "GitBlob": "6ff7ed7a2d74d7b5a9d0384d76999c6681fc8421"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/appinstall/RealAppInstallRiskMonitor.kt",
+    "GitBlob": "7a4e4ab81e2f308ce88336eff92281b7bfe0aa11"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/appusage/AppUsageRiskMonitor.kt",
+    "GitBlob": "aa4e2723128b93d597df6707cda8290411732f6d"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/appusage/RealAppUsageRiskMonitor.kt",
+    "GitBlob": "7f00a2ca61145726f43dd7e6a108d859bcf53786"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/call/BankArsRegistry.kt",
+    "GitBlob": "24dbe5d527bcfe085c87a23ee3efba255641d725"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/call/CallerContactChecker.kt",
+    "GitBlob": "c46a30e317d51181997e524bc5885c08e19dde22"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/call/CallRiskMonitor.kt",
+    "GitBlob": "b1648a58f310985e652de0e8880813e462fed524"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/call/CallSignalMapper.kt",
+    "GitBlob": "949b35c2fca2c2f95d6142e4711e0efd026a57f7"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/call/OutgoingCallReceiver.kt",
+    "GitBlob": "4761c01fb9a229912c7d74fbc056537e9da851b2"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/call/RealCallRiskMonitor.kt",
+    "GitBlob": "8e02dd9f46e4ad7f4a6bee79cb0148025ece580c"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/deviceenv/DeviceEnvironmentRiskMonitor.kt",
+    "GitBlob": "b072b83f9746c4a3a77da24388c05d0c04186ac6"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/deviceenv/RealDeviceEnvironmentRiskMonitor.kt",
+    "GitBlob": "212499ef0c73f4aa836c3278114a92521338ce25"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/di/MonitoringModule.kt",
+    "GitBlob": "85577e647c9d6fddf90407e36185981ecdcbf093"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/evaluator/RiskEvaluator.kt",
+    "GitBlob": "2b8045b343dfd0dd33bf87646beab956ea31825b"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/evaluator/RiskEvaluatorImpl.kt",
+    "GitBlob": "2d19d520a3b09ed5452fef3b686784e6a02f2863"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/event/RiskEventFactory.kt",
+    "GitBlob": "f039869b910403a5e2a404cbb9fa232322c5745c"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/model/CallContext.kt",
+    "GitBlob": "a61f81dff6f252277d29705c32740922dcc8365b"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/model/CallMonitorState.kt",
+    "GitBlob": "f33063adf51fdece0d656e5402951d55db1e2e17"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/model/CallState.kt",
+    "GitBlob": "1f3cf6456440ed4aeb57fc0639b0cec4219f54a6"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/model/Produced.kt",
+    "GitBlob": "9b09762f2bd6b6984d497f7170664a581a39de5d"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/orchestrator/AlertStateResolver.kt",
+    "GitBlob": "4d1c23b5d9b3662dd1da4c3b26924330efdf89cd"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/orchestrator/DefaultRiskDetectionCoordinator.kt",
+    "GitBlob": "efb9fbd2b668eff194e413fbc5db12cdd1152630"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/orchestrator/RiskDetectionCoordinator.kt",
+    "GitBlob": "3c4a75eaaba57e800f04819b9fe0d1aefe0a190a"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/orchestrator/S2RecRefireDebounce.kt",
+    "GitBlob": "4f5c58bbecd736054defe5b4f2c9e4d4e33be016"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/registry/RemoteControlAppRegistry.kt",
+    "GitBlob": "c0b1721a386a25e174dbb25988d660f795d16d58"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/service/MonitoringForegroundService.kt",
+    "GitBlob": "5016ba3d81f9481d932d4a2f5c839b3440e59e46"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/session/ResetEpochProvider.kt",
+    "GitBlob": "b823d65d6293f6425ac45cdb50bf415a93c81b6e"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/session/RiskSession.kt",
+    "GitBlob": "38772120c540f6439bf3c8df8138f8d56e9ccd93"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/monitoring/session/RiskSessionTracker.kt",
+    "GitBlob": "e422c1e3fc7f3a4fd972393afc333a265f5d9546"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/SeniorShieldApp.kt",
+    "GitBlob": "1ff0812c348310732810abdcb2ad22b7e98021c5"
+  },
+  {
+    "Path": "app/src/main/res/drawable/ic_launcher_background.xml",
+    "GitBlob": "574d197288b07e5ec091923233aa25e5d87c3ff7"
+  },
+  {
+    "Path": "app/src/main/res/drawable/ic_launcher_foreground.xml",
+    "GitBlob": "1c2113434acdcb100e81e5795f85fc4ad7ac3946"
+  },
+  {
+    "Path": "app/src/main/res/mipmap-anydpi/ic_launcher_round.xml",
+    "GitBlob": "6f3b755bf50c6b03d8714a9c6184705e6a08389f"
+  },
+  {
+    "Path": "app/src/main/res/mipmap-anydpi/ic_launcher.xml",
+    "GitBlob": "6f3b755bf50c6b03d8714a9c6184705e6a08389f"
+  },
+  {
+    "Path": "app/src/main/res/mipmap-hdpi/ic_launcher_round.webp",
+    "GitBlob": "b2dfe3d1ba5cf3ee31b3ecc1ced89044a1f3b7a9"
+  },
+  {
+    "Path": "app/src/main/res/mipmap-hdpi/ic_launcher.webp",
+    "GitBlob": "c209e78ecd372343283f4157dcfd918ec5165bb3"
+  },
+  {
+    "Path": "app/src/main/res/mipmap-mdpi/ic_launcher_round.webp",
+    "GitBlob": "62b611da081676d42f6c3f78a2c91e7bcedddedb"
+  },
+  {
+    "Path": "app/src/main/res/mipmap-mdpi/ic_launcher.webp",
+    "GitBlob": "4f0f1d64e58ba64d180ce43ee13bf9a17835fbca"
+  },
+  {
+    "Path": "app/src/main/res/mipmap-xhdpi/ic_launcher_round.webp",
+    "GitBlob": "1b9a6956b3acdc11f40ce2bb3f6efbd845cc243f"
+  },
+  {
+    "Path": "app/src/main/res/mipmap-xhdpi/ic_launcher.webp",
+    "GitBlob": "948a3070fe34c611c42c0d3ad3013a0dce358be0"
+  },
+  {
+    "Path": "app/src/main/res/mipmap-xxhdpi/ic_launcher_round.webp",
+    "GitBlob": "9287f5083623b375139afb391af71cc533a7dd37"
+  },
+  {
+    "Path": "app/src/main/res/mipmap-xxhdpi/ic_launcher.webp",
+    "GitBlob": "28d4b77f9f036a47549d47db79c16788749dca10"
+  },
+  {
+    "Path": "app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.webp",
+    "GitBlob": "9126ae37cbc3587421d6889eadd1d91fbf1994d4"
+  },
+  {
+    "Path": "app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp",
+    "GitBlob": "aa7d6427e6fa1074b79ccd52ef67ac15c5637e85"
+  },
+  {
+    "Path": "app/src/main/res/values/colors.xml",
+    "GitBlob": "f8c6127d327620c93d2b2d00342a68e97b98a48d"
+  },
+  {
+    "Path": "app/src/main/res/values/strings.xml",
+    "GitBlob": "7e241666a9af73643a1f56ed75af06c78d1635dc"
+  },
+  {
+    "Path": "app/src/main/res/values/themes.xml",
+    "GitBlob": "c6087eaeb8ecf21316d3c8426278835624e1e6cd"
+  },
+  {
+    "Path": "app/src/main/res/xml/backup_rules.xml",
+    "GitBlob": "4df925582478cf0d469c4cff9a4bb50859f3230a"
+  },
+  {
+    "Path": "app/src/main/res/xml/data_extraction_rules.xml",
+    "GitBlob": "9ee9997b0b4726e57c27b2f7b21462b604ff8a88"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/core/notification/RiskNotificationPermissionSafetyTest.kt",
+    "GitBlob": "39fa4429803ddd8178cbe1632551760fb2d1eeb3"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/core/overlay/OverlayPermissionSafetyTest.kt",
+    "GitBlob": "cb5aab9be08ba7c32db487c3c8890f2010a85295"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/core/overlay/PresentationGenerationGateTest.kt",
+    "GitBlob": "c72354077f3d97142711941fd31dcdedd79ed30c"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/core/overlay/RiskOverlayManagerBindingContractTest.kt",
+    "GitBlob": "cf24bfc8f64f1c938844e5ef09fc52bc6acd839b"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/core/overlay/RiskOverlayManagerSafeEffectsTest.kt",
+    "GitBlob": "38aa7724df30687dedaa1b4d2bad9d4c551cb4b4"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/core/util/CallEndHelperPermissionSafetyTest.kt",
+    "GitBlob": "f2d5a125373d5dee1aa8c12920726a8c32824764"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/domain/repository/RiskEventSinkClearTest.kt",
+    "GitBlob": "cf52d2d68cf778e3b916218fb1a63fdd87a2a6af"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/feature/home/HomePresentationTest.kt",
+    "GitBlob": "48a6870e9097e4122baf5c014524e0b8291e77ba"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/feature/home/HomeScreenWarningNavigationContractTest.kt",
+    "GitBlob": "0f86798eefd5d9d3d96f6d07e0a7b1e88d7012ce"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/feature/home/HomeViewModelSafeConfirmationTest.kt",
+    "GitBlob": "053ea50ee997bfcaa0d6d5339110630d7e730f49"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/feature/settings/DebugViewModelSafeConfirmationTest.kt",
+    "GitBlob": "74b8c6d157b0d48478fc4ed37533c266fd85dd1d"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/feature/simulation/SimulationViewModelTest.kt",
+    "GitBlob": "3b2e99555dcd1f5ba4c4a32ab27080fc05083457"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/feature/warning/WarningScreenSafeConfirmationTest.kt",
+    "GitBlob": "b429376ff0b61628ec984e9b01fc873695053616"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/feature/warning/WarningViewModelTest.kt",
+    "GitBlob": "3e31ccfcebb126ad86e5848165889c7be1a4ab3e"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/monitoring/appinstall/AppInstallSignalResetTest.kt",
+    "GitBlob": "989a2ec34cbcbe3414f6100514394b04cdf4041f"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/monitoring/appinstall/RealAppInstallRiskMonitorProvenanceTest.kt",
+    "GitBlob": "620f3937f2ea4143dabb39319b5180f142f60725"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/monitoring/appusage/RealAppUsageRiskMonitorProvenanceTest.kt",
+    "GitBlob": "d373f09984830f2f15dbcda3c898c9ded0bf1e27"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/monitoring/call/BankArsRegistryTest.kt",
+    "GitBlob": "d5f8afac819bb8a6d85b052b520e28e89c0ec945"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/monitoring/call/CallMonitorStateFlowTest.kt",
+    "GitBlob": "f8c221f1032f0b6aaca52d48e09d6ac2394bccb8"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/monitoring/call/CallSignalMapperTest.kt",
+    "GitBlob": "8e22becb64edc3b317801119eef4d9de4ff01f2e"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/monitoring/call/RealCallRiskMonitorAnchorTest.kt",
+    "GitBlob": "9cfc8ea2984f4b3dc0be4d17b8d5f2dafe52dbe4"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/monitoring/call/RealCallRiskMonitorProvenanceTest.kt",
+    "GitBlob": "362f5243b760987ef14f74d0be880cc71facb310"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/monitoring/call/RealCallRiskMonitorTest.kt",
+    "GitBlob": "bf50b3db1d1861e445b287b3ce96d0efe92b6e3a"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/monitoring/deviceenv/RealDeviceEnvironmentRiskMonitorProvenanceTest.kt",
+    "GitBlob": "26c84cf666d0bdbd23b38978f2a3c248d0ffcf75"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/monitoring/evaluator/RiskEvaluatorImplTest.kt",
+    "GitBlob": "a11b6e56a209ea495580e2d51911722112036c7f"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/monitoring/event/RiskEventFactoryTest.kt",
+    "GitBlob": "a6077edaa921a7e25b18eae308393fcc72467ee9"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/monitoring/orchestrator/AlertStateResolverTest.kt",
+    "GitBlob": "56aab26ea92e5bfb64acfb98e5c5a0c3e4e7fc5b"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/monitoring/orchestrator/DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest.kt",
+    "GitBlob": "d864c0c0299468d5ee8af0394e751976fd516bcf"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/monitoring/orchestrator/DefaultRiskDetectionCoordinatorTest.kt",
+    "GitBlob": "158783868d58af658270c7a57fb47ba14ad63374"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/monitoring/orchestrator/S2InvariantGuardrailTest.kt",
+    "GitBlob": "ac9fd97e884904c4ee43afeba949791ec03ed569"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/monitoring/orchestrator/S2RecRefireDebounceTest.kt",
+    "GitBlob": "68fd0b97f49486acd78a319b18a3fc2b4cad20f7"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/monitoring/orchestrator/SafeConfirmationCommandTest.kt",
+    "GitBlob": "a2b69f25e7c2610cbec3d2ef3a54027c77276832"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/monitoring/orchestrator/SafeConfirmationOverlayCommandTest.kt",
+    "GitBlob": "b2a7bcc112d42ee7c8e18a86b56bc1cb6fff26ae"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/monitoring/orchestrator/WarningNavigationPublicationTest.kt",
+    "GitBlob": "112f33cd293b15f8a357162e10dad8e40599341d"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/monitoring/registry/RemoteControlAppRegistryTest.kt",
+    "GitBlob": "f0c07f830489cf5c47779fdc5a9322eb5e438b71"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/monitoring/session/RiskSessionTrackerAlphaTest.kt",
+    "GitBlob": "2bd2fdc9ce6ca5d761352610b692d2bc38bdaa66"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/monitoring/session/RiskSessionTrackerIdleExpiryTest.kt",
+    "GitBlob": "87cb04a0545d3b024799838f9dffe6a06d14887b"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/monitoring/session/RiskSessionTrackerTest.kt",
+    "GitBlob": "03bbe3cd61f18f26659481461f903d7b111aa2cc"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/testutil/CoordinatorTestHarness.kt",
+    "GitBlob": "c56c804596269f839f1e4ca9a10ec40581763c65"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/testutil/FakeClock.kt",
+    "GitBlob": "a9821bf02321018b5a8d0101a2ea2496e77f08a2"
+  },
+  {
+    "Path": "build.gradle.kts",
+    "GitBlob": "d09ab0422f3de22c43b7b7fc35e7bdd93a645d3d"
+  },
+  {
+    "Path": "CLAUDE.md",
+    "GitBlob": "59aaad4eb6c1b8c6a4141cd230a43c7b3d850ff8"
+  },
+  {
+    "Path": "compose-stability.conf",
+    "GitBlob": "ca6941bcadec7f2127ff7c5868868953b509a879"
+  },
+  {
+    "Path": "data/build.gradle.kts",
+    "GitBlob": "ce6080002b28584281ef7a48618fee8575062c08"
+  },
+  {
+    "Path": "data/schemas/com.example.seniorshield.data.local.db.SeniorShieldDatabase/1.json",
+    "GitBlob": "c5629b6670b8ce1fd56643b521ac4545bec27bf1"
+  },
+  {
+    "Path": "data/src/main/java/com/example/seniorshield/data/di/DatabaseModule.kt",
+    "GitBlob": "30bd87c73096ebfda888c247f1a98db95c9c62db"
+  },
+  {
+    "Path": "data/src/main/java/com/example/seniorshield/data/di/DataModule.kt",
+    "GitBlob": "ca05b4a0ba7ddf03bcdd6365b2fe2a6ea1f34cd8"
+  },
+  {
+    "Path": "data/src/main/java/com/example/seniorshield/data/local/db/RiskEventDao.kt",
+    "GitBlob": "10731791b636fa86af387e716233ea99562f1254"
+  },
+  {
+    "Path": "data/src/main/java/com/example/seniorshield/data/local/db/RiskEventEntity.kt",
+    "GitBlob": "c2578fe05182df5c76a0e7d78ef9d950a84b1f39"
+  },
+  {
+    "Path": "data/src/main/java/com/example/seniorshield/data/local/db/SeniorShieldDatabase.kt",
+    "GitBlob": "30b4972b8a8f8665dc10b2f7536a07a2d930aaf4"
+  },
+  {
+    "Path": "data/src/main/java/com/example/seniorshield/data/local/GuardianDataStore.kt",
+    "GitBlob": "b967579e2a464c72dff8e19fdfaecadf7df77a4b"
+  },
+  {
+    "Path": "data/src/main/java/com/example/seniorshield/data/local/LiveRiskEventStore.kt",
+    "GitBlob": "2474a978e668c718784dd5fba2df87951a04165f"
+  },
+  {
+    "Path": "data/src/main/java/com/example/seniorshield/data/local/RoomRiskEventStore.kt",
+    "GitBlob": "5ff7f97eb875ef17aa328f51c277a24f87b9374f"
+  },
+  {
+    "Path": "data/src/main/java/com/example/seniorshield/data/local/SettingsDataStore.kt",
+    "GitBlob": "2a738eadc9d0c3baab2e5fb1cac6473c5a338dac"
+  },
+  {
+    "Path": "data/src/main/java/com/example/seniorshield/data/repository/GuardianRepositoryImpl.kt",
+    "GitBlob": "e5ed80698cabc09963d659b107c9dcab62208c25"
+  },
+  {
+    "Path": "data/src/main/java/com/example/seniorshield/data/repository/RiskRepositoryImpl.kt",
+    "GitBlob": "a06bd351d4f82cc206f0f54c4fafe1341535057c"
+  },
+  {
+    "Path": "data/src/main/java/com/example/seniorshield/data/repository/SettingsRepositoryImpl.kt",
+    "GitBlob": "11c401ea9d9eb91b42574bfb1ac17f1d386df955"
+  },
+  {
+    "Path": "docs/fraud_killchain_coverage_v1.md",
+    "GitBlob": "1bcae9fe31a234ec77c1fb3db88092171b335646"
+  },
+  {
+    "Path": "docs/project_status_2026-03-31.md",
+    "GitBlob": "5371629a4a063790c250db740b98a41c37109699"
+  },
+  {
+    "Path": "docs/project_status_2026-06-22.md",
+    "GitBlob": "80561b4183f87a0340002d7c822d2a14f5af2d13"
+  },
+  {
+    "Path": "domain/contracts/build.gradle.kts",
+    "GitBlob": "df2a34f1b50304f6682f7189fc324b5c29968f54"
+  },
+  {
+    "Path": "domain/contracts/src/main/kotlin/com/example/seniorshield/domain/model/Guardian.kt",
+    "GitBlob": "2fa86a66df042955bf6e170c0094c57b89c13a2c"
+  },
+  {
+    "Path": "domain/contracts/src/main/kotlin/com/example/seniorshield/domain/repository/GuardianRepository.kt",
+    "GitBlob": "6049ccd235dbee0c24384902e169645052f422a6"
+  },
+  {
+    "Path": "domain/contracts/src/main/kotlin/com/example/seniorshield/domain/repository/RiskEventSink.kt",
+    "GitBlob": "090778e0b7ea8666d1a8d03c6c5d03a0f9c26992"
+  },
+  {
+    "Path": "domain/contracts/src/main/kotlin/com/example/seniorshield/domain/repository/RiskRepository.kt",
+    "GitBlob": "7d76a5a47c179c159c629753bb99e5f91f5fc45b"
+  },
+  {
+    "Path": "domain/contracts/src/main/kotlin/com/example/seniorshield/domain/repository/SettingsRepository.kt",
+    "GitBlob": "aaff3caa61cbddef99ccbb0f7ba279d1021b0d3e"
+  },
+  {
+    "Path": "domain/contracts/src/test/kotlin/com/example/seniorshield/domain/ContractCompatibilityTest.kt",
+    "GitBlob": "200d85f4c42199bf5828c9d47566d99028fa882c"
+  },
+  {
+    "Path": "domain/risk/build.gradle.kts",
+    "GitBlob": "8f2132bd090de2d74d2557ab96fce45cc5d72020"
+  },
+  {
+    "Path": "domain/risk/src/main/kotlin/com/example/seniorshield/domain/model/AlertState.kt",
+    "GitBlob": "566632098aa562de5c0fad6a61a99377f6292401"
+  },
+  {
+    "Path": "domain/risk/src/main/kotlin/com/example/seniorshield/domain/model/RiskEvent.kt",
+    "GitBlob": "0526f8bc32688ef866d41dd6305832c8f561aac6"
+  },
+  {
+    "Path": "domain/risk/src/main/kotlin/com/example/seniorshield/domain/model/RiskLevel.kt",
+    "GitBlob": "970de13105f13b353404bc624ac869cbbb6322c1"
+  },
+  {
+    "Path": "domain/risk/src/main/kotlin/com/example/seniorshield/domain/model/RiskScore.kt",
+    "GitBlob": "9546871abfe87731b3657e3686482301f7644d5b"
+  },
+  {
+    "Path": "domain/risk/src/main/kotlin/com/example/seniorshield/domain/model/RiskSignal.kt",
+    "GitBlob": "79daeb43d9ff28f5e89172bb8d461fd8fca6f1f0"
+  },
+  {
+    "Path": "domain/risk/src/main/kotlin/com/example/seniorshield/domain/model/SignalCategory.kt",
+    "GitBlob": "327ea681b1164c7ab37a211a968847dce044fd35"
+  },
+  {
+    "Path": "domain/risk/src/test/kotlin/com/example/seniorshield/domain/model/RiskModelCompatibilityTest.kt",
+    "GitBlob": "12cc96db61a5a73cb4c0b634abe09f45f0d83a73"
+  },
+  {
+    "Path": "gradle.properties",
+    "GitBlob": "20e2a01520742aff4ec9ce578ed4fe5f3a76fe77"
+  },
+  {
+    "Path": "gradle/gradle-daemon-jvm.properties",
+    "GitBlob": "6c1139ec06ae4e5307f6f0ea75ff8338aa2d4b72"
+  },
+  {
+    "Path": "gradle/libs.versions.toml",
+    "GitBlob": "fd503dfa354f5f49da76315fcc6101199ad808b2"
+  },
+  {
+    "Path": "gradle/wrapper/gradle-wrapper.jar",
+    "GitBlob": "8bdaf60c75ab801e22807dde59e12a8735a34077"
+  },
+  {
+    "Path": "gradle/wrapper/gradle-wrapper.properties",
+    "GitBlob": "3bacd7fcec78e3cb960ae6df184c7e48f6b84826"
+  },
+  {
+    "Path": "gradlew",
+    "GitBlob": "ef07e0162b183eb9d19a2c9ba7035c283af9f8dd"
+  },
+  {
+    "Path": "gradlew.bat",
+    "GitBlob": "db3a6ac207e507b0bc1635a9f2c18d3b174e682e"
+  },
+  {
+    "Path": "settings.gradle.kts",
+    "GitBlob": "847a0e6276eb6d989ed256dbb338cfe4ca3b269c"
+  }
+]

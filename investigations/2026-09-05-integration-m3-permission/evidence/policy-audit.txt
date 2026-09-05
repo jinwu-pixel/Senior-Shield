@@ -1,0 +1,8 @@
+Integration policy audit
+Production = exact approved M3 + permission union; source/config/test provenance196 verified.
+New production behavior=0; added test file only.
+Forbidden GuardianSmsManager/SEND_SMS/READ_SMS/ACTION_CALL/endCall matches=0.
+M3 monitoring/app DI/Application/navigation/data/domain paths unchanged.
+Merged Manifest exact approved telephony-required permission PR.
+Physical script uses test Application; outbound call/message/production launch commands absent.
+Main merge not authorized and not performed.

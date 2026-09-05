@@ -1,0 +1,12 @@
+[
+  {
+    "Module": "risk",
+    "Issues": 0,
+    "Ids": ""
+  },
+  {
+    "Module": "contracts",
+    "Issues": 1,
+    "Ids": "GradleDependency"
+  }
+]

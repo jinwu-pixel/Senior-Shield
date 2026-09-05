@@ -1,0 +1,16 @@
+[
+  {
+    "Module": "domain/risk",
+    "Errors": 0,
+    "Warnings": 0,
+    "Ids": []
+  },
+  {
+    "Module": "domain/contracts",
+    "Errors": 0,
+    "Warnings": 1,
+    "Ids": [
+      "GradleDependency"
+    ]
+  }
+]

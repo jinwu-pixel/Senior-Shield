@@ -1,0 +1,7 @@
+Command: clean :domain:risk:check :domain:contracts:check :app:testDebugUnitTest :app:kaptDebugKotlin :app:assembleDebug :app:checkDebugDuplicateClasses
+JDK21; --offline --no-daemon --no-parallel --max-workers=1 --console=plain
+BUILD SUCCESSFUL in 7m 36s
+82 actionable tasks: 82 executed
+555 tests; failures/errors/skipped 0
+Existing main deprecated API warnings retained; new tests inspect deprecated notification priority fields intentionally.
+Contracts lint: one existing GradleDependency warning for coroutines-core1.8.1; no source issue.

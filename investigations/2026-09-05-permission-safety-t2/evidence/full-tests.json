@@ -1,0 +1,26 @@
+[
+  {
+    "Module": "app",
+    "Suites": 39,
+    "Tests": 544.0,
+    "Failures": 0.0,
+    "Errors": 0.0,
+    "Skipped": 0.0
+  },
+  {
+    "Module": "domain/risk",
+    "Suites": 1,
+    "Tests": 7.0,
+    "Failures": 0.0,
+    "Errors": 0.0,
+    "Skipped": 0.0
+  },
+  {
+    "Module": "domain/contracts",
+    "Suites": 1,
+    "Tests": 4.0,
+    "Failures": 0.0,
+    "Errors": 0.0,
+    "Skipped": 0.0
+  }
+]

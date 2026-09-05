@@ -1,0 +1,30 @@
+[
+  {
+    "suite": "com.example.seniorshield.core.notification.RiskNotificationPermissionSafetyTest",
+    "tests": 12,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  {
+    "suite": "com.example.seniorshield.core.overlay.BankingCooldownPermissionSafetyTest",
+    "tests": 28,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  {
+    "suite": "com.example.seniorshield.core.overlay.RiskOverlayPermissionSafetyTest",
+    "tests": 28,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  {
+    "suite": "com.example.seniorshield.core.util.CallEndHelperPermissionSafetyTest",
+    "tests": 22,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  }
+]

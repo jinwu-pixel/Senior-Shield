@@ -1,0 +1,7 @@
+Fresh clean integration gate, JBR21, serial Gradle
+BUILD SUCCESSFUL in 8m 7s
+179 actionable tasks:175 executed,4 up-to-date
+Actual XML:555 tests,41 suites,failure/error/skipped0
+Tasks: clean domain:risk/contracts:check data/app kapt app unit/build/duplicate/AndroidTestAPK data/app lint
+Data unit task NO-SOURCE; no invented data unit tests
+Raw log: .superpowers/integration/full-gate.log
