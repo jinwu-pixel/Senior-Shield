@@ -1,0 +1,5 @@
+
+BaselineCount : 72
+CurrentCount  : 72
+Differences   : 0
+Fingerprint   : 8F301A319E9158B66072DAD70DEB4E72BDB3D08F2C9076B4E5ADAC636F3ACFCD

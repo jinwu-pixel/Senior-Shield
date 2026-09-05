@@ -452,3 +452,34 @@ mergedAt=null, and no reported CI checks. Remote main remained
 7754ebf5bd457e7fabeb6e9357d178df95fd01e9. This final publication-record update
 changes only the plan/log; no source, build configuration, or tests changed
 after the verified implementation. The worktree is retained for PR feedback.
+
+### PR #10 follow-up — lint verifier and next-track investigation
+
+The user authorized continuing the remaining recommended work after publication.
+PR review comments 3938929748 and 3938929751 were reproduced: absent Current
+returned success by comparing the baseline with itself; separator/checkout changes
+produced false mismatches. A fail-closed Current check and repository-root-based
+normalization now preserve the original M1 fingerprint without assuming a clone name.
+The frozen evidence is unchanged. The committed regression probe exercises the
+real verifier, not its source text: RED before the fix, 11/11 expected verdicts after.
+The actual Task 5 report was reread at 72/72, delta 0, original SHA.
+
+Independent senior-shield code review returned PASS with no required/recommended
+finding. It separately ran the 11 probes, 13 adversarial inputs (including changed
+diagnostics, traversal, case sensitivity, Windows/UNC paths and order changes), and
+the actual report comparison. No Linux-host or new Gradle execution is claimed.
+Production, build configuration, frozen baseline and existing test sources remain
+unchanged after Task 5; the focused follow-up validation targets the verifier defect.
+
+Read-only Senior Shield investigation of the remaining five lint errors and the
+12-file data boundary is captured in FOLLOW_UP_PLAN.md. It distinguishes the
+existing notification helper guard from the three unguarded telecom call sites,
+and treats telephony feature support as a product decision. M3 proposes an Android
+library, five bindings/two providers, schema/Flow/identity preservation, and actual
+storage tests before relocation. The investigation does not authorize or implement
+M3, Manifest changes, permissions, device operations, or main merge.
+
+Independent follow-up plan review returned PASS after two recommendations were
+fixed: explicit before/after Compose report generation and app ownership/execution
+of instrumentation tests. Dedicated emulator isolation also accounts for the real
+Hilt ApplicationContext database provider. Open required/recommended findings: 0.

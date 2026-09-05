@@ -1,14 +1,38 @@
+[CmdletBinding()]
 param(
     [string]$Baseline = "$PSScriptRoot/evidence/lint/baseline-lint.sanitized.xml",
-    [string]$Current = "$PSScriptRoot/evidence/lint/baseline-lint.sanitized.xml"
+    [string]$Current,
+    [string]$RepositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 )
 $ErrorActionPreference = 'Stop'
+if ([string]::IsNullOrWhiteSpace($Current)) {
+    throw 'Current is required: pass -Current app/build/reports/lint-results-debug.xml after running lint.'
+}
+if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) { throw 'RepositoryRoot must not be empty.' }
+$rootPrefix = $RepositoryRoot.Replace('\', '/').TrimEnd('/') + '/'
+if ($rootPrefix -notmatch '^(?:[A-Za-z]:/|/)') { throw 'RepositoryRoot must be absolute.' }
+
+function Get-RepositoryPath([string]$Path) {
+    $normalized = $Path.Replace('\', '/')
+    if ($normalized -match '^(?:[A-Za-z]:/|/)') {
+        $comparison = if ($rootPrefix -match '^[A-Za-z]:/' -or $rootPrefix.StartsWith('//')) {
+            [StringComparison]::OrdinalIgnoreCase
+        } else { [StringComparison]::Ordinal }
+        if (-not $normalized.StartsWith($rootPrefix, $comparison)) {
+            throw "Lint location is outside RepositoryRoot: $Path"
+        }
+        $normalized = $normalized.Substring($rootPrefix.Length)
+    }
+    if ($normalized -match '(^|/)\.\.(/|$)|:') { throw "Unsupported lint location: $Path" }
+    # Keep the frozen M1 representation; separator normalization must not rebaseline diagnostics.
+    return ($normalized -replace '^(\./)+', '').Replace('/', '\')
+}
 function Get-NormalizedLint([string]$Path) {
     [xml]$doc = Get-Content -LiteralPath $Path -Raw
     foreach ($issue in $doc.issues.issue) {
         $loc = @($issue.location)[0]
         $file = if ($loc.file) {
-            ([string]$loc.file) -replace '^.*?Senior_Shield(?:\\.worktrees\\[^\\]+)?\\', ''
+            Get-RepositoryPath ([string]$loc.file)
         } else { '' }
         $message = ([string]$issue.message) -replace '(?<=available: )[^\s]+', '<LATEST>'
         (([string]$issue.id) + '|' + ([string]$issue.severity) + '|' + $message + '|' + $file + '|' + ([string]$issue.errorLine1)).Trim()

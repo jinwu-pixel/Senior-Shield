@@ -46,4 +46,18 @@ Production search finds exactly two legacy SMS interface declarations and two im
 
 The baseline-to-verification-source diff contains 34 files, all inside the DIRECTIVE allowlist; adding this report, portable verifier, and compact Task 5 evidence brings the review diff to 37 allowlisted files. It contains no Manifest, data, monitoring, core, DI, navigation, service, or other sensitive app source change. Both the committed diff and working-tree `git diff --check` passed. The controller independently inspected the unchanged policy-sensitive paths and confirmed the existing `MonitoringForegroundService` and `SeniorShieldApp` initialization remain only the AGENTS-approved exceptions.
 
-This evidence supports no detected API, module-boundary, lint-fingerprint, or Compose compiler-report contract regression. Runtime recomposition was not measured, and the metadata/ABI checks do not claim generated-bytecode identity. Whole-branch independent final review and Ready PR publication remain controller-owned pending steps; merge is outside the authorized scope.
+This evidence supports no detected API, module-boundary, lint-fingerprint, or Compose compiler-report contract regression. Runtime recomposition was not measured, and the metadata/ABI checks do not claim generated-bytecode identity. Whole-branch independent final review and Ready PR publication are recorded as complete in `IMPL_LOG.md`; merge is outside the authorized scope.
+
+## PR #10 follow-up: lint verifier reproduction
+
+The post-publication review found two verifier defects: omitting `-Current` compared the baseline against itself, and absolute-path normalization assumed one Windows checkout name. The follow-up fixes only investigation tooling and documents; production source, Gradle configuration, and frozen evidence remain unchanged.
+
+`-Current` is now required by an explicit fail-closed check (also safe under noninteractive PowerShell). `-RepositoryRoot` defaults to this checkout's root, independent of working directory. When comparing a report generated in another checkout, supply that report's absolute repository root. Windows and POSIX separators are normalized to the original M1 backslash-relative representation, preserving the frozen fingerprint; paths outside the supplied repository are rejected.
+
+```powershell
+./investigations/2026-09-05-domain-contracts-m2-t2/verify-lint-fingerprint.ps1 -Current app/build/reports/lint-results-debug.xml
+./investigations/2026-09-05-domain-contracts-m2-t2/verify-lint-fingerprint.ps1 -Current /path/to/copied-report.xml -RepositoryRoot /workspace/Senior-Shield
+./investigations/2026-09-05-domain-contracts-m2-t2/probe-lint-fingerprint.ps1
+```
+
+Before the fix, probes reproduced baseline self-comparison PASS and false failures for POSIX separators and arbitrary Windows/POSIX roots. After the fix, all 11 probes returned their expected verdicts: four equivalent-path cases accepted; omitted/nonexistent input, outside-root location, changed anchor, added/removed diagnostic, and changed source path rejected. The actual Task 5 report was reread and compared at 72/72 diagnostics, difference 0, with the unchanged frozen SHA above. Path portability is exercised with synthetic Windows/POSIX reports using PowerShell on Windows; no Linux-host execution or new Gradle run is claimed. An explicit report path does not prove report freshness: run lint before using this verifier as a completion gate.

@@ -1,0 +1,16 @@
+
+Probe                                              Expected Actual
+-----                                              -------- ------
+Missing current report fails closed                   False  False
+Nonexistent current report fails closed               False  False
+Relative Windows paths preserve frozen fingerprint     True   True
+Relative Unix separators preserve fingerprint          True   True
+Arbitrary Windows checkout including spaces            True   True
+Unix checkout independent of Windows host              True   True
+Sibling directory is not the repository               False  False
+Changed source anchor rejects                         False  False
+Additional diagnostic rejects                         False  False
+Missing diagnostic rejects                            False  False
+Different repository file rejects                     False  False
+
+PASS: 11 lint fingerprint probes
