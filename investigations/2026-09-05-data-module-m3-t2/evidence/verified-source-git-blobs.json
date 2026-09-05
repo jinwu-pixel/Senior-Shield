@@ -1,0 +1,110 @@
+[
+  {
+    "Path": ".gitignore",
+    "GitBlob": "bd247aa8dfc462493e9056dae17d4a833528ccc5"
+  },
+  {
+    "Path": "AGENTS.md",
+    "GitBlob": "2a861e8eecf93ce95a5b417d9eff474fe724a052"
+  },
+  {
+    "Path": "app/build.gradle.kts",
+    "GitBlob": "4daec24b59f9a0a58e8e57188797f4727e515704"
+  },
+  {
+    "Path": "app/src/androidTest/java/com/example/seniorshield/data/GuardianStorageTest.kt",
+    "GitBlob": "5d991a0ed33ca6a836bbb92e17500dda3da90c7c"
+  },
+  {
+    "Path": "app/src/androidTest/java/com/example/seniorshield/data/HiltRiskStorageTest.kt",
+    "GitBlob": "ffc189f8a7b2b91d44eefbb43d5ea999a1855dbd"
+  },
+  {
+    "Path": "app/src/androidTest/java/com/example/seniorshield/data/M3DatabaseModule.kt",
+    "GitBlob": "9d649caf6e54731a5a24a8cc812a4c3a03766909"
+  },
+  {
+    "Path": "app/src/androidTest/java/com/example/seniorshield/data/RoomDaoStorageTest.kt",
+    "GitBlob": "0ff19c6a9ee3111bdb5b0f7ea7f8be18335f48c4"
+  },
+  {
+    "Path": "app/src/androidTest/java/com/example/seniorshield/data/RoomRiskEventStoreStorageTest.kt",
+    "GitBlob": "d9840ae742836adb394259ebac61e97de5eb3d99"
+  },
+  {
+    "Path": "app/src/androidTest/java/com/example/seniorshield/data/SettingsStorageTest.kt",
+    "GitBlob": "2b5ba577ab6075575ab11e67575dceeda390810d"
+  },
+  {
+    "Path": "app/src/androidTest/java/com/example/seniorshield/data/StorageTestSupport.kt",
+    "GitBlob": "829f1971000a66d0264c1c55e827c919291e8a6f"
+  },
+  {
+    "Path": "app/src/androidTest/java/com/example/seniorshield/test/M3TestRunner.kt",
+    "GitBlob": "496062bc7ba9dc0fd8f59f2249401756ea0c63f6"
+  },
+  {
+    "Path": "build.gradle.kts",
+    "GitBlob": "d09ab0422f3de22c43b7b7fc35e7bdd93a645d3d"
+  },
+  {
+    "Path": "data/build.gradle.kts",
+    "GitBlob": "ce6080002b28584281ef7a48618fee8575062c08"
+  },
+  {
+    "Path": "data/schemas/com.example.seniorshield.data.local.db.SeniorShieldDatabase/1.json",
+    "GitBlob": "c5629b6670b8ce1fd56643b521ac4545bec27bf1"
+  },
+  {
+    "Path": "data/src/main/java/com/example/seniorshield/data/di/DatabaseModule.kt",
+    "GitBlob": "30bd87c73096ebfda888c247f1a98db95c9c62db"
+  },
+  {
+    "Path": "data/src/main/java/com/example/seniorshield/data/di/DataModule.kt",
+    "GitBlob": "ca05b4a0ba7ddf03bcdd6365b2fe2a6ea1f34cd8"
+  },
+  {
+    "Path": "data/src/main/java/com/example/seniorshield/data/local/db/RiskEventDao.kt",
+    "GitBlob": "10731791b636fa86af387e716233ea99562f1254"
+  },
+  {
+    "Path": "data/src/main/java/com/example/seniorshield/data/local/db/RiskEventEntity.kt",
+    "GitBlob": "c2578fe05182df5c76a0e7d78ef9d950a84b1f39"
+  },
+  {
+    "Path": "data/src/main/java/com/example/seniorshield/data/local/db/SeniorShieldDatabase.kt",
+    "GitBlob": "30b4972b8a8f8665dc10b2f7536a07a2d930aaf4"
+  },
+  {
+    "Path": "data/src/main/java/com/example/seniorshield/data/local/GuardianDataStore.kt",
+    "GitBlob": "b967579e2a464c72dff8e19fdfaecadf7df77a4b"
+  },
+  {
+    "Path": "data/src/main/java/com/example/seniorshield/data/local/LiveRiskEventStore.kt",
+    "GitBlob": "2474a978e668c718784dd5fba2df87951a04165f"
+  },
+  {
+    "Path": "data/src/main/java/com/example/seniorshield/data/local/RoomRiskEventStore.kt",
+    "GitBlob": "5ff7f97eb875ef17aa328f51c277a24f87b9374f"
+  },
+  {
+    "Path": "data/src/main/java/com/example/seniorshield/data/local/SettingsDataStore.kt",
+    "GitBlob": "2a738eadc9d0c3baab2e5fb1cac6473c5a338dac"
+  },
+  {
+    "Path": "data/src/main/java/com/example/seniorshield/data/repository/GuardianRepositoryImpl.kt",
+    "GitBlob": "e5ed80698cabc09963d659b107c9dcab62208c25"
+  },
+  {
+    "Path": "data/src/main/java/com/example/seniorshield/data/repository/RiskRepositoryImpl.kt",
+    "GitBlob": "a06bd351d4f82cc206f0f54c4fafe1341535057c"
+  },
+  {
+    "Path": "data/src/main/java/com/example/seniorshield/data/repository/SettingsRepositoryImpl.kt",
+    "GitBlob": "11c401ea9d9eb91b42574bfb1ac17f1d386df955"
+  },
+  {
+    "Path": "settings.gradle.kts",
+    "GitBlob": "847a0e6276eb6d989ed256dbb338cfe4ca3b269c"
+  }
+]

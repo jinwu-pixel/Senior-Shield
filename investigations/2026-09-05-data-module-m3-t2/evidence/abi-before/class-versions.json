@@ -1,0 +1,58 @@
+[
+  {
+    "Type": "com.example.seniorshield.data.di.DataModule",
+    "Major": 61
+  },
+  {
+    "Type": "com.example.seniorshield.data.di.DatabaseModule",
+    "Major": 61
+  },
+  {
+    "Type": "com.example.seniorshield.data.local.GuardianDataStoreKt",
+    "Major": 61
+  },
+  {
+    "Type": "com.example.seniorshield.data.local.GuardianKeys",
+    "Major": 61
+  },
+  {
+    "Type": "com.example.seniorshield.data.local.SettingsDataStoreKt",
+    "Major": 61
+  },
+  {
+    "Type": "com.example.seniorshield.data.local.SettingsKeys",
+    "Major": 61
+  },
+  {
+    "Type": "com.example.seniorshield.data.local.LiveRiskEventStore",
+    "Major": 61
+  },
+  {
+    "Type": "com.example.seniorshield.data.local.RoomRiskEventStore",
+    "Major": 61
+  },
+  {
+    "Type": "com.example.seniorshield.data.local.db.RiskEventDao",
+    "Major": 61
+  },
+  {
+    "Type": "com.example.seniorshield.data.local.db.RiskEventEntity",
+    "Major": 61
+  },
+  {
+    "Type": "com.example.seniorshield.data.local.db.SeniorShieldDatabase",
+    "Major": 61
+  },
+  {
+    "Type": "com.example.seniorshield.data.repository.GuardianRepositoryImpl",
+    "Major": 61
+  },
+  {
+    "Type": "com.example.seniorshield.data.repository.SettingsRepositoryImpl",
+    "Major": 61
+  },
+  {
+    "Type": "com.example.seniorshield.data.repository.RiskRepositoryImpl",
+    "Major": 61
+  }
+]

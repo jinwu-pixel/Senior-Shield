@@ -15,5 +15,6 @@ dependencyResolutionManagement {
 }
 rootProject.name = "SeniorShield"
 include(":app")
+include(":data")
 include(":domain:risk")
 include(":domain:contracts")

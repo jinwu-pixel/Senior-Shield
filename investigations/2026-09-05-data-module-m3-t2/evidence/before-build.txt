@@ -1,0 +1,7 @@
+Base production source: 0d7b30990bf3f08eaf8d56b220e41019b9996c3a; Task1 tests added; production source12 unchanged
+Missing-module RED: :data:tasks failed as project data not found; 25s.
+Before build: --rerun-tasks :domain:risk:test :domain:contracts:test :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest with separate composeCompilerReportsDir
+BUILD SUCCESSFUL in 5m 3s;97 actionable tasks:97 executed
+465 unit tests; failures/errors/skipped0
+Test APK metadata: com.example.seniorshield.test; runner com.example.seniorshield.test.M3TestRunner; target com.example.seniorshield
+Original source12 and schema byte hashes verified after build; ABI14 major61 captured.

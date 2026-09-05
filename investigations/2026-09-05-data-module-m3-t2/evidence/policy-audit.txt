@@ -1,0 +1,5 @@
+Protected app Manifest/monitoring/AppModule/Application/domain source delta0
+Data production source12 byte hashes exact; Hilt5bindings/2providers unchanged
+Production forbidden SMS/CALL/endCall patterns0; no new contact/permission/service
+App mergedmanifest exact before/after; reverseappdependency0
+Instrumented HiltTestApplication prevents production Application startup; dedicated AVD verified and stopped after14/14 PASS

@@ -6,6 +6,7 @@
 /build
 /domain/risk/build/
 /domain/contracts/build/
+/data/build/
 /captures
 .externalNativeBuild
 .cxx
