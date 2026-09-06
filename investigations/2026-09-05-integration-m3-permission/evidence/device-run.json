@@ -1,0 +1,18 @@
+{
+  "Model": "AT-M150",
+  "SDK": "34",
+  "Telephony": true,
+  "TargetAndTestAbsentBefore": true,
+  "Phases": [
+    "Initial READ_PHONE_STATE/POST_NOTIFICATIONS denied verified",
+    "Both runtime permissions granted; actual system state verified",
+    "Both runtime permissions revoked; actual system state verified",
+    "No target ServiceRecord after test execution"
+  ],
+  "AttemptedPackages": [
+    "com.example.seniorshield",
+    "com.example.seniorshield.test"
+  ],
+  "CleanupErrors": [],
+  "CleanupPass": true
+}

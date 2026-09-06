@@ -1,0 +1,97 @@
+# Command: javap -public -s -classpath app/build/tmp/kotlin-classes/debug <class>
+
+Compiled from "Guardian.kt"
+public final class com.example.seniorshield.domain.model.Guardian {
+  public static final com.example.seniorshield.domain.model.Guardian$Companion Companion;
+    descriptor: Lcom/example/seniorshield/domain/model/Guardian$Companion;
+  public static final int $stable;
+    descriptor: I
+  public static final int MAX_COUNT;
+    descriptor: I
+  public com.example.seniorshield.domain.model.Guardian(java.lang.String, java.lang.String, java.lang.String, java.lang.String);
+    descriptor: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+  public com.example.seniorshield.domain.model.Guardian(java.lang.String, java.lang.String, java.lang.String, java.lang.String, int, kotlin.jvm.internal.DefaultConstructorMarker);
+    descriptor: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+  public final java.lang.String getId();
+    descriptor: ()Ljava/lang/String;
+  public final java.lang.String getName();
+    descriptor: ()Ljava/lang/String;
+  public final java.lang.String getPhoneNumber();
+    descriptor: ()Ljava/lang/String;
+  public final java.lang.String getRelationship();
+    descriptor: ()Ljava/lang/String;
+  public final java.lang.String component1();
+    descriptor: ()Ljava/lang/String;
+  public final java.lang.String component2();
+    descriptor: ()Ljava/lang/String;
+  public final java.lang.String component3();
+    descriptor: ()Ljava/lang/String;
+  public final java.lang.String component4();
+    descriptor: ()Ljava/lang/String;
+  public final com.example.seniorshield.domain.model.Guardian copy(java.lang.String, java.lang.String, java.lang.String, java.lang.String);
+    descriptor: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/example/seniorshield/domain/model/Guardian;
+  public static com.example.seniorshield.domain.model.Guardian copy$default(com.example.seniorshield.domain.model.Guardian, java.lang.String, java.lang.String, java.lang.String, java.lang.String, int, java.lang.Object);
+    descriptor: (Lcom/example/seniorshield/domain/model/Guardian;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/example/seniorshield/domain/model/Guardian;
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+  public int hashCode();
+    descriptor: ()I
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+}
+
+Compiled from "GuardianRepository.kt"
+public interface com.example.seniorshield.domain.repository.GuardianRepository {
+  public abstract kotlinx.coroutines.flow.Flow<java.util.List<com.example.seniorshield.domain.model.Guardian>> observeGuardians();
+    descriptor: ()Lkotlinx/coroutines/flow/Flow;
+  public abstract java.lang.Object addGuardian(com.example.seniorshield.domain.model.Guardian, kotlin.coroutines.Continuation<? super java.lang.Boolean>);
+    descriptor: (Lcom/example/seniorshield/domain/model/Guardian;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+  public abstract java.lang.Object removeGuardian(java.lang.String, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+  public abstract java.lang.Object getGuardians(kotlin.coroutines.Continuation<? super java.util.List<com.example.seniorshield.domain.model.Guardian>>);
+    descriptor: (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+Compiled from "RiskRepository.kt"
+public interface com.example.seniorshield.domain.repository.RiskRepository {
+  public abstract kotlinx.coroutines.flow.Flow<java.util.List<com.example.seniorshield.domain.model.RiskEvent>> getRecentRiskEvents();
+    descriptor: ()Lkotlinx/coroutines/flow/Flow;
+  public abstract kotlinx.coroutines.flow.Flow<com.example.seniorshield.domain.model.RiskEvent> getCurrentRiskEvent();
+    descriptor: ()Lkotlinx/coroutines/flow/Flow;
+  public abstract java.lang.Object countEventsSince(long, kotlin.coroutines.Continuation<? super java.lang.Integer>);
+    descriptor: (JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+Compiled from "RiskEventSink.kt"
+public interface com.example.seniorshield.domain.repository.RiskEventSink {
+  public abstract java.lang.Object pushRiskEvent(com.example.seniorshield.domain.model.RiskEvent, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (Lcom/example/seniorshield/domain/model/RiskEvent;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+  public abstract java.lang.Object recordRiskEvent(com.example.seniorshield.domain.model.RiskEvent, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (Lcom/example/seniorshield/domain/model/RiskEvent;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+  public abstract java.lang.Object updateCurrentRiskEvent(com.example.seniorshield.domain.model.RiskEvent, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (Lcom/example/seniorshield/domain/model/RiskEvent;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+  public abstract void clearCurrentRiskEvent();
+    descriptor: ()V
+  public abstract java.lang.Object clearAll(kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+Compiled from "SettingsRepository.kt"
+public interface com.example.seniorshield.domain.repository.SettingsRepository {
+  public abstract kotlinx.coroutines.flow.Flow<java.lang.Boolean> observeOnboardingCompleted();
+    descriptor: ()Lkotlinx/coroutines/flow/Flow;
+  public abstract java.lang.Object setOnboardingCompleted(boolean, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+  public abstract kotlinx.coroutines.flow.Flow<java.lang.Boolean> observeSmsAlertEnabled();
+    descriptor: ()Lkotlinx/coroutines/flow/Flow;
+  public abstract java.lang.Object setSmsAlertEnabled(boolean, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+  public abstract kotlinx.coroutines.flow.Flow<java.lang.Boolean> observeTestModeEnabled();
+    descriptor: ()Lkotlinx/coroutines/flow/Flow;
+  public abstract java.lang.Object setTestModeEnabled(boolean, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+  public abstract kotlinx.coroutines.flow.Flow<java.lang.Boolean> observeSmsMenuEnabled();
+    descriptor: ()Lkotlinx/coroutines/flow/Flow;
+  public abstract java.lang.Object setSmsMenuEnabled(boolean, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}

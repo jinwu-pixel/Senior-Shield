@@ -41,20 +41,26 @@ Kotlin / Jetpack Compose / Hilt / DataStore 기반이며,
 
 ```
 Gradle 모듈 구조
-  :app          → Android 애플리케이션 및 composition root
-  :domain       → Gradle 상위 container project (소스 컴파일 없음)
-  :domain:risk  → pure Kotlin/JVM 위험 도메인 모델
+  :app              → Android 애플리케이션 및 composition root
+  :data             → Android library 저장 구현 및 Hilt data 모듈
+  :domain           → Gradle 상위 container project (소스 컴파일 없음)
+  :domain:risk      → pure Kotlin/JVM 위험 도메인 모델
+  :domain:contracts → pure Kotlin/JVM 공유 domain contract
 
 의존 방향
-  :app → :domain:risk (단방향)
+  :app → :domain:risk
+  :app → :domain:contracts → :domain:risk (단방향, 역의존 없음)
+  :app → :data → :domain:contracts / :domain:risk (단방향, app 역의존 없음)
 
 domain/
   model/
-    :domain:risk 소유 → AlertState, RiskEvent, RiskLevel, RiskScore, RiskSignal, SignalCategory
-    :app 유지         → Guardian, PermissionStatus, PolicySummary
-  repository/         → RiskRepository, RiskEventSink, SettingsRepository, GuardianRepository (interfaces only, :app 유지)
+    :domain:risk 소유      → AlertState, RiskEvent, RiskLevel, RiskScore, RiskSignal, SignalCategory
+    :domain:contracts 소유 → Guardian
+    :app 유지              → PermissionType, PermissionStatus, PolicySummary
+  repository/
+    :domain:contracts 소유 → RiskRepository, RiskEventSink, SettingsRepository, GuardianRepository (interfaces only)
 
-data/
+data/ (:data 소유)
   local/        → SettingsDataStore, GuardianDataStore, LiveRiskEventStore (interface), RoomRiskEventStore, db/(RiskEventEntity, RiskEventDao, SeniorShieldDatabase)
   repository/   → RiskRepositoryImpl, SettingsRepositoryImpl, GuardianRepositoryImpl
   di/           → DataModule, DatabaseModule (Hilt bindings)
@@ -92,9 +98,15 @@ core/
 di/             → AppModule
 ```
 
-`:domain:risk`는 Android, Compose, Hilt에 의존하지 않는다. 위 6개 모델은 기존
-`com.example.seniorshield.domain.model` FQCN을 유지하며, 후속 승인을 받지 않고
-다른 도메인 모델이나 repository/interface를 해당 모듈로 확장하지 않는다.
+`:domain:risk`와 `:domain:contracts`는 Android, Compose, Hilt에 의존하지 않는다.
+`:domain:contracts`는 `Guardian`과 위 4개 repository interface만 소유하며
+`:domain:risk`를 API로 참조한다. `:domain:risk`의 위 6개 모델과 contracts의 5개
+선언은 기존 FQCN을 유지한다. 후속 승인 없이 각 모듈의 소유 범위를 확장하지 않는다.
+
+`:data`는 기존 저장 source 12개와 Room schema를 소유하는 Android library다.
+Room/DataStore 구현과 DataModule·DatabaseModule의 Hilt binding/provider는 기존
+FQCN과 동작을 유지한다. Room compiler 및 schema export는 `:data`에서 수행하고,
+`:app`의 Hilt composition root와 CoroutineDispatcher provider는 유지한다.
 
 ### 위험 모델 호환성 제약
 

@@ -1,0 +1,11 @@
+
+Name                           Expected Accepted
+----                           -------- --------
+Exact approved reports             True     True
+Missing current reports           False    False
+Additional app diagnostic         False    False
+Missing existing app error        False    False
+Changed data diagnostic           False    False
+Additional diagnostic location    False    False
+
+PASS: 6 lint probes

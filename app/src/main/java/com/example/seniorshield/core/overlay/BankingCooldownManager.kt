@@ -446,10 +446,8 @@ class BankingCooldownManager @Inject constructor(
             }
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(52))
             setOnClickListener {
-                if (callEndHelper.isInCall()) {
+                if (callEndHelper.isInCall() && callEndHelper.showInCallScreen()) {
                     Log.d(TAG, "opening in-call screen")
-                    val telecom = context.getSystemService(Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
-                    telecom?.showInCallScreen(false)
                     // 전화 앱이 foreground로 올라올 시간을 확보한 뒤 오버레이 제거
                     mainHandler.postDelayed(
                         { dismiss(presentationToken) },

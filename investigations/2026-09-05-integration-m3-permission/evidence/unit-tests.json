@@ -1,0 +1,371 @@
+[
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.core.notification.RiskNotificationPermissionSafetyTest",
+    "Tests": 12,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:55:47"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.core.overlay.BankingCooldownPermissionSafetyTest",
+    "Tests": 28,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:02"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.core.overlay.PresentationGenerationGateTest",
+    "Tests": 8,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:12"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.core.overlay.RiskOverlayManagerBindingContractTest",
+    "Tests": 10,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:12"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.core.overlay.RiskOverlayManagerSafeEffectsTest",
+    "Tests": 11,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:13"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.core.overlay.RiskOverlayPermissionSafetyTest",
+    "Tests": 28,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:15"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.core.util.CallEndHelperPermissionSafetyTest",
+    "Tests": 22,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:19"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.domain.repository.RiskEventSinkClearTest",
+    "Tests": 2,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:21"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.feature.home.HomePresentationTest",
+    "Tests": 6,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:21"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.feature.home.HomeScreenWarningNavigationContractTest",
+    "Tests": 2,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:21"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.feature.home.HomeViewModelSafeConfirmationTest",
+    "Tests": 7,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:21"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.feature.settings.DebugViewModelSafeConfirmationTest",
+    "Tests": 1,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:25"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.feature.simulation.SimulationViewModelTest",
+    "Tests": 4,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:25"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.feature.warning.WarningScreenSafeConfirmationTest",
+    "Tests": 2,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:25"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.feature.warning.WarningViewModelTest",
+    "Tests": 11,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:25"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.monitoring.appinstall.AppInstallSignalResetTest",
+    "Tests": 2,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:25"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.monitoring.appinstall.RealAppInstallRiskMonitorProvenanceTest",
+    "Tests": 4,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:25"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.monitoring.appusage.RealAppUsageRiskMonitorProvenanceTest",
+    "Tests": 20,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:28"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.monitoring.call.BankArsRegistryTest",
+    "Tests": 40,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:29"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.monitoring.call.CallMonitorStateFlowTest",
+    "Tests": 8,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:29"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.monitoring.call.CallSignalMapperTest",
+    "Tests": 12,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:29"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.monitoring.call.RealCallRiskMonitorAnchorTest",
+    "Tests": 7,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:29"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.monitoring.call.RealCallRiskMonitorProvenanceTest",
+    "Tests": 25,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:30"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.monitoring.call.RealCallRiskMonitorTest",
+    "Tests": 7,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:45"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.monitoring.deviceenv.RealDeviceEnvironmentRiskMonitorProvenanceTest",
+    "Tests": 3,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:45"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.monitoring.evaluator.RiskEvaluatorImplTest",
+    "Tests": 26,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:46"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.monitoring.event.RiskEventFactoryTest",
+    "Tests": 7,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:46"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.monitoring.orchestrator.AlertStateResolverTest",
+    "Tests": 25,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:46"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.monitoring.orchestrator.DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest",
+    "Tests": 36,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:46"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.monitoring.orchestrator.DefaultRiskDetectionCoordinatorTest",
+    "Tests": 8,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:47"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.monitoring.orchestrator.S2InvariantGuardrailTest",
+    "Tests": 7,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:47"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.monitoring.orchestrator.S2RecRefireDebounceTest",
+    "Tests": 17,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:47"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.monitoring.orchestrator.SafeConfirmationCommandTest",
+    "Tests": 25,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:47"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.monitoring.orchestrator.SafeConfirmationOverlayCommandTest",
+    "Tests": 40,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:48"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.monitoring.orchestrator.WarningNavigationPublicationTest",
+    "Tests": 9,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:48"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.monitoring.registry.RemoteControlAppRegistryTest",
+    "Tests": 14,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:49"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.monitoring.session.RiskSessionTrackerAlphaTest",
+    "Tests": 8,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:49"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.monitoring.session.RiskSessionTrackerIdleExpiryTest",
+    "Tests": 9,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:49"
+  },
+  {
+    "Module": "app",
+    "Suite": "com.example.seniorshield.monitoring.session.RiskSessionTrackerTest",
+    "Tests": 31,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:56:49"
+  },
+  {
+    "Module": "domain/risk",
+    "Suite": "com.example.seniorshield.domain.model.RiskModelCompatibilityTest",
+    "Tests": 7,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:52:55"
+  },
+  {
+    "Module": "domain/contracts",
+    "Suite": "com.example.seniorshield.domain.ContractCompatibilityTest",
+    "Tests": 4,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "Timestamp": "2026-09-05T07:53:04"
+  }
+]

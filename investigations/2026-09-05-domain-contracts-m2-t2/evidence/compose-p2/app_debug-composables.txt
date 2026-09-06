@@ -1,0 +1,255 @@
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun PrimaryButton(
+  stable text: String
+  stable onClick: Function0<Unit>
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun SecondaryButton(
+  stable text: String
+  stable onClick: Function0<Unit>
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun BasicTextButton(
+  stable text: String
+  stable onClick: Function0<Unit>
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun ButtonsPreview()
+fun dpadFocusHighlight(
+  stable <this>: Modifier
+  stable shape: Shape? = @dynamic RoundedCornerShape(8.dp)
+  stable borderWidth: Dp = @static 3.dp
+  stable focusedColor: Color = @dynamic MaterialTheme.<get-colorScheme>($composer, MaterialTheme.$stable).primary
+): Modifier
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun PermissionStatusItem(
+  stable item: PermissionStatus
+  stable modifier: Modifier? = @static Companion
+  stable onAction: Function0<Unit>? = @static null
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable, [androidx.compose.ui.UiComposable]]") fun SeniorShieldScaffold(
+  stable title: String
+  stable onBackClick: Function0<Unit>? = @static null
+  stable content: Function3<PaddingValues, Composer, Int, Unit>
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun StatusCard(
+  stable title: String
+  stable body: String
+  stable modifier: Modifier? = @static Companion
+  stable riskLevel: RiskLevel? = @static RiskLevel.LOW
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun StatusCardPreview()
+restartable skippable scheme("[0, [0]]") fun SeniorShieldTheme(
+  stable darkTheme: Boolean = @dynamic isSystemInDarkTheme($composer, 0)
+  stable content: Function2<Composer, Int, Unit>
+)
+restartable scheme("[androidx.compose.ui.UiComposable]") fun SeniorShieldNavGraph(
+  unstable navigationEventBus: NavigationEventBus
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun GuardianAddContent(
+  stable uiState: GuardianAddUiState
+  stable onNameChange: Function1<String, Unit>
+  stable onPhoneChange: Function1<String, Unit>
+  stable onRelationshipChange: Function1<String, Unit>
+  stable onSave: Function0<Unit>
+  stable onBack: Function0<Unit>
+)
+restartable scheme("[androidx.compose.ui.UiComposable]") fun GuardianContent(
+  unstable uiState: GuardianUiState
+  stable onAddClick: Function0<Unit>
+  stable onRemove: Function1<String, Unit>
+  stable onBack: Function0<Unit>
+  stable onSmsClick: Function0<Unit>
+  stable onDismissSmsPicker: Function0<Unit>
+  stable onSmsGuardianSelected: Function1<Guardian, Unit>
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun GuardianCard(
+  stable guardian: Guardian
+  stable onRemove: Function0<Unit>
+)
+restartable scheme("[androidx.compose.ui.UiComposable]") fun SmsGuardianPickerDialog(
+  unstable guardians: List<Guardian>
+  stable onDismiss: Function0<Unit>
+  stable onSelect: Function1<Guardian, Unit>
+)
+restartable scheme("[androidx.compose.ui.UiComposable]") fun HistoryContent(
+  stable title: String
+  unstable events: List<RiskEvent>
+  stable onBack: Function0<Unit>
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun HistoryScreenPreview()
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun HomeContent(
+  stable uiState: HomeUiState
+  stable onNavigateHistory: Function0<Unit>
+  stable onNavigateWarning: Function0<Unit>
+  stable onNavigatePermissions: Function0<Unit>
+  stable onNavigatePolicy: Function0<Unit>
+  stable onNavigateSettings: Function0<Unit>
+  stable onNavigateSimulation: Function0<Unit>
+  stable onNavigateGuardian: Function0<Unit>
+  stable onConfirmSafe: Function0<Unit>
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun GuardianContactDialog(
+  stable onDismiss: Function0<Unit>
+  stable onCall: Function0<Unit>
+  stable onSms: Function0<Unit>
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun GuardedSessionCard(
+  stable card: GuardedCardInfo
+  stable onClick: Function0<Unit>
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun WeeklyTipCard(
+  stable tip: String
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun PermissionsWarningBanner(
+  stable onNavigatePermissions: Function0<Unit>
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun SettingsListItem(
+  stable text: String
+  stable onClick: Function0<Unit>
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun HomeScreenPreview()
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun OnboardingContent(
+  stable onStartClick: Function0<Unit>
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun OnboardingScreenPreview()
+restartable scheme("[androidx.compose.ui.UiComposable]") fun PermissionsContent(
+  unstable items: List<PermissionStatus>
+  stable fromOnboarding: Boolean
+  stable onBack: Function0<Unit>
+  stable onRefresh: Function0<Unit>
+  stable onNavigateHome: Function0<Unit>
+)
+restartable scheme("[androidx.compose.ui.UiComposable]") fun PolicyContent(
+  unstable policy: PolicySummary
+  stable onBack: Function0<Unit>
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun PolicyScreenPreview()
+restartable scheme("[androidx.compose.ui.UiComposable]") fun SettingsContent(
+  unstable session: RiskSession?
+  unstable score: RiskScore?
+  stable testModeEnabled: Boolean
+  stable smsMenuEnabled: Boolean
+  stable onNavigatePolicy: Function0<Unit>
+  stable onNavigateGuardian: Function0<Unit>
+  stable onBack: Function0<Unit>
+  stable onResetAll: Function0<Unit>
+  stable onShowTestOverlay: Function0<Unit>
+  stable onShowTestCooldown: Function0<Unit>
+  stable onSimulateTelebanking: Function0<Unit>
+  stable onSimulateRemoteApp: Function0<Unit>
+  stable onSimulateRemoteThenBanking: Function0<Unit>
+  stable onTestModeToggle: Function1<Boolean, Unit>
+  stable onSmsMenuToggle: Function1<Boolean, Unit>
+)
+restartable scheme("[androidx.compose.ui.UiComposable]") fun DebugPanel(
+  unstable session: RiskSession?
+  unstable score: RiskScore?
+  stable testModeEnabled: Boolean
+  stable onResetAll: Function0<Unit>
+  stable onShowTestOverlay: Function0<Unit>
+  stable onShowTestCooldown: Function0<Unit>
+  stable onSimulateTelebanking: Function0<Unit>
+  stable onSimulateRemoteApp: Function0<Unit>
+  stable onSimulateRemoteThenBanking: Function0<Unit>
+  stable onTestModeToggle: Function1<Boolean, Unit>
+)
+restartable scheme("[androidx.compose.ui.UiComposable]") fun SessionStateCard(
+  unstable session: RiskSession?
+  unstable score: RiskScore?
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun SessionRow(
+  stable label: String
+  stable value: String
+  stable labelColor: Color = @static Companion.Unspecified
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun TestModeToggleItem(
+  stable enabled: Boolean
+  stable onToggle: Function1<Boolean, Unit>
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun SettingsListItem(
+  stable text: String
+  stable onClick: Function0<Unit>
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun SmsMenuToggleItem(
+  stable enabled: Boolean
+  stable onToggle: Function1<Boolean, Unit>
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun SettingsScreenPreview()
+restartable scheme("[androidx.compose.ui.UiComposable]") fun ScenarioCard(
+  unstable scenario: FraudScenario
+  stable onClick: Function0<Unit>
+)
+restartable scheme("[androidx.compose.ui.UiComposable]") fun StepContent(
+  unstable uiState: SimulationUiState
+  stable onSelectChoice: Function1<Int, Unit>
+  stable onNext: Function0<Unit>
+)
+restartable scheme("[androidx.compose.ui.UiComposable]") fun CompletionContent(
+  unstable uiState: SimulationUiState
+  stable onBack: Function0<Unit>
+)
+restartable scheme("[androidx.compose.ui.UiComposable]") fun WarningContent(
+  unstable uiState: WarningUiState
+  stable onFamilyCallClick: Function0<Unit>
+  stable onInstitutionCall: Function1<String, Unit>
+  stable onBack: Function0<Unit>
+  stable onConfirmSafe: Function0<Unit>
+  stable onDismissGuardianPicker: Function0<Unit>
+  stable onGuardianSelected: Function1<Guardian, Unit>
+  stable onSmsClick: Function0<Unit>
+  stable onDismissSmsPicker: Function0<Unit>
+  stable onSmsGuardianSelected: Function1<Guardian, Unit>
+  stable onBehaviorAnswer: Function2<Int, Boolean, Unit>
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun ContactSection(
+  stable smsVisible: Boolean
+  stable onFamilyCallClick: Function0<Unit>
+  stable onSmsClick: Function0<Unit>
+  stable onInstitutionCall: Function1<String, Unit>
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun WarningCard(
+  stable eventTitle: String?
+  stable eventDescription: String?
+  stable hasActiveEvent: Boolean
+)
+restartable scheme("[androidx.compose.ui.UiComposable]") fun BehaviorCheckSection(
+  unstable answers: Map<Int, Boolean>
+  stable anyYes: Boolean
+  stable onAnswer: Function2<Int, Boolean, Unit>
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun BehaviorCheckItem(
+  stable question: String
+  stable answer: Boolean?
+  stable onAnswer: Function1<Boolean, Unit>
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun BehaviorAnswerButton(
+  stable text: String
+  stable selected: Boolean
+  stable selectedColor: Color
+  stable onClick: Function0<Unit>
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun Checklist()
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun ChecklistItem(
+  stable text: String
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun InstitutionSection(
+  stable onCall: Function1<String, Unit>
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun InstitutionCard(
+  stable info: InstitutionInfo
+  stable onCall: Function0<Unit>
+)
+restartable scheme("[androidx.compose.ui.UiComposable]") fun GuardianPickerDialog(
+  unstable guardians: List<Guardian>
+  stable onDismiss: Function0<Unit>
+  stable onSelect: Function1<Guardian, Unit>
+)
+restartable scheme("[androidx.compose.ui.UiComposable]") fun SmsGuardianPickerDialog(
+  unstable guardians: List<Guardian>
+  stable onDismiss: Function0<Unit>
+  stable onSelect: Function1<Guardian, Unit>
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun WarningScreenPreview()

@@ -1,0 +1,6 @@
+
+RemovedClasses   : 10
+UnchangedClasses : 76
+AddedClasses     : 0
+Composables      : Exact
+Metrics          : Exact approved class-count deltas

@@ -1,0 +1,114 @@
+[
+  {
+    "Id": "GradleDependency",
+    "Severity": "Warning",
+    "File": "data\\build.gradle.kts",
+    "Declaration": "    implementation(\"androidx.room:room-runtime:2.6.1\")",
+    "Message": "A newer version of androidx.room:room-runtime than 2.6.1 is available: <LATEST>",
+    "Key": "GradleDependency|Warning|A newer version of androidx.room:room-runtime than 2.6.1 is available: <LATEST>|data\\build.gradle.kts|    implementation(\"androidx.room:room-runtime:2.6.1\")"
+  },
+  {
+    "Id": "GradleDependency",
+    "Severity": "Warning",
+    "File": "data\\build.gradle.kts",
+    "Declaration": "    implementation(\"androidx.room:room-ktx:2.6.1\")",
+    "Message": "A newer version of androidx.room:room-ktx than 2.6.1 is available: <LATEST>",
+    "Key": "GradleDependency|Warning|A newer version of androidx.room:room-ktx than 2.6.1 is available: <LATEST>|data\\build.gradle.kts|    implementation(\"androidx.room:room-ktx:2.6.1\")"
+  },
+  {
+    "Id": "GradleDependency",
+    "Severity": "Warning",
+    "File": "data\\build.gradle.kts",
+    "Declaration": "    kapt(\"androidx.room:room-compiler:2.6.1\")",
+    "Message": "A newer version of androidx.room:room-compiler than 2.6.1 is available: <LATEST>",
+    "Key": "GradleDependency|Warning|A newer version of androidx.room:room-compiler than 2.6.1 is available: <LATEST>|data\\build.gradle.kts|    kapt(\"androidx.room:room-compiler:2.6.1\")"
+  },
+  {
+    "Id": "GradleDependency",
+    "Severity": "Warning",
+    "File": "data\\build.gradle.kts",
+    "Declaration": "    implementation(\"androidx.datastore:datastore-preferences:1.1.1\")",
+    "Message": "A newer version of androidx.datastore:datastore-preferences than 1.1.1 is available: <LATEST>",
+    "Key": "GradleDependency|Warning|A newer version of androidx.datastore:datastore-preferences than 1.1.1 is available: <LATEST>|data\\build.gradle.kts|    implementation(\"androidx.datastore:datastore-preferences:1.1.1\")"
+  },
+  {
+    "Id": "GradleDependency",
+    "Severity": "Warning",
+    "File": "data\\build.gradle.kts",
+    "Declaration": "    implementation(\"org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1\")",
+    "Message": "A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-android than 1.8.1 is available: <LATEST>",
+    "Key": "GradleDependency|Warning|A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-android than 1.8.1 is available: <LATEST>|data\\build.gradle.kts|    implementation(\"org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1\")"
+  },
+  {
+    "Id": "KaptUsageInsteadOfKsp",
+    "Severity": "Warning",
+    "File": "data\\build.gradle.kts",
+    "Declaration": "    kapt(\"androidx.room:room-compiler:2.6.1\")",
+    "Message": "This library supports using KSP instead of kapt, which greatly improves performance. Learn more: https://developer.android.com/studio/build/migrate-to-ksp",
+    "Key": "KaptUsageInsteadOfKsp|Warning|This library supports using KSP instead of kapt, which greatly improves performance. Learn more: https://developer.android.com/studio/build/migrate-to-ksp|data\\build.gradle.kts|    kapt(\"androidx.room:room-compiler:2.6.1\")"
+  },
+  {
+    "Id": "UseTomlInstead",
+    "Severity": "Warning",
+    "File": "data\\build.gradle.kts",
+    "Declaration": "    implementation(\"androidx.room:room-runtime:2.6.1\")",
+    "Message": "Use version catalog instead",
+    "Key": "UseTomlInstead|Warning|Use version catalog instead|data\\build.gradle.kts|    implementation(\"androidx.room:room-runtime:2.6.1\")"
+  },
+  {
+    "Id": "UseTomlInstead",
+    "Severity": "Warning",
+    "File": "data\\build.gradle.kts",
+    "Declaration": "    implementation(\"androidx.room:room-ktx:2.6.1\")",
+    "Message": "Use version catalog instead",
+    "Key": "UseTomlInstead|Warning|Use version catalog instead|data\\build.gradle.kts|    implementation(\"androidx.room:room-ktx:2.6.1\")"
+  },
+  {
+    "Id": "UseTomlInstead",
+    "Severity": "Warning",
+    "File": "data\\build.gradle.kts",
+    "Declaration": "    kapt(\"androidx.room:room-compiler:2.6.1\")",
+    "Message": "Use version catalog instead",
+    "Key": "UseTomlInstead|Warning|Use version catalog instead|data\\build.gradle.kts|    kapt(\"androidx.room:room-compiler:2.6.1\")"
+  },
+  {
+    "Id": "UseTomlInstead",
+    "Severity": "Warning",
+    "File": "data\\build.gradle.kts",
+    "Declaration": "    implementation(\"androidx.datastore:datastore-preferences:1.1.1\")",
+    "Message": "Use version catalog instead",
+    "Key": "UseTomlInstead|Warning|Use version catalog instead|data\\build.gradle.kts|    implementation(\"androidx.datastore:datastore-preferences:1.1.1\")"
+  },
+  {
+    "Id": "UseTomlInstead",
+    "Severity": "Warning",
+    "File": "data\\build.gradle.kts",
+    "Declaration": "    implementation(\"org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1\")",
+    "Message": "Use version catalog instead",
+    "Key": "UseTomlInstead|Warning|Use version catalog instead|data\\build.gradle.kts|    implementation(\"org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1\")"
+  },
+  {
+    "Id": "UseTomlInstead",
+    "Severity": "Warning",
+    "File": "data\\build.gradle.kts",
+    "Declaration": "    implementation(\"com.google.dagger:hilt-android:2.52\")",
+    "Message": "Use version catalog instead",
+    "Key": "UseTomlInstead|Warning|Use version catalog instead|data\\build.gradle.kts|    implementation(\"com.google.dagger:hilt-android:2.52\")"
+  },
+  {
+    "Id": "UseTomlInstead",
+    "Severity": "Warning",
+    "File": "data\\build.gradle.kts",
+    "Declaration": "    kapt(\"com.google.dagger:hilt-android-compiler:2.52\")",
+    "Message": "Use version catalog instead",
+    "Key": "UseTomlInstead|Warning|Use version catalog instead|data\\build.gradle.kts|    kapt(\"com.google.dagger:hilt-android-compiler:2.52\")"
+  },
+  {
+    "Id": "UseTomlInstead",
+    "Severity": "Warning",
+    "File": "data\\build.gradle.kts",
+    "Declaration": "    implementation(\"javax.inject:javax.inject:1\")",
+    "Message": "Use version catalog instead",
+    "Key": "UseTomlInstead|Warning|Use version catalog instead|data\\build.gradle.kts|    implementation(\"javax.inject:javax.inject:1\")"
+  }
+]

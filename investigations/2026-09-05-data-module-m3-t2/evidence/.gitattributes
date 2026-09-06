@@ -1,0 +1,7 @@
+* text eol=lf
+compose-before/app_debug-* -text
+compose-after/app_debug-* -text
+compose-before/app_debug-classes.txt whitespace=-blank-at-eol
+compose-after/app_debug-classes.txt whitespace=-blank-at-eol
+abi-before/*.txt -text
+abi-after/*.txt -text

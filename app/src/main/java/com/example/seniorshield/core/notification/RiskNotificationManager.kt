@@ -48,7 +48,10 @@ class RiskNotificationManager @Inject constructor(
 
     /** 위험 이벤트를 알림으로 표시한다. POST_NOTIFICATIONS 권한이 없으면 조용히 건너뛴다. */
     fun notify(event: RiskEvent) {
-        if (!hasNotificationPermission()) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) return
 
         val pendingIntent = PendingIntent.getActivity(
             context,
@@ -68,15 +71,11 @@ class RiskNotificationManager @Inject constructor(
             .setAutoCancel(true)
             .build()
 
-        NotificationManagerCompat.from(context).notify(event.id.hashCode(), notification)
-    }
-
-    private fun hasNotificationPermission(): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
-        return ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.POST_NOTIFICATIONS,
-        ) == PackageManager.PERMISSION_GRANTED
+        try {
+            NotificationManagerCompat.from(context).notify(event.id.hashCode(), notification)
+        } catch (_: SecurityException) {
+            // 권한 검사 후 notify 호출 전에 권한이 철회되면 이번 본인 알림은 건너뛴다.
+        }
     }
 
     private fun RiskLevel.toNotificationPriority(): Int = when (this) {

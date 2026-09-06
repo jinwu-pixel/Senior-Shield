@@ -1,0 +1,22 @@
+# Command: javap -v -classpath app/build/tmp/kotlin-classes/debug <class>
+# Projection: major version and class-level StabilityInferred(parameters=1) only.
+
+com.example.seniorshield.domain.model.Guardian
+major version: 61
+androidx.compose.runtime.internal.StabilityInferred(parameters=1)
+
+com.example.seniorshield.domain.repository.GuardianRepository
+major version: 61
+StabilityInferred: absent
+
+com.example.seniorshield.domain.repository.RiskRepository
+major version: 61
+StabilityInferred: absent
+
+com.example.seniorshield.domain.repository.RiskEventSink
+major version: 61
+StabilityInferred: absent
+
+com.example.seniorshield.domain.repository.SettingsRepository
+major version: 61
+StabilityInferred: absent

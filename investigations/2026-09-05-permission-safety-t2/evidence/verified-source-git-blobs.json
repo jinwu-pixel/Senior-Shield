@@ -1,0 +1,42 @@
+[
+  {
+    "Path": "app/build.gradle.kts",
+    "GitBlob": "c9e54ed56cd7cfa0a6cab71ff15392041dc5be92"
+  },
+  {
+    "Path": "app/src/main/AndroidManifest.xml",
+    "GitBlob": "350c94e1ae80d6ef4dc8bd613b04c445d0d5c1ab"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/core/notification/RiskNotificationManager.kt",
+    "GitBlob": "553ce704c42771237b7288326a9a4475f90dfd12"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/core/overlay/BankingCooldownManager.kt",
+    "GitBlob": "995c43afed603be44cc8bbe12503e53a82820095"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/core/overlay/RiskOverlayManager.kt",
+    "GitBlob": "2e493fb437008cba5e5bbe206fe153eadf8a521d"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/core/util/CallEndHelper.kt",
+    "GitBlob": "447972ca58355f78ea6ce0d25197147f03779087"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/core/notification/RiskNotificationPermissionSafetyTest.kt",
+    "GitBlob": "39fa4429803ddd8178cbe1632551760fb2d1eeb3"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/core/overlay/OverlayPermissionSafetyTest.kt",
+    "GitBlob": "cb5aab9be08ba7c32db487c3c8890f2010a85295"
+  },
+  {
+    "Path": "app/src/test/java/com/example/seniorshield/core/util/CallEndHelperPermissionSafetyTest.kt",
+    "GitBlob": "f2d5a125373d5dee1aa8c12920726a8c32824764"
+  },
+  {
+    "Path": "gradle/libs.versions.toml",
+    "GitBlob": "fd503dfa354f5f49da76315fcc6101199ad808b2"
+  }
+]

@@ -1,0 +1,5 @@
+After clean gate: domain check/data+app kapt/app unit/APK/test APK/duplicate classes
+BUILD SUCCESSFUL in 4m 25s;144 actionable tasks:142executed,2up-to-date
+465 actual unit tests;failure/error/skip0;data unit task NO-SOURCE (no invented additional tests)
+No explicit data manifest needed; generated merged app manifest exactbefore
+Initial offline attempt failed beforecompilation because newcom.android.library8.5.2 marker uncached; online sameversion resolved; no source/config workaround

@@ -1,0 +1,13 @@
+[
+  {
+    "APK": "app-debug.apk",
+    "Package": "com.example.seniorshield",
+    "Sha256": "60191097B8B84A4E5D3D262E6B438C1ABA40CF3872EDEA8D6D9C687AF057AE43"
+  },
+  {
+    "APK": "app-debug-androidTest.apk",
+    "Package": "com.example.seniorshield.test",
+    "Runner": "com.example.seniorshield.test.M3TestRunner",
+    "Sha256": "A7AADCE2FF0B502460813BDA908462EC6748E01250BCA99F45F433E6F4A725BC"
+  }
+]

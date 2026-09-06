@@ -1,0 +1,6 @@
+compose-p1/* -text
+compose-p2/* -text
+abi-p0/* -text
+lint/*.xml -text
+compose-p1/app_debug-classes.txt -text whitespace=-blank-at-eol
+compose-p2/app_debug-classes.txt -text whitespace=-blank-at-eol

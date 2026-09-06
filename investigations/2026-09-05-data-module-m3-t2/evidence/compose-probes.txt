@@ -1,0 +1,11 @@
+
+Name                       Expected Accepted
+----                       -------- --------
+Exact approved projection      True     True
+Unparsed class content        False    False
+Duplicate frozen inventory    False    False
+Changed composable metric     False    False
+Added metric key              False    False
+Changed composables CSV       False    False
+
+PASS: 6 Compose probes (synthetic projection; not a production build claim)

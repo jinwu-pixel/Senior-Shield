@@ -1,0 +1,589 @@
+unstable class MainActivity {
+  unstable var navigationEventBus: NavigationEventBus
+  <runtime stability> = Unstable
+}
+unstable class SeniorShieldApp {
+  unstable var notificationManager: RiskNotificationManager
+  <runtime stability> = Unstable
+}
+unstable class NavigationEventBus {
+  unstable val _popToHomeEvents: MutableSharedFlow<Unit>
+  unstable val popToHomeEvents: SharedFlow<Unit>
+  <runtime stability> = Unstable
+}
+stable class SeniorShieldDestination {
+  stable val SPLASH: String
+  stable val ONBOARDING: String
+  stable val HOME: String
+  stable val HISTORY: String
+  stable val WARNING: String
+  stable val PERMISSIONS: String
+  stable val POLICY: String
+  stable val SETTINGS: String
+  stable val GUARDIAN: String
+  stable val GUARDIAN_ADD: String
+  stable val SIMULATION_LIST: String
+  stable val SIMULATION_PLAY: String
+  <runtime stability> = Stable
+}
+unstable class RiskNotificationManager {
+  unstable val context: Context
+  <runtime stability> = Unstable
+}
+unstable class BankingCooldownManager {
+  unstable val context: Context
+  unstable val callEndHelper: CallEndHelper
+  runtime val resetEpochProvider: ResetEpochProvider
+  stable var clock: Function0<Long>
+  unstable val windowManager: WindowManager
+  unstable val mainHandler: Handler
+  unstable val scope: CoroutineScope
+  unstable var overlayView: LinearLayout?
+  stable var overlayPresentationToken: PresentationGenerationToken?
+  unstable var countdownJob: Job?
+  stable var countdownJobToken: PresentationGenerationToken?
+  unstable val presentationGeneration: PresentationGenerationGate
+  stable var pendingSafeCleanup: PresentationInvalidationTicket?
+  stable var showedAtMillis: Long
+  stable var dismissedAtMillis: Long
+  stable var lastCountdownSec: Int
+  <runtime stability> = Unstable
+}
+stable class PresentationGenerationToken {
+  stable val businessEpoch: Long
+  stable val generation: Long
+  <runtime stability> = Stable
+}
+stable class PresentationInvalidationTicket {
+  stable val beforeBusinessEpoch: Long
+  stable val issuedThroughGeneration: Long
+  <runtime stability> = Stable
+}
+unstable class PresentationGenerationGate {
+  stable var nextGeneration: Long
+  stable var latestReservedGeneration: Long
+  stable var minimumBusinessEpoch: Long
+  unstable val latestReservedGenerationByEpoch: MutableMap<Long, Long>
+  unstable val invalidThroughGenerationByEpoch: MutableMap<Long, Long>
+  <runtime stability> = Unstable
+}
+unstable class RiskOverlayManager {
+  unstable val context: Context
+  unstable val callEndHelper: CallEndHelper
+  runtime val callRiskMonitor: CallRiskMonitor
+  unstable val navigationEventBus: NavigationEventBus
+  runtime val resetEpochProvider: ResetEpochProvider
+  unstable val windowManager: WindowManager
+  unstable val mainHandler: Handler
+  unstable var overlayView: LinearLayout?
+  stable var overlayPresentationToken: PresentationGenerationToken?
+  stable var isDismissing: Boolean
+  unstable var currentParams: LayoutParams?
+  unstable val presentationGeneration: PresentationGenerationGate
+  stable var pendingSafeCleanup: PresentationInvalidationTicket?
+  stable var endCallSuppressionActive: Boolean
+  stable var idleStabilizationScheduled: Boolean
+  unstable var suppressionReleaseRunnable: Runnable?
+  stable var onSuppressionReleased: Function0<Unit>?
+  unstable val suppressionGeneration: PresentationGenerationGate
+  stable var suppressionPresentationToken: PresentationGenerationToken?
+  <runtime stability> = Unstable
+}
+unstable class CallEndHelper {
+  unstable val context: Context
+  <runtime stability> = Unstable
+}
+stable class ContactIntentHelper {
+  <runtime stability> = Stable
+}
+stable class DataModule {
+  <runtime stability> = Stable
+}
+stable class DatabaseModule {
+  <runtime stability> = Stable
+}
+unstable class GuardianKeys {
+  unstable val GuardiansJson: Key<String>
+  <runtime stability> = Unstable
+}
+unstable class RoomRiskEventStore {
+  runtime val dao: RiskEventDao
+  unstable val scope: CoroutineScope
+  unstable val recentEvents: StateFlow<List<RiskEvent>>
+  unstable val _currentEvent: MutableStateFlow<RiskEvent?>
+  unstable val currentEvent: StateFlow<RiskEvent?>
+  <runtime stability> = Unstable
+}
+unstable class SettingsKeys {
+  unstable val OnboardingCompleted: Key<Boolean>
+  unstable val SmsAlertEnabled: Key<Boolean>
+  unstable val TestModeEnabled: Key<Boolean>
+  unstable val SmsMenuEnabled: Key<Boolean>
+  <runtime stability> = Unstable
+}
+stable class RiskEventEntity {
+  stable val id: String
+  stable val title: String
+  stable val description: String
+  stable val occurredAtMillis: Long
+  stable val level: String
+  stable val signalsCsv: String
+  <runtime stability> = Stable
+}
+stable class SeniorShieldDatabase {
+  <runtime stability> = Stable
+}
+unstable class GuardianRepositoryImpl {
+  unstable val context: Context
+  <runtime stability> = Unstable
+}
+stable class RiskRepositoryImpl {
+  runtime val store: LiveRiskEventStore
+  runtime val dao: RiskEventDao
+  <runtime stability> = 
+}
+unstable class SettingsRepositoryImpl {
+  unstable val context: Context
+  <runtime stability> = Unstable
+}
+stable class AppModule {
+  <runtime stability> = Stable
+}
+stable class PermissionStatus {
+  stable val type: PermissionType
+  stable val name: String
+  stable val description: String
+  stable val granted: Boolean
+  <runtime stability> = Stable
+}
+unstable class PolicySummary {
+  stable val title: String
+  unstable val items: List<String>
+  <runtime stability> = Unstable
+}
+stable class GuardianAddUiState {
+  stable val name: String
+  stable val phone: String
+  stable val relationship: String
+  stable val error: String?
+  stable val canSave: Boolean
+  <runtime stability> = Stable
+}
+unstable class GuardianAddViewModel {
+  unstable val guardianRepository: GuardianRepository
+  unstable val _name: MutableStateFlow<String>
+  unstable val _phone: MutableStateFlow<String>
+  unstable val _relationship: MutableStateFlow<String>
+  unstable val _error: MutableStateFlow<String?>
+  unstable val _savedEvent: Channel<Unit>
+  unstable val savedEvent: Flow<Unit>
+  unstable val uiState: StateFlow<GuardianAddUiState>
+  <runtime stability> = Unstable
+}
+unstable class GuardianUiState {
+  unstable val guardians: List<Guardian>
+  stable val canAddMore: Boolean
+  stable val message: String?
+  stable val smsMenuEnabled: Boolean
+  stable val showSmsPicker: Boolean
+  <runtime stability> = Unstable
+}
+unstable class GuardianViewModel {
+  unstable val guardianRepository: GuardianRepository
+  unstable val _message: MutableStateFlow<String?>
+  unstable val _showSmsPicker: MutableStateFlow<Boolean>
+  unstable val uiState: StateFlow<GuardianUiState>
+  <runtime stability> = Unstable
+}
+unstable class HistoryViewModel {
+  unstable val events: StateFlow<List<RiskEvent>>
+  <runtime stability> = Unstable
+}
+stable class HomePresentation {
+  stable val status: HomeStatus
+  stable val title: String
+  stable val baseBody: String
+  stable val level: RiskLevel
+  <runtime stability> = Stable
+}
+stable class GuardedCardInfo {
+  stable val title: String
+  stable val body: String
+  <runtime stability> = Stable
+}
+stable class HomeUiState {
+  stable val currentRiskTitle: String
+  stable val currentRiskBody: String
+  stable val currentRiskLevel: RiskLevel
+  stable val homeStatus: HomeStatus
+  stable val recentEventCount: Int
+  stable val hasCriticalPermissions: Boolean
+  stable val weeklyEventCount: Int
+  stable val weeklyTip: String
+  stable val guardedCard: GuardedCardInfo?
+  stable val hasGuardian: Boolean
+  stable val guardianName: String
+  stable val guardianPhone: String
+  <runtime stability> = Stable
+}
+unstable class HomeViewModel {
+  unstable val riskRepository: RiskRepository
+  unstable val sessionTracker: RiskSessionTracker
+  stable val alertStateResolver: AlertStateResolver
+  unstable val guardianRepository: GuardianRepository
+  runtime val coordinator: RiskDetectionCoordinator
+  unstable val context: Context
+  unstable val _hasCriticalPermissions: MutableStateFlow<Boolean>
+  unstable val _weeklySnapshot: MutableStateFlow<WeeklySnapshot>
+  unstable val _guardedCardShownSessionId: MutableStateFlow<String?>
+  unstable val uiState: StateFlow<HomeUiState>
+  unstable val _navigateToWarning: MutableSharedFlow<WarningNavigationPayload>
+  unstable val navigateToWarning: SharedFlow<WarningNavigationPayload>
+  <runtime stability> = Unstable
+}
+unstable class OnboardingViewModel {
+  unstable val settingsRepository: SettingsRepository
+  <runtime stability> = Unstable
+}
+unstable class PermissionsViewModel {
+  unstable val context: Context
+  unstable val _items: MutableStateFlow<List<PermissionStatus>>
+  unstable val items: StateFlow<List<PermissionStatus>>
+  <runtime stability> = Unstable
+}
+unstable class PolicyViewModel {
+  unstable val policy: StateFlow<PolicySummary>
+  <runtime stability> = Unstable
+}
+unstable class DebugViewModel {
+  unstable val sessionTracker: RiskSessionTracker
+  unstable val eventSink: RiskEventSink
+  runtime val evaluator: RiskEvaluator
+  runtime val coordinator: RiskDetectionCoordinator
+  unstable val cooldownManager: BankingCooldownManager
+  unstable val settingsRepository: SettingsRepository
+  unstable val session: StateFlow<RiskSession?>
+  unstable val testModeEnabled: StateFlow<Boolean>
+  unstable val smsMenuEnabled: StateFlow<Boolean>
+  unstable val score: StateFlow<RiskScore?>
+  <runtime stability> = Unstable
+}
+unstable class FraudScenario {
+  stable val id: String
+  stable val title: String
+  stable val description: String
+  unstable val steps: List<ScenarioStep>
+  <runtime stability> = Unstable
+}
+unstable class ScenarioStep {
+  stable val fraudsterMessage: String
+  unstable val choices: List<ScenarioChoice>
+  <runtime stability> = Unstable
+}
+stable class ScenarioChoice {
+  stable val text: String
+  stable val isCorrect: Boolean
+  stable val feedback: String
+  <runtime stability> = Stable
+}
+unstable class SimulationUiState {
+  unstable val scenario: FraudScenario
+  stable val currentStepIndex: Int
+  stable val selectedChoiceIndex: Int?
+  stable val correctCount: Int
+  stable val isCompleted: Boolean
+  <runtime stability> = Unstable
+}
+unstable class SimulationViewModel {
+  stable val scenarioId: String
+  unstable val scenario: FraudScenario
+  unstable val _uiState: MutableStateFlow<SimulationUiState>
+  unstable val uiState: StateFlow<SimulationUiState>
+  <runtime stability> = Unstable
+}
+stable class Loading {
+  <runtime stability> = Stable
+}
+stable class Ready {
+  stable val route: String
+  <runtime stability> = Stable
+}
+unstable class SplashViewModel {
+  unstable val settingsRepository: SettingsRepository
+  unstable val _uiState: MutableStateFlow<SplashUiState>
+  unstable val uiState: StateFlow<SplashUiState>
+  <runtime stability> = Unstable
+}
+unstable class WarningUiState {
+  unstable val guardians: List<Guardian>
+  stable val showGuardianPicker: Boolean
+  stable val message: String?
+  stable val detectedEventTitle: String?
+  stable val detectedEventDescription: String?
+  stable val detectedEventLevel: RiskLevel?
+  stable val smsMenuEnabled: Boolean
+  stable val showSmsPicker: Boolean
+  unstable val behaviorCheckAnswers: Map<Int, Boolean>
+  <runtime stability> = Unstable
+}
+unstable class WarningViewModel {
+  runtime val coordinator: RiskDetectionCoordinator
+  unstable val _showGuardianPicker: MutableStateFlow<Boolean>
+  unstable val _message: MutableStateFlow<String?>
+  unstable val _showSmsPicker: MutableStateFlow<Boolean>
+  unstable val _behaviorCheckAnswers: MutableStateFlow<Map<Int, Boolean>>
+  unstable val uiState: StateFlow<WarningUiState>
+  <runtime stability> = Unstable
+}
+unstable class RealAppInstallRiskMonitor {
+  unstable val context: Context
+  stable val remoteControlRegistry: RemoteControlAppRegistry
+  runtime val resetEpochProvider: ResetEpochProvider
+  <runtime stability> = Unstable
+}
+unstable class Observed {
+  unstable val packages: Set<String>
+  <runtime stability> = Unstable
+}
+stable class Unknown {
+  <runtime stability> = Stable
+}
+unstable class RemoteGateState {
+  stable val activeGeneration: Long
+  stable val lastObservedEpoch: Long
+  stable val remoteAbsentObservedInCurrentEpoch: Boolean
+  stable val anchorAtMs: Long?
+  stable val anchorEpoch: Long
+  unstable val cachedObservation: CachedObservation<List<RiskSignal>>?
+  <runtime stability> = Unstable
+}
+unstable class Applied {
+  unstable val produced: Produced<List<RiskSignal>>
+  <runtime stability> = Unstable
+}
+stable class Superseded {
+  <runtime stability> = Stable
+}
+stable class StaleEpoch {
+  <runtime stability> = Stable
+}
+runtime class CachedObservation {
+  runtime val produced: Produced<T>
+  stable val observedAtMs: Long
+  stable val generation: Long
+  <runtime stability> = Parameter(T)
+}
+unstable class RealAppUsageRiskMonitor {
+  unstable val context: Context
+  unstable val ioDispatcher: CoroutineDispatcher
+  stable val remoteControlRegistry: RemoteControlAppRegistry
+  runtime val resetEpochProvider: ResetEpochProvider
+  stable var clock: Function0<Long>
+  stable var monotonicClock: Function0<Long>
+  unstable val usageStatsManager$delegate: Lazy<UsageStatsManager?>
+  unstable val remoteGateState: AtomicReference<@[FlexibleNullability] RemoteGateState?>
+  unstable val bankingState: AtomicReference<@[FlexibleNullability] BankingCollectorState?>
+  <runtime stability> = Unstable
+}
+unstable class BankArsRegistry {
+  unstable val arsNumbers: Set<String>
+  <runtime stability> = Unstable
+}
+stable class CallSignalMapper {
+  <runtime stability> = Stable
+}
+unstable class CallerContactChecker {
+  unstable val context: Context
+  stable var clock: Function0<Long>
+  <runtime stability> = Unstable
+}
+stable class OutgoingCallReceiver {
+  <runtime stability> = Stable
+}
+unstable class RealCallRiskMonitor {
+  unstable val context: Context
+  stable val mapper: CallSignalMapper
+  unstable val contactChecker: CallerContactChecker
+  unstable val settingsRepository: SettingsRepository
+  unstable val bankArsRegistry: BankArsRegistry
+  unstable val sessionTracker: RiskSessionTracker
+  stable var clock: Function0<Long>
+  stable var monotonicClock: Function0<Long>
+  stable var sdkIntProvider: Function0<Int>
+  stable val extraStateRinging: String
+  stable var callbackExecutorFactory: Function0<ExecutorService>
+  stable var lastSuspiciousCallEndedElapsedMs: Long?
+  stable var safeConfirmedCallId: Long?
+  unstable val recentUnknownCalls: MutableList<Long>
+  unstable val callOwnership: AtomicReference<@[FlexibleNullability] CallOwnership?>
+  unstable val sharingScope: CoroutineScope
+  unstable val sharedCallContext$delegate: Lazy<SharedFlow<SourcedCallState>>
+  <runtime stability> = Unstable
+}
+unstable class RealDeviceEnvironmentRiskMonitor {
+  unstable val context: Context
+  unstable val signals: MutableStateFlow<Produced<List<RiskSignal>>>
+  <runtime stability> = Unstable
+}
+stable class MonitoringModule {
+  <runtime stability> = Stable
+}
+stable class RiskEvaluatorImpl {
+  <runtime stability> = Stable
+}
+unstable class RiskEventFactory {
+  stable var clock: Function0<Long>
+  <runtime stability> = Unstable
+}
+stable class CallContext {
+  stable val state: CallState
+  stable val phoneNumber: String?
+  stable val startedAtMillis: Long?
+  stable val endedAtMillis: Long?
+  stable val durationMs: Long
+  stable val durationSec: Long
+  stable val isUnknownCaller: Boolean?
+  stable val isVerifiedCaller: Boolean?
+  stable val isOutgoing: Boolean
+  <runtime stability> = Stable
+}
+stable class NoPermission {
+  <runtime stability> = Stable
+}
+stable class Idle {
+  <runtime stability> = Stable
+}
+stable class Active {
+  stable val context: CallContext
+  <runtime stability> = Stable
+}
+runtime class Produced {
+  runtime val value: T
+  stable val producedAtEpoch: Long
+  <runtime stability> = Parameter(T)
+}
+stable class AlertStateResolver {
+  <runtime stability> = Stable
+}
+unstable class DefaultRiskDetectionCoordinator {
+  runtime val callMonitor: CallRiskMonitor
+  runtime val appUsageMonitor: AppUsageRiskMonitor
+  runtime val appInstallMonitor: AppInstallRiskMonitor
+  runtime val deviceEnvMonitor: DeviceEnvironmentRiskMonitor
+  runtime val evaluator: RiskEvaluator
+  unstable val eventFactory: RiskEventFactory
+  unstable val eventSink: RiskEventSink
+  unstable val notificationManager: RiskNotificationManager
+  unstable val overlayManager: RiskOverlayManager
+  unstable val cooldownManager: BankingCooldownManager
+  unstable val sessionTracker: RiskSessionTracker
+  stable val alertStateResolver: AlertStateResolver
+  unstable val guardianRepository: GuardianRepository
+  unstable val ioDispatcher: CoroutineDispatcher
+  stable var clock: Function0<Long>
+  unstable var afterDebugEpochCapturedBeforePublish: SuspendFunction0<Unit>
+  unstable var afterDebugPublicationBeforeEffects: SuspendFunction1<RiskEvent, Unit>
+  unstable var beforeDebugOverlayEffect: SuspendFunction1<RiskEvent, Unit>
+  unstable var beforeInactiveSessionCleanupCommit: SuspendFunction0<Unit>
+  unstable var beforeRenewalDowngradeCleanup: SuspendFunction0<Unit>
+  unstable var beforePublicationNotificationCommit: SuspendFunction1<RiskEvent, Unit>
+  unstable var beforePublicationPopupAccountingCommit: SuspendFunction1<RiskEvent, Unit>
+  unstable val scope: CoroutineScope
+  unstable var job: Job?
+  stable var previousBankingForeground: Boolean
+  stable var cooldownConsumedSessionId: String?
+  unstable var s2RecRefireState: S2RecRefireDebounceState
+  unstable val _anchorHotState: MutableStateFlow<Boolean>
+  unstable val anchorHotState: StateFlow<Boolean>
+  unstable val _warningNavigationEvents: MutableSharedFlow<WarningNavigationPayload>
+  unstable val warningNavigationEvents: Flow<WarningNavigationPayload>
+  unstable var currentSafeConfirmationEvent: SafeConfirmationEventContext?
+  unstable var currentSafeConfirmationDebug: SafeConfirmationDebugContext?
+  stable var nextDebugSafeConfirmationToken: Long
+  unstable val consumedSafeConfirmations: MutableSet<SafeConfirmationConsumeKey>
+  unstable var pendingSafeConfirmationRetry: PendingSafeConfirmationRetry?
+  unstable val eventPublicationMutex: Mutex
+  stable var nextEventPublicationIntentSequence: Long
+  unstable val activeEventPublicationIntents: MutableMap<Long, ActiveEventPublicationIntent>
+  <runtime stability> = Unstable
+}
+stable class MaintenanceTick {
+  <runtime stability> = Stable
+}
+stable class Event {
+  stable val eventId: String
+  <runtime stability> = Stable
+}
+stable class Session {
+  stable val sessionId: String
+  <runtime stability> = Stable
+}
+stable class Debug {
+  stable val token: String
+  <runtime stability> = Stable
+}
+unstable class SafeConfirmationRequest {
+  stable val origin: SafeConfirmationOrigin
+  runtime val subject: SafeConfirmationSubject
+  stable val expectedResetEpoch: Long
+  stable val liveCallId: Long?
+  unstable val signals: Set<RiskSignal>
+  stable val expectedEventId: String?
+  <runtime stability> = Unstable
+}
+stable class WarningNavigationPayload {
+  stable val eventId: String
+  stable val expectedResetEpoch: Long
+  <runtime stability> = Stable
+}
+unstable class SafeConfirmationOverlayBinding {
+  runtime val subject: SafeConfirmationSubject
+  stable val expectedEventId: String
+  stable val expectedResetEpoch: Long
+  unstable val expectedSignals: Set<RiskSignal>
+  stable val kind: SafeConfirmationOverlayBindingKind
+  stable val consume: Function1<SafeConfirmationRequest, Boolean>
+  <runtime stability> = Unstable
+}
+unstable class S2RecRefireDebounceState {
+  stable val lastFiredAt: Long?
+  unstable val snapshot: Set<RiskSignal>
+  <runtime stability> = Unstable
+}
+stable class RemoteControlAppRegistry {
+  <runtime stability> = Stable
+}
+unstable class MonitoringForegroundService {
+  runtime var coordinator: RiskDetectionCoordinator
+  <runtime stability> = Unstable
+}
+unstable class RiskSession {
+  stable val id: String
+  stable val startedAt: Long
+  unstable val accumulatedSignals: Set<RiskSignal>
+  stable val lastSignalAt: Long
+  stable val notifiedLevel: RiskLevel?
+  stable val notifiedAlertState: AlertState?
+  unstable val notifiedActiveThreats: Set<RiskSignal>
+  stable val hasTrigger: Boolean
+  <runtime stability> = Unstable
+}
+unstable class UpdateOutcome {
+  unstable val session: RiskSession?
+  stable val expiredPrevious: Boolean
+  stable val renewed: Boolean
+  unstable val renewalBasis: Set<RiskSignal>?
+  stable val aborted: Boolean
+  <runtime stability> = Unstable
+}
+unstable class RiskSessionTracker {
+  stable var clock: Function0<Long>
+  unstable val _sessionState: MutableStateFlow<RiskSession?>
+  unstable val sessionState: StateFlow<RiskSession?>
+  stable var snoozedCallId: Long?
+  stable var snoozedAt: Long
+  stable var lastResetAt: Long?
+  unstable var lastResetSignals: Set<RiskSignal>
+  unstable val userResetEpochCounter: AtomicLong
+  <runtime stability> = Unstable
+}

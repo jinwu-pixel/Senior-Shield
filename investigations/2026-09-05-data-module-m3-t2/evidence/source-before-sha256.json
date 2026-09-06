@@ -1,0 +1,50 @@
+[
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/data/di/DatabaseModule.kt",
+    "Sha256": "28C80720CFA34E3133B39AE8A39E3BEF5D4063C1F62BF252BD1A569B4BB5CA09"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/data/di/DataModule.kt",
+    "Sha256": "1B086CC21CB7C612B9D89691DAAE3429EAAD549B815AA18BA9D13313C2F66661"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/data/local/db/RiskEventDao.kt",
+    "Sha256": "51CEBF622A35F2135C48FDF369EF71228B806C89824DB85E58C54AD12C9DD291"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/data/local/db/RiskEventEntity.kt",
+    "Sha256": "77003BFE126FF2E515275715640D1855591BC55D7F3CF493BD23CED4180116D5"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/data/local/db/SeniorShieldDatabase.kt",
+    "Sha256": "1D144F9807EBC0D93C0E6E606D3F78E6404BB9E3F1F9C2AAB3E4086411525CF2"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/data/local/GuardianDataStore.kt",
+    "Sha256": "557F582B8CFBDB32619E28A30994C7DC65B89EE8BA6CF030E46947367505CA2B"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/data/local/LiveRiskEventStore.kt",
+    "Sha256": "B9972D1789C447F14FCB1947A65BA7671FC81EC612917326CD675B576612324E"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/data/local/RoomRiskEventStore.kt",
+    "Sha256": "CA41BD5371E485AA4668EE9A679F0FD7ACE89CCE3048AC258138DF90DFF2490B"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/data/local/SettingsDataStore.kt",
+    "Sha256": "E4D118B83841D1FFC58EEF3FB7504C93AAEB7335B72EE83D768B4FE9BD07C3D6"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/data/repository/GuardianRepositoryImpl.kt",
+    "Sha256": "3614743067E39F44FB43C3A7B8A0818B2D6DF9DE2DC65C6B9CA24731A51147DF"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/data/repository/RiskRepositoryImpl.kt",
+    "Sha256": "A3A581055FD92212E09A351DE5FBEC11075005C9DE25FDA93634027AFF9AC5A5"
+  },
+  {
+    "Path": "app/src/main/java/com/example/seniorshield/data/repository/SettingsRepositoryImpl.kt",
+    "Sha256": "297833792C188E4A4214090E94469EAEEBFEA1BE3E4E6C120D3E6A3921D47027"
+  }
+]

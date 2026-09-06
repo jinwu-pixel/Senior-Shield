@@ -16,7 +16,7 @@ android {
         targetSdk = 34
         versionCode = 2
         versionName = "1.1"
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "com.example.seniorshield.test.M3TestRunner"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -52,18 +52,11 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        unitTests.isIncludeAndroidResources = true
     }
 
     packaging {
         resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
-    }
-}
-
-kapt {
-    arguments {
-        // Room 스키마 JSON을 app/schemas/<DB FQCN>/<version>.json 으로 export.
-        // exportSchema=true 와 한 쌍 — 이 인자가 없으면 JSON이 생성되지 않는다(경고만).
-        arg("room.schemaLocation", "$projectDir/schemas")
     }
 }
 
@@ -83,7 +76,9 @@ providers.gradleProperty("composeCompilerReportsDir").orNull?.let { reportsDir -
 }
 
 dependencies {
+    implementation(project(":data"))
     implementation(project(":domain:risk"))
+    implementation(project(":domain:contracts"))
 
     val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
     implementation(composeBom)
@@ -114,9 +109,15 @@ dependencies {
 
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
-    kapt("androidx.room:room-compiler:2.6.1")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
     testImplementation("io.mockk:mockk:1.13.13")
+    testImplementation(libs.robolectric)
+
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test:core:1.7.0")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("com.google.dagger:hilt-android-testing:2.52")
+    kaptAndroidTest("com.google.dagger:hilt-android-compiler:2.52")
 }

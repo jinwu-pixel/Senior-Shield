@@ -1,0 +1,6 @@
+
+Baseline              : 72
+ApprovedErrorsRemoved : 5
+Current               : 67
+Differences           : 0
+Fingerprint           : 338C12F4515B3CC90E3337173B36FC74215E0764804FB6188181061787C7D332

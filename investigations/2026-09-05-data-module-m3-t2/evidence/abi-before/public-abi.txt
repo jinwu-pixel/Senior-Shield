@@ -1,0 +1,264 @@
+Compiled from "DataModule.kt"
+public abstract class com.example.seniorshield.data.di.DataModule {
+  public static final int $stable;
+    descriptor: I
+  public com.example.seniorshield.data.di.DataModule();
+    descriptor: ()V
+
+  public abstract com.example.seniorshield.data.local.LiveRiskEventStore bindLiveRiskEventStore(com.example.seniorshield.data.local.RoomRiskEventStore);
+    descriptor: (Lcom/example/seniorshield/data/local/RoomRiskEventStore;)Lcom/example/seniorshield/data/local/LiveRiskEventStore;
+
+  public abstract com.example.seniorshield.domain.repository.RiskEventSink bindRiskEventSink(com.example.seniorshield.data.local.RoomRiskEventStore);
+    descriptor: (Lcom/example/seniorshield/data/local/RoomRiskEventStore;)Lcom/example/seniorshield/domain/repository/RiskEventSink;
+
+  public abstract com.example.seniorshield.domain.repository.RiskRepository bindRiskRepository(com.example.seniorshield.data.repository.RiskRepositoryImpl);
+    descriptor: (Lcom/example/seniorshield/data/repository/RiskRepositoryImpl;)Lcom/example/seniorshield/domain/repository/RiskRepository;
+
+  public abstract com.example.seniorshield.domain.repository.SettingsRepository bindSettingsRepository(com.example.seniorshield.data.repository.SettingsRepositoryImpl);
+    descriptor: (Lcom/example/seniorshield/data/repository/SettingsRepositoryImpl;)Lcom/example/seniorshield/domain/repository/SettingsRepository;
+
+  public abstract com.example.seniorshield.domain.repository.GuardianRepository bindGuardianRepository(com.example.seniorshield.data.repository.GuardianRepositoryImpl);
+    descriptor: (Lcom/example/seniorshield/data/repository/GuardianRepositoryImpl;)Lcom/example/seniorshield/domain/repository/GuardianRepository;
+}
+Compiled from "DatabaseModule.kt"
+public final class com.example.seniorshield.data.di.DatabaseModule {
+  public static final com.example.seniorshield.data.di.DatabaseModule INSTANCE;
+    descriptor: Lcom/example/seniorshield/data/di/DatabaseModule;
+  public static final int $stable;
+    descriptor: I
+  public final com.example.seniorshield.data.local.db.SeniorShieldDatabase provideDatabase(android.content.Context);
+    descriptor: (Landroid/content/Context;)Lcom/example/seniorshield/data/local/db/SeniorShieldDatabase;
+
+  public final com.example.seniorshield.data.local.db.RiskEventDao provideRiskEventDao(com.example.seniorshield.data.local.db.SeniorShieldDatabase);
+    descriptor: (Lcom/example/seniorshield/data/local/db/SeniorShieldDatabase;)Lcom/example/seniorshield/data/local/db/RiskEventDao;
+}
+Compiled from "GuardianDataStore.kt"
+public final class com.example.seniorshield.data.local.GuardianDataStoreKt {
+  public static final androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences> getGuardianDataStore(android.content.Context);
+    descriptor: (Landroid/content/Context;)Landroidx/datastore/core/DataStore;
+}
+Compiled from "GuardianDataStore.kt"
+public final class com.example.seniorshield.data.local.GuardianKeys {
+  public static final com.example.seniorshield.data.local.GuardianKeys INSTANCE;
+    descriptor: Lcom/example/seniorshield/data/local/GuardianKeys;
+  public static final int $stable;
+    descriptor: I
+  public final androidx.datastore.preferences.core.Preferences$Key<java.lang.String> getGuardiansJson();
+    descriptor: ()Landroidx/datastore/preferences/core/Preferences$Key;
+}
+Compiled from "SettingsDataStore.kt"
+public final class com.example.seniorshield.data.local.SettingsDataStoreKt {
+  public static final androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences> getSettingsDataStore(android.content.Context);
+    descriptor: (Landroid/content/Context;)Landroidx/datastore/core/DataStore;
+}
+Compiled from "SettingsDataStore.kt"
+public final class com.example.seniorshield.data.local.SettingsKeys {
+  public static final com.example.seniorshield.data.local.SettingsKeys INSTANCE;
+    descriptor: Lcom/example/seniorshield/data/local/SettingsKeys;
+  public static final int $stable;
+    descriptor: I
+  public final androidx.datastore.preferences.core.Preferences$Key<java.lang.Boolean> getOnboardingCompleted();
+    descriptor: ()Landroidx/datastore/preferences/core/Preferences$Key;
+
+  public final androidx.datastore.preferences.core.Preferences$Key<java.lang.Boolean> getSmsAlertEnabled();
+    descriptor: ()Landroidx/datastore/preferences/core/Preferences$Key;
+
+  public final androidx.datastore.preferences.core.Preferences$Key<java.lang.Boolean> getTestModeEnabled();
+    descriptor: ()Landroidx/datastore/preferences/core/Preferences$Key;
+
+  public final androidx.datastore.preferences.core.Preferences$Key<java.lang.Boolean> getSmsMenuEnabled();
+    descriptor: ()Landroidx/datastore/preferences/core/Preferences$Key;
+}
+Compiled from "LiveRiskEventStore.kt"
+public interface com.example.seniorshield.data.local.LiveRiskEventStore {
+  public abstract kotlinx.coroutines.flow.StateFlow<java.util.List<com.example.seniorshield.domain.model.RiskEvent>> getRecentEvents();
+    descriptor: ()Lkotlinx/coroutines/flow/StateFlow;
+
+  public abstract kotlinx.coroutines.flow.StateFlow<com.example.seniorshield.domain.model.RiskEvent> getCurrentEvent();
+    descriptor: ()Lkotlinx/coroutines/flow/StateFlow;
+}
+Compiled from "RoomRiskEventStore.kt"
+public final class com.example.seniorshield.data.local.RoomRiskEventStore implements com.example.seniorshield.data.local.LiveRiskEventStore,com.example.seniorshield.domain.repository.RiskEventSink {
+  public static final int $stable;
+    descriptor: I
+  public com.example.seniorshield.data.local.RoomRiskEventStore(com.example.seniorshield.data.local.db.RiskEventDao, kotlinx.coroutines.CoroutineDispatcher);
+    descriptor: (Lcom/example/seniorshield/data/local/db/RiskEventDao;Lkotlinx/coroutines/CoroutineDispatcher;)V
+
+  public kotlinx.coroutines.flow.StateFlow<java.util.List<com.example.seniorshield.domain.model.RiskEvent>> getRecentEvents();
+    descriptor: ()Lkotlinx/coroutines/flow/StateFlow;
+
+  public kotlinx.coroutines.flow.StateFlow<com.example.seniorshield.domain.model.RiskEvent> getCurrentEvent();
+    descriptor: ()Lkotlinx/coroutines/flow/StateFlow;
+
+  public java.lang.Object pushRiskEvent(com.example.seniorshield.domain.model.RiskEvent, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (Lcom/example/seniorshield/domain/model/RiskEvent;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public java.lang.Object recordRiskEvent(com.example.seniorshield.domain.model.RiskEvent, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (Lcom/example/seniorshield/domain/model/RiskEvent;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public java.lang.Object updateCurrentRiskEvent(com.example.seniorshield.domain.model.RiskEvent, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (Lcom/example/seniorshield/domain/model/RiskEvent;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public void clearCurrentRiskEvent();
+    descriptor: ()V
+
+  public java.lang.Object clearAll(kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+Compiled from "RiskEventDao.kt"
+public interface com.example.seniorshield.data.local.db.RiskEventDao {
+  public abstract java.lang.Object insert(com.example.seniorshield.data.local.db.RiskEventEntity, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (Lcom/example/seniorshield/data/local/db/RiskEventEntity;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public abstract kotlinx.coroutines.flow.Flow<java.util.List<com.example.seniorshield.data.local.db.RiskEventEntity>> observeRecent();
+    descriptor: ()Lkotlinx/coroutines/flow/Flow;
+
+  public abstract java.lang.Object countEventsSince(long, kotlin.coroutines.Continuation<? super java.lang.Integer>);
+    descriptor: (JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public abstract java.lang.Object deleteAll(kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+Compiled from "RiskEventEntity.kt"
+public final class com.example.seniorshield.data.local.db.RiskEventEntity {
+  public static final int $stable;
+    descriptor: I
+  public com.example.seniorshield.data.local.db.RiskEventEntity(java.lang.String, java.lang.String, java.lang.String, long, java.lang.String, java.lang.String);
+    descriptor: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JLjava/lang/String;Ljava/lang/String;)V
+
+  public final java.lang.String getId();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String getTitle();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String getDescription();
+    descriptor: ()Ljava/lang/String;
+
+  public final long getOccurredAtMillis();
+    descriptor: ()J
+
+  public final java.lang.String getLevel();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String getSignalsCsv();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String component1();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String component2();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String component3();
+    descriptor: ()Ljava/lang/String;
+
+  public final long component4();
+    descriptor: ()J
+
+  public final java.lang.String component5();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String component6();
+    descriptor: ()Ljava/lang/String;
+
+  public final com.example.seniorshield.data.local.db.RiskEventEntity copy(java.lang.String, java.lang.String, java.lang.String, long, java.lang.String, java.lang.String);
+    descriptor: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JLjava/lang/String;Ljava/lang/String;)Lcom/example/seniorshield/data/local/db/RiskEventEntity;
+
+  public static com.example.seniorshield.data.local.db.RiskEventEntity copy$default(com.example.seniorshield.data.local.db.RiskEventEntity, java.lang.String, java.lang.String, java.lang.String, long, java.lang.String, java.lang.String, int, java.lang.Object);
+    descriptor: (Lcom/example/seniorshield/data/local/db/RiskEventEntity;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JLjava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/example/seniorshield/data/local/db/RiskEventEntity;
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public int hashCode();
+    descriptor: ()I
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+}
+Compiled from "SeniorShieldDatabase.kt"
+public abstract class com.example.seniorshield.data.local.db.SeniorShieldDatabase extends androidx.room.RoomDatabase {
+  public static final int $stable;
+    descriptor: I
+  public com.example.seniorshield.data.local.db.SeniorShieldDatabase();
+    descriptor: ()V
+
+  public abstract com.example.seniorshield.data.local.db.RiskEventDao riskEventDao();
+    descriptor: ()Lcom/example/seniorshield/data/local/db/RiskEventDao;
+}
+Compiled from "GuardianRepositoryImpl.kt"
+public final class com.example.seniorshield.data.repository.GuardianRepositoryImpl implements com.example.seniorshield.domain.repository.GuardianRepository {
+  public static final int $stable;
+    descriptor: I
+  public com.example.seniorshield.data.repository.GuardianRepositoryImpl(android.content.Context);
+    descriptor: (Landroid/content/Context;)V
+
+  public kotlinx.coroutines.flow.Flow<java.util.List<com.example.seniorshield.domain.model.Guardian>> observeGuardians();
+    descriptor: ()Lkotlinx/coroutines/flow/Flow;
+
+  public java.lang.Object addGuardian(com.example.seniorshield.domain.model.Guardian, kotlin.coroutines.Continuation<? super java.lang.Boolean>);
+    descriptor: (Lcom/example/seniorshield/domain/model/Guardian;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public java.lang.Object removeGuardian(java.lang.String, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public java.lang.Object getGuardians(kotlin.coroutines.Continuation<? super java.util.List<com.example.seniorshield.domain.model.Guardian>>);
+    descriptor: (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public static final java.lang.Object access$saveGuardians(com.example.seniorshield.data.repository.GuardianRepositoryImpl, java.util.List, kotlin.coroutines.Continuation);
+    descriptor: (Lcom/example/seniorshield/data/repository/GuardianRepositoryImpl;Ljava/util/List;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public static final java.lang.String access$toJson(com.example.seniorshield.data.repository.GuardianRepositoryImpl, java.util.List);
+    descriptor: (Lcom/example/seniorshield/data/repository/GuardianRepositoryImpl;Ljava/util/List;)Ljava/lang/String;
+
+  public static final java.util.List access$parseGuardians(com.example.seniorshield.data.repository.GuardianRepositoryImpl, java.lang.String);
+    descriptor: (Lcom/example/seniorshield/data/repository/GuardianRepositoryImpl;Ljava/lang/String;)Ljava/util/List;
+}
+Compiled from "SettingsRepositoryImpl.kt"
+public final class com.example.seniorshield.data.repository.SettingsRepositoryImpl implements com.example.seniorshield.domain.repository.SettingsRepository {
+  public static final int $stable;
+    descriptor: I
+  public com.example.seniorshield.data.repository.SettingsRepositoryImpl(android.content.Context);
+    descriptor: (Landroid/content/Context;)V
+
+  public kotlinx.coroutines.flow.Flow<java.lang.Boolean> observeOnboardingCompleted();
+    descriptor: ()Lkotlinx/coroutines/flow/Flow;
+
+  public java.lang.Object setOnboardingCompleted(boolean, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public kotlinx.coroutines.flow.Flow<java.lang.Boolean> observeSmsAlertEnabled();
+    descriptor: ()Lkotlinx/coroutines/flow/Flow;
+
+  public java.lang.Object setSmsAlertEnabled(boolean, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public kotlinx.coroutines.flow.Flow<java.lang.Boolean> observeTestModeEnabled();
+    descriptor: ()Lkotlinx/coroutines/flow/Flow;
+
+  public java.lang.Object setTestModeEnabled(boolean, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public kotlinx.coroutines.flow.Flow<java.lang.Boolean> observeSmsMenuEnabled();
+    descriptor: ()Lkotlinx/coroutines/flow/Flow;
+
+  public java.lang.Object setSmsMenuEnabled(boolean, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+Compiled from "RiskRepositoryImpl.kt"
+public final class com.example.seniorshield.data.repository.RiskRepositoryImpl implements com.example.seniorshield.domain.repository.RiskRepository {
+  public static final int $stable;
+    descriptor: I
+  public com.example.seniorshield.data.repository.RiskRepositoryImpl(com.example.seniorshield.data.local.LiveRiskEventStore, com.example.seniorshield.data.local.db.RiskEventDao);
+    descriptor: (Lcom/example/seniorshield/data/local/LiveRiskEventStore;Lcom/example/seniorshield/data/local/db/RiskEventDao;)V
+
+  public kotlinx.coroutines.flow.Flow<java.util.List<com.example.seniorshield.domain.model.RiskEvent>> getRecentRiskEvents();
+    descriptor: ()Lkotlinx/coroutines/flow/Flow;
+
+  public kotlinx.coroutines.flow.Flow<com.example.seniorshield.domain.model.RiskEvent> getCurrentRiskEvent();
+    descriptor: ()Lkotlinx/coroutines/flow/Flow;
+
+  public java.lang.Object countEventsSince(long, kotlin.coroutines.Continuation<? super java.lang.Integer>);
+    descriptor: (JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}

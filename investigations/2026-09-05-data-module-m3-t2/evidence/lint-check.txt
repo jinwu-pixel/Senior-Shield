@@ -1,0 +1,11 @@
+
+Verdict                      : Exact approved lint projection PASS
+AppErrors                    : 5
+AppWarnings                  : 69
+RetainedBaselineIssues       : 69
+RoomProcessorWarningsMoved   : 3
+ExactTestDeclarationWarnings : 5
+DataWarnings                 : 14
+NewSourceOrManifestIssues    : 0
+AppFingerprint               : C47F35A647F6FC78E5864FB772240CD823FB07FF47E230D8912E91521D561BC9
+DataFingerprint              : 8B8B8DBDD93425F073D1D928C27B5F9F29348173BD758F8C0E5F1A11821DBD32

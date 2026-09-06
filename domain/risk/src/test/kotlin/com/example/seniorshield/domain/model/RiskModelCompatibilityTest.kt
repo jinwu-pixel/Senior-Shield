@@ -137,4 +137,40 @@ class RiskModelCompatibilityTest {
             listOf(total, level, signals),
         )
     }
+
+    @Test
+    fun `risk event and risk score properties remain immutable Java beans`() {
+        assertImmutableProperties(
+            RiskEvent::class.java,
+            listOf("id", "title", "description", "occurredAtMillis", "level", "signals"),
+        )
+        assertImmutableProperties(
+            RiskScore::class.java,
+            listOf("total", "level", "signals"),
+        )
+    }
+
+    private fun assertImmutableProperties(modelClass: Class<*>, propertyNames: List<String>) {
+        val backingFields = modelClass.declaredFields.filterNot { field ->
+            Modifier.isStatic(field.modifiers) || field.isSynthetic
+        }
+        assertEquals(
+            "${modelClass.simpleName} must declare exactly the intended instance backing fields",
+            propertyNames.toSet(),
+            backingFields.map { field -> field.name }.toSet(),
+        )
+
+        backingFields.forEach { backingField ->
+            val propertyName = backingField.name
+            assertTrue(
+                "${modelClass.simpleName}.$propertyName backing field must be final",
+                Modifier.isFinal(backingField.modifiers),
+            )
+            val setterName = "set${propertyName.replaceFirstChar(Char::uppercaseChar)}"
+            assertTrue(
+                "${modelClass.simpleName}.$propertyName must not expose a Java setter",
+                modelClass.methods.none { method -> method.name == setterName },
+            )
+        }
+    }
 }

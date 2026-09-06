@@ -1,0 +1,174 @@
+[
+  {
+    "Suite": "com.example.seniorshield.core.notification.RiskNotificationPermissionSafetyTest",
+    "Tests": 12,
+    "Failures": 2,
+    "Errors": 0,
+    "Skipped": 0,
+    "FailedTests": [
+      {
+        "Name": "permissionRevokedAtNotifyIsSkipped[32]",
+        "Type": "java.lang.SecurityException"
+      },
+      {
+        "Name": "permissionRevokedAtNotifyIsSkipped",
+        "Type": "java.lang.SecurityException"
+      }
+    ]
+  },
+  {
+    "Suite": "com.example.seniorshield.core.overlay.BankingCooldownPermissionSafetyTest",
+    "Tests": 28,
+    "Failures": 14,
+    "Errors": 0,
+    "Skipped": 0,
+    "FailedTests": [
+      {
+        "Name": "permissionRevokedAfterRenderDismissesImmediately[32]",
+        "Type": "java.lang.AssertionError"
+      },
+      {
+        "Name": "permissionRevokedBetweenCallCheckAndOpeningSkipsInvocation[32]",
+        "Type": "java.lang.AssertionError"
+      },
+      {
+        "Name": "deniedAtRenderAndClickDoesNotReadCallStateOrOpenPhone[32]",
+        "Type": "java.lang.AssertionError"
+      },
+      {
+        "Name": "permissionRevokedAtShowInCallScreenDismissesImmediately[32]",
+        "Type": "java.lang.SecurityException"
+      },
+      {
+        "Name": "permissionRevokedDuringClickCallStateCheckDismissesImmediately[32]",
+        "Type": "java.lang.SecurityException"
+      },
+      {
+        "Name": "revocationDuringRenderIsSafeAndPrimaryStillDismisses[32]",
+        "Type": "java.lang.SecurityException"
+      },
+      {
+        "Name": "serviceDisappearingBetweenCheckAndOpeningDismissesImmediately[32]",
+        "Type": "java.lang.AssertionError"
+      },
+      {
+        "Name": "permissionRevokedAfterRenderDismissesImmediately",
+        "Type": "java.lang.AssertionError"
+      },
+      {
+        "Name": "permissionRevokedBetweenCallCheckAndOpeningSkipsInvocation",
+        "Type": "java.lang.AssertionError"
+      },
+      {
+        "Name": "deniedAtRenderAndClickDoesNotReadCallStateOrOpenPhone",
+        "Type": "java.lang.AssertionError"
+      },
+      {
+        "Name": "permissionRevokedAtShowInCallScreenDismissesImmediately",
+        "Type": "java.lang.SecurityException"
+      },
+      {
+        "Name": "permissionRevokedDuringClickCallStateCheckDismissesImmediately",
+        "Type": "java.lang.SecurityException"
+      },
+      {
+        "Name": "revocationDuringRenderIsSafeAndPrimaryStillDismisses",
+        "Type": "java.lang.SecurityException"
+      },
+      {
+        "Name": "serviceDisappearingBetweenCheckAndOpeningDismissesImmediately",
+        "Type": "java.lang.AssertionError"
+      }
+    ]
+  },
+  {
+    "Suite": "com.example.seniorshield.core.overlay.RiskOverlayPermissionSafetyTest",
+    "Tests": 28,
+    "Failures": 14,
+    "Errors": 0,
+    "Skipped": 0,
+    "FailedTests": [
+      {
+        "Name": "permissionRevokedAfterRenderDismissesImmediately[32]",
+        "Type": "java.lang.AssertionError"
+      },
+      {
+        "Name": "permissionRevokedBetweenCallCheckAndOpeningSkipsInvocation[32]",
+        "Type": "java.lang.AssertionError"
+      },
+      {
+        "Name": "deniedAtRenderAndClickDoesNotReadCallStateOrOpenPhone[32]",
+        "Type": "org.junit.ComparisonFailure"
+      },
+      {
+        "Name": "permissionRevokedAtShowInCallScreenDismissesImmediately[32]",
+        "Type": "java.lang.SecurityException"
+      },
+      {
+        "Name": "permissionRevokedDuringClickCallStateCheckDismissesImmediately[32]",
+        "Type": "java.lang.SecurityException"
+      },
+      {
+        "Name": "revocationDuringRenderIsSafeAndPrimaryStillDismisses[32]",
+        "Type": "java.lang.SecurityException"
+      },
+      {
+        "Name": "serviceDisappearingBetweenCheckAndOpeningDismissesImmediately[32]",
+        "Type": "java.lang.AssertionError"
+      },
+      {
+        "Name": "permissionRevokedAfterRenderDismissesImmediately",
+        "Type": "java.lang.AssertionError"
+      },
+      {
+        "Name": "permissionRevokedBetweenCallCheckAndOpeningSkipsInvocation",
+        "Type": "java.lang.AssertionError"
+      },
+      {
+        "Name": "deniedAtRenderAndClickDoesNotReadCallStateOrOpenPhone",
+        "Type": "org.junit.ComparisonFailure"
+      },
+      {
+        "Name": "permissionRevokedAtShowInCallScreenDismissesImmediately",
+        "Type": "java.lang.SecurityException"
+      },
+      {
+        "Name": "permissionRevokedDuringClickCallStateCheckDismissesImmediately",
+        "Type": "java.lang.SecurityException"
+      },
+      {
+        "Name": "revocationDuringRenderIsSafeAndPrimaryStillDismisses",
+        "Type": "java.lang.SecurityException"
+      },
+      {
+        "Name": "serviceDisappearingBetweenCheckAndOpeningDismissesImmediately",
+        "Type": "java.lang.AssertionError"
+      }
+    ]
+  },
+  {
+    "Suite": "com.example.seniorshield.core.util.CallEndHelperPermissionSafetyTest",
+    "Tests": 12,
+    "Failures": 4,
+    "Errors": 0,
+    "Skipped": 0,
+    "FailedTests": [
+      {
+        "Name": "permissionRevokedAtIsInCallReturnsFalse[32]",
+        "Type": "java.lang.SecurityException"
+      },
+      {
+        "Name": "deniedPermissionDoesNotAccessTelecomService[32]",
+        "Type": "java.lang.AssertionError"
+      },
+      {
+        "Name": "permissionRevokedAtIsInCallReturnsFalse",
+        "Type": "java.lang.SecurityException"
+      },
+      {
+        "Name": "deniedPermissionDoesNotAccessTelecomService",
+        "Type": "java.lang.AssertionError"
+      }
+    ]
+  }
+]
