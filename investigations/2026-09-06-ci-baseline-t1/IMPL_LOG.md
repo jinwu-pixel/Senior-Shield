@@ -79,3 +79,13 @@
 - -ReportRoot 입력을 추가해 실제 Ubuntu 리포트64/13/0과 로컬 리포트69/14/1 양쪽으로 하네스를 실행한다. contracts-approved-warning.xml은 변조 테스트 전용 fixture다. 원격 조회 실패의 구체적인 네트워크/캐시 원인은 관측 사실과 구분했다.
 - 검증 결과와 후속 Actions URL은 아래에 기록한다. production·Gradle 소스 변경0이며 실기기 테스트는 반복하지 않는다.
 - 후속 검증: 로컬69/14/1 및 실제 Ubuntu64/13/0 입력 각각 probe40/40 PASS(unexpected0). 실제 Ubuntu 리포트에서 narrowed lint 판정 PASS, production/Gradle 변경0. 원격 후속 run은 push 뒤 확인한다.
+
+### 후속 원격 run 34039299138 — GREEN
+
+- 검증 커밋: `271802a7b11e3ae63c4b8da32b18f9553e091c48` (실제7건만 허용 + cold-runner self-check). PR #14, main 미병합.
+- URL: https://github.com/jinwu-pixel/Senior-Shield/actions/runs/34039299138
+- 최종 conclusion success, verify job 6m20s. JDK/SDK 준비, serial Gradle gate, unit XML, domain lint, app/data lint, schema drift, self-check, artifact 업로드 모두 success. 실패 전용 lint-diff step은 정상적으로 skipped.
+- 실제 다운로드한 artifact의 XML을 재집계: 41 suites/555 tests(app544/risk7/contracts4), failure/error/skipped0. probe40/40 unexpected0.
+- 실제 lint: app64/69, data13/14, contracts0, risk0. exact-required app64/data13 모두 일치하고 부재는 승인된 app5/data1/contracts1뿐이다. 새로운 진단·확대된 일반 waiver는 없다.
+- Artifact: `verify-reports-2`, ID9991260720, 101946 bytes, 보존14일. lint XML4, unit/probe/lint 판정 JSON/TXT, run metadata와 artifact 식별정보를 `evidence/run-34039299138/`에 보존한다.
+- 이번 문서/증거 후속 커밋은 위 검증 커밋에서 실행 코드·workflow·probe를 변경하지 않는다. 최종 브랜치 SHA 및 후속 체크 상태는 PR에서 확인한다. main 병합·실제 통화 UI·CI 밖 기기 재실행은 수행하지 않았다.

@@ -1,0 +1,24 @@
+[
+  {
+    "Label": "app",
+    "Expected": 69,
+    "Current": 64,
+    "ExactRequired": 64,
+    "TolerableAbsent": 5,
+    "ToleratedAbsent": [
+      "GradleDependency|Warning|A newer version of org.jetbrains.kotlin.plugin.compose than 2.0.21 is available: <LATEST>|gradle\\libs.versions.toml|kotlin = \"2.0.21\" x3",
+      "GradleDependency|Warning|A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-android than 1.8.1 is available: <LATEST>|app\\build.gradle.kts|    implementation(\"org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1\") x1",
+      "GradleDependency|Warning|A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-test than 1.8.1 is available: <LATEST>|app\\build.gradle.kts|    testImplementation(\"org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1\") x1"
+    ]
+  },
+  {
+    "Label": "data",
+    "Expected": 14,
+    "Current": 13,
+    "ExactRequired": 13,
+    "TolerableAbsent": 1,
+    "ToleratedAbsent": [
+      "GradleDependency|Warning|A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-android than 1.8.1 is available: <LATEST>|data\\build.gradle.kts|    implementation(\"org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1\") x1"
+    ]
+  }
+]
