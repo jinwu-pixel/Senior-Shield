@@ -1,0 +1,26 @@
+PROBE OK         | unit: faithful copy | verifier=pass expected=pass | Verdict: PASS total=555 suites=41 failures=0 errors=0 skipped=0
+PROBE OK         | unit: one app suite skipped=1 | verifier=fail expected=fail | app: skipped=1 (skipped tests are not allowed)
+PROBE OK         | unit: one app suite file removed (below floor 544) | verifier=fail expected=fail | app: tests=532 is below the frozen floor 544
+PROBE OK         | unit: risk failures=1 | verifier=fail expected=fail | domain:risk: failures=1 errors=0
+PROBE OK         | unit: contracts errors=1 | verifier=fail expected=fail | domain:contracts: failures=0 errors=1
+PROBE OK         | unit: contracts results dir missing | verifier=fail expected=fail | Missing test results for domain:contracts: domain/contracts/build/test-results/test
+PROBE OK         | domain lint: faithful copy | verifier=pass expected=pass | Verdict: PASS domain:risk=0 issues; domain:contracts=1 approved GradleDependency warning (domain/contracts/build.gradle.kts: coroutines-core 1.8.1 pin), 0 errors
+PROBE OK         | domain lint: only the latest-version metadata changes (normalized, must pass) | verifier=pass expected=pass | Verdict: PASS domain:risk=0 issues; domain:contracts=1 approved GradleDependency warning (domain/contracts/build.gradle.kts: coroutines-core 1.8.1 pin), 0 errors
+PROBE OK         | domain lint: risk gains 1 issue | verifier=fail expected=fail | domain:risk lint expected 0 issues, found 1: GradleDependency/Warning@C:\Users\momen\AppData\Local\Temp\seniorshield-ci-probes\probe-lint-risk-issue\domain\contracts\buil
+PROBE OK         | domain lint: contracts approved warning disappears | verifier=fail expected=fail | domain:contracts lint expected exactly one approved issue, found 0:
+PROBE OK         | domain lint: contracts warning escalated to Error | verifier=fail expected=fail | domain:contracts lint issue does not match the approved warning: Severity expected [Warning] actual [Error]
+PROBE OK         | domain lint: contracts warning duplicated (2 issues) | verifier=fail expected=fail | domain:contracts lint expected exactly one approved issue, found 2: GradleDependency/Warning@C:\Users\momen\AppData\Local\Temp\seniorshield-ci-probes\probe-lint-contracts
+PROBE OK         | domain lint: contracts warning id changed | verifier=fail expected=fail | domain:contracts lint issue does not match the approved warning: Id expected [GradleDependency] actual [UseTomlInstead]
+PROBE OK         | domain lint: same id/severity/file but a different library warning | verifier=fail expected=fail | domain:contracts lint issue does not match the approved warning: Message expected [A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-core than 1.8.1 is availabl
+PROBE OK         | domain lint: declaration (errorLine1) changed only | verifier=fail expected=fail | domain:contracts lint issue does not match the approved warning: Declaration expected [ api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")] actual [ implementatio
+PROBE OK         | domain lint: message pinned version changed only | verifier=fail expected=fail | domain:contracts lint issue does not match the approved warning: Message expected [A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-core than 1.8.1 is availabl
+PROBE OK         | domain lint: second location appended | verifier=fail expected=fail | domain:contracts lint issue does not match the approved warning: LocationCount expected [1] actual [2]; File expected [domain/contracts/build.gradle.kts] actual []
+PROBE OK         | domain lint: same file name under a different directory | verifier=fail expected=fail | domain:contracts lint issue does not match the approved warning: File expected [domain/contracts/build.gradle.kts] actual [domain/contracts/src/build.gradle.kts]
+PROBE OK         | domain lint: location outside the repository root | verifier=fail expected=fail | Lint location outside repository root: /elsewhere/domain/contracts/build.gradle.kts
+PROBE OK         | domain lint: risk report missing | verifier=fail expected=fail | Missing lint report: domain/risk/build/reports/lint-results.xml
+PROBE OK         | schema drift: committed tree clean | verifier=pass expected=pass | Room schema drift 0 under data/schemas (tracked and untracked)
+PROBE OK         | schema drift: new UNTRACKED schema JSON (version bump not committed) | verifier=fail expected=fail | ?? data/schemas/com.example.Db/2.json
+PROBE OK         | schema drift: tracked schema JSON modified | verifier=fail expected=fail |  1 file changed, 1 insertion(+), 1 deletion(-)
+PROBE OK         | schema drift: tracked schema JSON deleted | verifier=fail expected=fail |  1 file changed, 1 deletion(-)
+PROBE OK         | schema drift: restored tree clean again | verifier=pass expected=pass | Room schema drift 0 under data/schemas (tracked and untracked)
+probes=25 ok=25 unexpected=0

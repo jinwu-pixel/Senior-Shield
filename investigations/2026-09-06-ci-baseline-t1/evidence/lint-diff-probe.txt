@@ -1,0 +1,9 @@
+# lint-diff.ps1 diagnostic demo: app report with one baseline diagnostic removed and one fabricated diagnostic appended
+== app lint: expected=69 current=69 missing=1 extra=1
+  MISSING OldTargetApi|Warning|Not targeting the latest versions of Android; compatibility modes apply. Consider testing and updating this version. Consult the `android.os.Build.VERSION_CODES` javadoc for details.|app\build.gradle.kts|        targetSdk = 34 x1
+  EXTRA   UnusedResources|Warning|probe extra diagnostic|gradle\libs.versions.toml|agp = "9.0.1" x1
+== data lint: expected=14 current=14 missing=0 extra=0
+# verify-integration-lint.ps1 on the same mutated report:
+App exact lint union failed
+App exact lint union failed
+exit=1 (expected)
