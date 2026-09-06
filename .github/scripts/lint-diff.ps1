@@ -10,8 +10,11 @@ param(
 )
 $ErrorActionPreference = 'Continue'
 
-$m2 = Join-Path $RepositoryRoot 'investigations/2026-09-05-domain-contracts-m2-t2'
-$m3 = Join-Path $RepositoryRoot 'investigations/2026-09-05-data-module-m3-t2'
+# Frozen inventories come from the repository this script lives in; -RepositoryRoot only relativizes
+# the locations inside the current reports (same split as verify-lint-union.ps1).
+$evidenceRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
+$m2 = Join-Path $evidenceRoot 'investigations/2026-09-05-domain-contracts-m2-t2'
+$m3 = Join-Path $evidenceRoot 'investigations/2026-09-05-data-module-m3-t2'
 . (Join-Path $m3 'lint-records.ps1')
 
 function Show-Diff([string]$Label, [string[]]$Expected, [string[]]$Current) {
@@ -34,7 +37,7 @@ function Show-Diff([string]$Label, [string[]]$Expected, [string[]]$Current) {
 }
 
 try {
-    $baseline = @(Read-LintRecords (Join-Path $m2 'evidence/lint/baseline-lint.sanitized.xml') $RepositoryRoot)
+    $baseline = @(Read-LintRecords (Join-Path $m2 'evidence/lint/baseline-lint.sanitized.xml') $evidenceRoot)
     $room = @($baseline | Where-Object {
         $_.File -ceq 'app\build.gradle.kts' -and $_.Declaration -ceq '    kapt("androidx.room:room-compiler:2.6.1")'
     })

@@ -1,7 +1,7 @@
 name: verify
 
-# Mirrors the local serial verification gate exactly (same Gradle tasks and flags,
-# same frozen lint/test verifiers). No step may soften a gate: no continue-on-error,
+# Uses the local serial Gradle tasks and flags, with the approved seven exact
+# optional version-lookup warnings for CI. No blanket waiver or continue-on-error,
 # no lint baseline, no test filtering. Instrumentation (real device) stays out of CI.
 
 on:
@@ -67,13 +67,13 @@ jobs:
         shell: pwsh
         run: ./.github/scripts/verify-unit-xml.ps1 -EvidenceOut build-evidence/unit-tests.json
 
-      - name: Verify domain lint (risk 0, contracts 1 approved warning)
+      - name: Verify domain lint (risk 0, contracts 0 or 1 exact approved warning)
         shell: pwsh
         run: ./.github/scripts/verify-domain-lint.ps1
 
-      - name: Verify app/data lint exact union (69 / 14)
+      - name: Verify app/data lint (exact except 5 app and 1 data enumerated warnings)
         shell: pwsh
-        run: ./investigations/2026-09-05-integration-m3-permission/verify-integration-lint.ps1 -AppCurrent $env:APP_LINT -DataCurrent $env:DATA_LINT
+        run: ./.github/scripts/verify-lint-union.ps1 -AppCurrent $env:APP_LINT -DataCurrent $env:DATA_LINT -EvidenceOut build-evidence/lint-union.json
 
       - name: Room schema drift (tracked and untracked)
         shell: bash

@@ -50,4 +50,32 @@
 
 - 커밋 대상(exact path, 18 파일): `.github/workflows/verify.yml`, `.github/scripts/verify-unit-xml.ps1`, `.github/scripts/verify-domain-lint.ps1`, `.github/scripts/lint-diff.ps1`, `.github/scripts/check-schema-drift.sh`, `investigations/2026-09-06-ci-baseline-t1/DIRECTIVE.md`, `IMPL_LOG.md`, `probe-verifiers.ps1`, `run-device-baseline.ps1`, `evidence/.gitattributes`, `evidence/*`(8 파일).
 - push 후 첫 `verify` run GREEN 확인과 run URL·소요 시간·artifact 기록은 사용자 승인 뒤 이 섹션에 추가한다. RED면 S5 보고.
+- **2026-09-06 사용자 "커밋 나우"** → 브랜치 `claude/ci-baseline-t1`(main 7c6bfd1 기준), 커밋 `c8f220c`(18 files, +1150), push, Ready PR **#14** (base main, 병합 안 함): https://github.com/jinwu-pixel/Senior-Shield/pull/14. workflow는 `pull_request`·main push에서만 실행되므로 PR이 main 반영 전 첫 원격 실행 경로다.
+- 첫 원격 run: https://github.com/jinwu-pixel/Senior-Shield/actions/runs/34021941395 (pull_request, ubuntu-24.04). 결과는 아래에 추가.
+
+### 첫 원격 run 34021941395 — S5 (lint 판정 실패), 원인·수정
+
+- 단계 결과(`evidence/run-34021941395/run-summary.txt`): Checkout·JDK·SDK 설치·Gradle 캐시 **성공**, **직렬 게이트 성공(7m17s)**, unit XML 검증 **PASS 555/41**, 도메인 lint 검증 **실패** → 이후 판정 단계 skipped, lint-diff 진단·artifact 업로드 성공. 총 7m40s.
+- 원인: runner의 contracts lint = **0건**(승인 coroutines-core 경고 부재), app 64/69, data 13/14. lint-diff 출력 기준 빠진 것은 전부 `GradleDependency` "A newer version of org.jetbrains.kotlin* …"(app: kotlin.plugin.compose ×3·coroutines-android·coroutines-test, data: coroutines-android, contracts: coroutines-core) = **Maven Central 조회 의존 진단**. androidx/AGP(Google Maven) 조회는 runner에서도 동일하게 나타났다. 즉 frozen 지문은 로컬의 원격 조회 결과(캐시 포함)를 담고 있어 fresh 환경에서 재현되지 않는다. 코드·테스트·결정적 lint는 전부 동일.
+- 수정(판정 계약 변경, DIRECTIVE §3.1 2·3 갱신):
+  - 신규 `.github/scripts/verify-lint-union.ps1`: 같은 frozen 증거·해시로 **결정적 진단 exact + 원격 조회 의존 진단 부분 multiset**(신규·변경 0, 부재 허용·목록 출력). frozen 증거는 스크립트가 속한 저장소에서 읽고 `-RepositoryRoot`는 현재 리포트의 경로 접두사에만 쓴다(`lint-diff.ps1`도 동일하게 분리).
+  - `verify-domain-lint.ps1`: contracts 0건 허용(그 밖의 진단은 여전히 실패), 1건이면 6필드 일치.
+  - workflow: exact-union 단계를 `verify-lint-union.ps1`로 교체(12 steps 유지). 로컬 Windows 증거용 기존 exact 검증기는 무수정.
+- 재검증: runner 리포트 원본에 새 검증기 적용 → **app 64/69·data 13/14 PASS(결정적 41/41·9/9 exact, 부재 5+1 tolerated)**, contracts 0건 PASS(`evidence/run-34021941395/verdict-after-fix.txt`). 로컬 리포트 → 69/14 PASS·contracts 1건 PASS. probe 하네스 확장 **35/35**(unit 6, domain lint 14, lint union 10 — runner와 동일한 부재 PASS·최신버전 정규화 PASS·결정적 누락 FAIL·조회의존 중복/변경 FAIL·신규 진단 FAIL·Error FAIL·리포트 없음 FAIL, schema 5). `evidence/verifier-probes.txt`.
+- 커밋 대상 추가(S1 대기, 두 번째 커밋): `.github/scripts/verify-lint-union.ps1`(신규), `verify-domain-lint.ps1`·`lint-diff.ps1`·`verify.yml`·`probe-verifiers.ps1`·DIRECTIVE·IMPL_LOG·`evidence/verifier-probes.txt`(수정), `evidence/run-34021941395/`(runner lint XML 4·unit-tests.json·run-summary·verdict-after-fix). push 후 run #2 결과를 여기에 기록.
+
+### 독립 리뷰 2차 (S2) — 부재 허용 범위 축소
+
+- 지적: 1차 수정안의 "원격 조회 의존 진단 부분 multiset" 규칙은 실제 누락 7건이 아니라 조회 의존 **app 28·data 5·contracts 1건 전부**의 부재를 허용한다(app 41/data 9만 남긴 입력 PASS 재현). 코드·키 인벤토리로 확인: app 조회 의존 28 = Maven Central 5 + Google Maven 23, data 5 = 1 + 4. Google Maven 조회는 runner에서도 전부 나왔으므로 그 부재까지 허용할 근거가 없었다.
+- 수정: `verify-lint-union.ps1`을 **exact multiset + 열거된 7 키의 부재만 최대 횟수까지 허용**으로 변경(app 3 키/5건, data 1 키/1건; contracts 1건은 `verify-domain-lint.ps1`의 0건 허용으로 이미 열거). 열거 키가 frozen 인벤토리에 없으면 fail-closed. DIRECTIVE §3.1 3 갱신.
+- 재검증: runner 리포트 원본 **PASS 64/69·13/14**(exact-required 64/13 전부 존재, 열거 부재 5/1), 로컬 **PASS 69/14**. probe **38/38** — 신규 3건 = 조회 의존 전부 부재(app 41/data 9) → FAIL, app Google Maven 1건 부재 → FAIL, data Google Maven 1건 부재 → FAIL. `evidence/verifier-probes.txt`, `evidence/run-34021941395/verdict-after-fix.txt`.
 - 후속 T0: `gradlew` 실행 비트(`git update-index --chmod=+x gradlew`)를 별도 커밋으로 정리하면 workflow의 `chmod +x` 단계를 제거할 수 있다.
+
+### Codex 후속 마감 — 사용자 승인 범위(7건) 적용
+
+- 사용자가 열거된 실제 누락7건만 허용하는 후속 커밋·push를 승인했다. app3키/5건, data1키/1건, contracts1키/1건이며 다른 진단은 exact 유지한다. 허용 키의 frozen 횟수도 정확히 일치해야 한다.
+- multiset 카운터는 Ordinal 비교를 사용해 대소문자만 바뀐 진단도 새 진단으로 검출한다. 허용 경고의 중복 증가도 실패하는 probe를 추가했다.
+- self-check의 추가 환경 결함: 실제 CI에서 contracts 경고가0이면 첫 메시지 변조부터 입력이 없어 실패한다. 실제 리포트의 faithful-copy probe는 유지하고, 나머지 lint 변조만 보존된 full fixture를 scratch에 복사해 검사하도록 분리했다. CI 실제 판정 리포트는 보충/수정하지 않는다.
+- -ReportRoot 입력을 추가해 실제 Ubuntu 리포트64/13/0과 로컬 리포트69/14/1 양쪽으로 하네스를 실행한다. contracts-approved-warning.xml은 변조 테스트 전용 fixture다. 원격 조회 실패의 구체적인 네트워크/캐시 원인은 관측 사실과 구분했다.
+- 검증 결과와 후속 Actions URL은 아래에 기록한다. production·Gradle 소스 변경0이며 실기기 테스트는 반복하지 않는다.
+- 후속 검증: 로컬69/14/1 및 실제 Ubuntu64/13/0 입력 각각 probe40/40 PASS(unexpected0). 실제 Ubuntu 리포트에서 narrowed lint 판정 PASS, production/Gradle 변경0. 원격 후속 run은 push 뒤 확인한다.

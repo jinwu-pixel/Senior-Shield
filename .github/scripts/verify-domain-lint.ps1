@@ -1,9 +1,9 @@
 #!/usr/bin/env pwsh
 # Enforces the frozen lint state of the two pure JVM modules.
-# domain:risk must report zero issues. domain:contracts must report exactly ONE issue that matches
+# domain:risk must report zero issues. domain:contracts may report zero issues, or ONE that matches
 # the approved warning in every field that identifies it: id, severity, normalized message,
 # offending declaration (errorLine1), exactly one location, and the exact repository-relative path.
-# Only the "available: <version>" metadata may drift (normalized to <LATEST>, same rule as the
+# When present, only the "available: <version>" metadata may drift (normalized to <LATEST>, same rule as the
 # frozen app/data lint fingerprints in investigations/2026-09-05-data-module-m3-t2/lint-records.ps1).
 [CmdletBinding()]
 param(
@@ -54,8 +54,15 @@ $risk = @(Read-Issues 'domain/risk/build/reports/lint-results.xml')
 if ($risk.Count -ne 0) { throw "domain:risk lint expected 0 issues, found $($risk.Count): $(Describe $risk)" }
 
 $contracts = @(Read-Issues 'domain/contracts/build/reports/lint-results.xml')
+if ($contracts.Count -eq 0) {
+    # The approved warning is a "newer version available" lookup against Maven Central. Its presence is
+    # environment-dependent (run 34021941395 on a fresh ubuntu runner reported 0 issues here), so absence
+    # is tolerated. Anything else present is still a failure below.
+    Write-Output 'Verdict: PASS domain:risk=0 issues; domain:contracts=0 issues (approved lookup-dependent GradleDependency warning absent in this environment, tolerated), 0 errors'
+    exit 0
+}
 if ($contracts.Count -ne 1) {
-    throw "domain:contracts lint expected exactly one approved issue, found $($contracts.Count): $(Describe $contracts)"
+    throw "domain:contracts lint expected at most the one approved issue, found $($contracts.Count): $(Describe $contracts)"
 }
 $issue = $contracts[0]
 $locations = @($issue.location | Where-Object { $null -ne $_ })

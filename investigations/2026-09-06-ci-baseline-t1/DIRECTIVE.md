@@ -36,8 +36,8 @@
 
 ## 2. 승인된 5줄 계획
 
-1. **수정 파일**: 신규 `.github/workflows/verify.yml`, `.github/scripts/verify-unit-xml.ps1`, `.github/scripts/verify-domain-lint.ps1`, `.github/scripts/check-schema-drift.sh`, `.github/scripts/lint-diff.ps1`, `investigations/2026-09-06-ci-baseline-t1/**`(DIRECTIVE·IMPL_LOG·probe-verifiers.ps1·run-device-baseline.ps1·evidence). 기존 `investigations/2026-09-05-integration-m3-permission/verify-integration-lint.ps1`·`verify-instrumentation.ps1`, `investigations/2026-09-05-data-module-m3-t2/lint-records.ps1`은 **무수정 재사용**.
-2. **목적**: main push·PR·수동 실행마다 로컬 검증 게이트(fresh 직렬 build/unit/kapt/APK/duplicate/androidTest APK 컴파일/lint)와 **동일한 명령·동일한 판정 스크립트**를 자동 실행해, 이후 트랙의 "빌드·테스트·lint 기준선 동일" 주장을 GitHub 체크로 대체한다.
+1. **수정 파일**: 신규 `.github/workflows/verify.yml`, `.github/scripts/verify-unit-xml.ps1`, `.github/scripts/verify-domain-lint.ps1`, `.github/scripts/verify-lint-union.ps1`, `.github/scripts/check-schema-drift.sh`, `.github/scripts/lint-diff.ps1`, `investigations/2026-09-06-ci-baseline-t1/**`(DIRECTIVE·IMPL_LOG·probe-verifiers.ps1·run-device-baseline.ps1·evidence). 기존 `investigations/2026-09-05-integration-m3-permission/verify-integration-lint.ps1`·`verify-instrumentation.ps1`, `investigations/2026-09-05-data-module-m3-t2/lint-records.ps1`은 **무수정 재사용**.
+2. **목적**: main push·PR·수동 실행마다 로컬 검증 게이트(fresh 직렬 build/unit/kapt/APK/duplicate/androidTest APK 컴파일/lint)와 동일한 Gradle 명령을 실행한다. 판정에는 §3.1에 열거된 7건의 부재만 허용하는 승인된 CI 예외를 적용한다.
 3. **리스크**: 제품 동작·정책·권한 변경 0. 공급망 = 외부 액션 4종을 **commit SHA로 핀**(major tag 주석 병기). 비용 = PUBLIC 저장소라 Actions 무료. 노이즈 = lint 최신 버전 메타데이터 변동은 `<LATEST>` 정규화로 흡수, 그 밖의 진단 변동은 의도적 fingerprint 실패이며 `lint-diff.ps1`가 missing/extra 키를 출력한다.
 4. **테스트(완료 게이트)**: ① main에서 CI와 동일 명령 fresh 직렬 실행 GREEN ② 그 산출물로 스크립트 3종 + 기존 lint 검증기 PASS ③ 변조 probe(테스트 XML 1건 skipped 변조·lint 항목 제거)로 각 스크립트가 실제로 FAIL하는지 확인 ④ workflow YAML 파싱 ⑤ (S1 이후) push 후 첫 Actions run GREEN·run URL을 IMPL_LOG에 기록.
 5. **중단 조건**: 스크립트가 로컬 산출물에서 실패, YAML 오류, 앱/Gradle 소스 변경이 필요, 신규 lint 진단, Actions run RED(원인이 workflow가 아닌 코드/환경이면 S5 보고 후 대기).
@@ -52,8 +52,8 @@
   `./gradlew --no-daemon --no-parallel --max-workers=1 --console=plain clean :domain:risk:check :domain:contracts:check :app:testDebugUnitTest :app:kaptDebugKotlin :app:assembleDebug :app:checkDebugDuplicateClasses :app:assembleDebugAndroidTest :data:lintDebug :app:lintDebug`
 - 후속 판정(각각 독립 step, 실패 시 job 실패):
   1. `verify-unit-xml.ps1`: 모듈별 JUnit XML 합산. **app ≥ 544, risk ≥ 7, contracts ≥ 4**, failures·errors·**skipped = 0**. 결과 JSON을 artifact에 포함.
-  2. `verify-domain-lint.ps1`: risk 진단 0, contracts = **정확히 1건이며 6개 필드가 승인 경고와 일치** — id `GradleDependency`, severity `Warning`, `<LATEST>` 정규화 메시지, 선언문 `errorLine1`(`api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")`), location 개수 1, 저장소 상대 경로 정확히 `domain/contracts/build.gradle.kts`(루트 밖 경로는 실패). 같은 id/파일의 다른 라이브러리 경고로 대체되면 실패해야 한다.
-  3. 기존 `verify-integration-lint.ps1 -AppCurrent app/build/reports/lint-results-debug.xml -DataCurrent data/build/reports/lint-results-debug.xml`: app 69 / data 14 exact multiset.
+  2. `verify-domain-lint.ps1`: risk 진단 0, contracts = **0건 또는 정확히 1건이며 6개 필드가 승인 경고와 일치** — id `GradleDependency`, severity `Warning`, `<LATEST>` 정규화 메시지, 선언문 `errorLine1`(`api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")`), location 개수 1, 저장소 상대 경로 정확히 `domain/contracts/build.gradle.kts`(루트 밖 경로는 실패). 같은 id/파일의 다른 라이브러리 경고로 대체되면 실패해야 한다. 0건 허용 근거는 아래 3과 같다(원격 조회 의존 경고의 부재).
+  3. `verify-lint-union.ps1`(CI 판정): 기존 `verify-integration-lint.ps1`과 **같은 frozen 증거·같은 해시**(baseline 72 → retained 64 + additions 5 = app 69, data 14)로 **exact multiset**을 요구하되, 단 하나의 예외로 **열거된 7건의 부재만 최대 횟수까지 허용**한다 — app: `org.jetbrains.kotlin.plugin.compose`(libs.versions.toml `kotlin = "2.0.21"`) ×3, `kotlinx-coroutines-android` ×1, `kotlinx-coroutines-test` ×1 / data: `kotlinx-coroutines-android` ×1 / contracts: `kotlinx-coroutines-core` ×1(판정 2). 근거: 첫 원격 run 34021941395(ubuntu-24.04 fresh runner)에서 정확히 이 7건만 빠졌고, Kotlin/coroutines 버전 조회 경고에 해당한다. 실제 누락 목록만 판정 근거로 삼으며 구체적인 네트워크/캐시 실패 원인은 이 비교만으로 확정하지 않는다. Google Maven 조회 23(app)+4(data)건을 포함한 나머지는 전부 exact이며, 열거 키가 frozen 증거에 없으면 fail-closed. 신규·변경·그 밖의 누락은 실패. id 단위 waiver·baseline 파일·suppression 없음. 로컬 Windows 트랙 증거는 기존 exact 검증기를 그대로 사용한다.
   4. Room schema drift: `check-schema-drift.sh data/schemas` = `git status --porcelain --untracked-files=all -- data/schemas`가 비어 있어야 통과. 추적 JSON 수정·삭제뿐 아니라 **미추적 신규 JSON**(버전 올리고 schema 미커밋)도 실패. `git diff`만으로는 미추적 파일을 놓치므로 사용하지 않는다.
   5. Verifier self-check: `probe-verifiers.ps1`가 게이트 산출물 사본을 변조해 각 검증기가 정상 사본 PASS·변조 FAIL인지 매 run 재확인(unexpected 0 필수). schema 스크립트는 임시 git 저장소에서 probe한다.
   6. 실패 시(`if: failure()`) `lint-diff.ps1`가 missing/extra 키를 출력(진단 전용, 판정 아님).
@@ -77,7 +77,7 @@
 ## 5. 파일 범위
 
 - `.github/workflows/verify.yml` (신규)
-- `.github/scripts/verify-unit-xml.ps1`, `.github/scripts/verify-domain-lint.ps1`, `.github/scripts/check-schema-drift.sh`, `.github/scripts/lint-diff.ps1` (신규)
+- `.github/scripts/verify-unit-xml.ps1`, `.github/scripts/verify-domain-lint.ps1`, `.github/scripts/verify-lint-union.ps1`, `.github/scripts/check-schema-drift.sh`, `.github/scripts/lint-diff.ps1` (신규)
 - `investigations/2026-09-06-ci-baseline-t1/**` (신규, probe 하네스 `probe-verifiers.ps1` 포함 — 판정 재현용으로 커밋)
 - 밖은 S3 중단·질의. 특히 `gradlew` 실행 비트(`git update-index --chmod=+x`)는 index 변경 = 커밋 대상이므로 이번에는 workflow의 `chmod +x`로 대체하고 후속 T0로 남긴다.
 
@@ -86,3 +86,7 @@
 - 로컬: fresh 직렬 GREEN, unit 555 이상·skipped 0, lint app 0E/69W·data 0E/14W·contracts 1W·risk 0, schema drift 0, 스크립트 3종 PASS + 변조 probe FAIL 확인, YAML 파싱 OK, 앱/Gradle 소스 무접촉(`git status`가 §5 파일만).
 - 원격(S1 이후): 첫 `verify` run GREEN, run URL·소요 시간·artifact 목록을 IMPL_LOG에 기록. RED면 S5.
 - IMPL_LOG에 계약 항목 ↔ 파일/증거 매핑 표.
+
+## 후속 실행 승인 및 self-check 입력
+
+사용자의 후속 커밋·push 승인을 받아 Codex가 열거된 7건 계약으로 마감한다. faithful-copy probe와 CI 실제 판정은 fresh 리포트를 그대로 사용한다. 변조 probe만 커밋된 app/data full lint 및 contracts 경고 fixture를 scratch에 복사해 사용한다. 실제 리포트가 64/13/0인 환경에서도 변조가 가능해야 하며 -ReportRoot로 그 입력을 별도 재현한다. 이 fixture는 CI 실제 진단을 보충하거나 덮어쓰지 않는다.
