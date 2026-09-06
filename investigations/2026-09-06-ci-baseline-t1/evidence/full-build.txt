@@ -1,0 +1,11 @@
+Fresh serial gate on main 7c6bfd1 (JBR 21, --no-daemon --no-parallel --max-workers=1 --console=plain), 2026-09-06
+Part 1: clean :domain:risk:check :domain:contracts:check :app:testDebugUnitTest :app:kaptDebugKotlin :app:assembleDebug :app:checkDebugDuplicateClasses
+BUILD SUCCESSFUL in 6m 10s
+107 actionable tasks: 105 executed, 2 up-to-date
+Part 2: :app:assembleDebugAndroidTest :data:lintDebug :app:lintDebug
+BUILD SUCCESSFUL in 3m 4s
+130 actionable tasks: 70 executed, 60 up-to-date
+Split into two invocations only because of the local 10-minute tool timeout; CI runs the same task list in one invocation.
+JUnit XML: 41 suites / 555 tests / failures 0 / errors 0 / skipped 0 (app 39 suites 544, risk 7, contracts 4)
+APK: app-debug.apk 20594287 B, app-debug-androidTest.apk 544724 B
+Room schema drift (git diff --exit-code -- data/schemas): 0
