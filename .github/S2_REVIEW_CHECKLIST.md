@@ -141,13 +141,13 @@ C1은 컴파일/grep 차원에서 빠르게 확인 가능. C2/C3은 의미 차�
 
 Step 3 §11.1 follow-up. 본 PR3에서 **수행하지 않는다**.
 
-현재 동일 의미 set이 3곳에 분산되어 있다:
+현재 동일 의미 set이 3곳에 분산되어 있다. 위치는 리팩터로 인한 줄 이동에 영향받지 않도록 줄 번호 대신 파일과 최상위 선언 심볼로 적는다:
 
 | 참조 위치 | 정의 | 의미 |
 |---|---|---|
-| `RiskSessionTracker.kt:28-32` | `private val UPGRADE_TRIGGERS` | α arm escape |
-| `DefaultRiskDetectionCoordinator.kt:79-83` | `private val UPGRADE_TRIGGERS` | same-call snooze upgrade trigger |
-| `S2RecRefireDebounce.kt` | `internal val S2_UPGRADE_TRIGGERS` | S2 REC-REFIRE debounce escape |
+| `RiskSessionTracker.kt` 최상위 선언 | `private val UPGRADE_TRIGGERS` | α arm escape |
+| `DefaultRiskDetectionCoordinator.kt` 최상위 선언 | `private val UPGRADE_TRIGGERS` | same-call snooze upgrade trigger |
+| `S2RecRefireDebounce.kt` 최상위 선언 | `internal val S2_UPGRADE_TRIGGERS` | S2 REC-REFIRE debounce escape |
 
 PR3가 **수행하지 않는 것**:
 - 단일 truth source 통합
@@ -179,6 +179,8 @@ PR3가 **수행하는 것** (drift 방지 운영 규칙):
 | 전제 — `"일단 닫기"` dismiss-only | | ● PR2-G6 + G6-B | ● 불변 1 + 5 (§2) |
 | 전제 — safe-confirm 별도 흐름 | | | ● 불변 2 + 6 (§2) |
 | §11.1 — `UPGRADE_TRIGGERS` 3중 참조 | (drift 방지 의무 명시) | | ● follow-up tracking (§4) |
+
+> 위 표는 PR3 시점의 이력이다. 현재 위치(2026-10-07, PR #15 이후): Coordinator의 S2 게이트 호출(`shouldSuppressS2RecRefire`·`s2RecRefireStateAfterFiring`)은 collect lane의 단계 함수 `processTickEscalation`·`processTickNewTriggers` 안에 있다.
 
 범례: ● 주 반영, ◐ 부분 반영
 
