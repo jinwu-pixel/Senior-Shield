@@ -198,7 +198,8 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
     /**
      * S2 REC-REFIRE debounce 게이트 상태.
      *
-     * Coordinator collect 블록 안에서만 read/write되며 외부에 노출되지 않는다.
+     * collect lane(processTick의 escalation·new-trigger 단계)에서만 read/write하며, stop()에서 초기화한다.
+     * 외부에 노출되지 않는다.
      * α 변수와 5축 disjoint 공존 — 같은 `UPGRADE_TRIGGERS` set만 의미상 공유한다.
      * 자세한 설계는 `investigations/2026-04-24-cta-semantics/03_step2_design.md`,
      * `04_step3_impl_plan.md` 참조.
@@ -643,566 +644,676 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                     delay(ANCHOR_MIRROR_INTERVAL_MS)
                 }
             }
-            // maintenance 만료 직후 재평가용 마지막 신호 스냅샷. collect lane에서만 접근(직렬).
-            var latestSignals: CombinedSignals? = null
-            // 직전 TTL renewal(스냅샷·신호 경로 공통)의 검증 토큰.
-            var renewalToken: RenewalToken? = null
-            // version vector: 직전에 처리한 tick의 source별 sequence — "이번 tick에서 실제로
-            // 전진한(재방출된) source"를 식별한다.
-            val lastSeenSeq = mutableMapOf<SourceId, Long>()
+            val loopState = TickLoopState()
 
             merge(signalUpdates, maintenanceTicks)
-                .collect { tick ->
-                    // ── 공통 prologue ────────────────────────────────────────
-                    // TTL 만료/renewal/유지는 신호와 함께 transition()이 단일 시각으로 원자 결정한다.
-                    // 여기서는 mirror 갱신 + maintenance 저비용 게이트만.
-                    refreshAnchorHotMirror()
+                .collect { tick -> processTick(tick, loopState) }
+        }
+    }
 
-                    val signals = when (tick) {
-                        is CombinedSignals -> tick.also { latestSignals = it }
-                        CoordinatorEvent.MaintenanceTick -> {
-                            // 위협 신호가 latched(monitor flow 전부 distinctUntilChanged → 재방출 0)인 채
-                            // TTL이 만료될 수 있으므로, idle 초과가 감지된 tick에서만 마지막 스냅샷으로
-                            // 1회 재평가한다. 위협 지속 → 같은 세션 renewal(재발동 없음) / 진짜 idle → 종료.
-                            if (!sessionTracker.isCurrentSessionIdleTimedOut()) return@collect
-                            latestSignals ?: run {
-                                // 첫 combine 방출 전(스냅샷 없음) 만료 — 재평가 없이 만료+정리만.
-                                if (sessionTracker.expireIfTimedOut()) {
-                                    clearInactiveSessionPresentation("session TTL expired (no snapshot)")
-                                }
-                                return@collect
+    private suspend fun processTick(tick: CoordinatorEvent, loopState: TickLoopState) {
+        // ── 공통 prologue ────────────────────────────────────────
+        // TTL 만료/renewal/유지는 신호와 함께 transition()이 단일 시각으로 원자 결정한다.
+        // 여기서는 mirror 갱신 + maintenance 저비용 게이트만.
+        refreshAnchorHotMirror()
+
+        val signals = when (tick) {
+            is CombinedSignals -> tick.also { loopState.latestSignals = it }
+            CoordinatorEvent.MaintenanceTick -> {
+                // 위협 신호가 latched(monitor flow 전부 distinctUntilChanged → 재방출 0)인 채
+                // TTL이 만료될 수 있으므로, idle 초과가 감지된 tick에서만 마지막 스냅샷으로
+                // 1회 재평가한다. 위협 지속 → 같은 세션 renewal(재발동 없음) / 진짜 idle → 종료.
+                if (!sessionTracker.isCurrentSessionIdleTimedOut()) return
+                loopState.latestSignals ?: run {
+                    // 첫 combine 방출 전(스냅샷 없음) 만료 — 재평가 없이 만료+정리만.
+                    if (sessionTracker.expireIfTimedOut()) {
+                        clearInactiveSessionPresentation("session TTL expired (no snapshot)")
+                    }
+                    return
+                }
+            }
+        }
+
+        val context = prepareTickSignals(signals, loopState)
+        with(context) {
+            runTickStages(context, loopState)
+            previousBankingForeground = bankingForeground
+        }
+    }
+
+    /**
+     * 어느 단계에서 tick을 중단해도 정상 반환하며, 호출자 processTick이 반환 직후 banking 이전값을 한 번 대입한다.
+     * 예외·취소가 전파되면 호출자의 banking 이전값 대입은 수행하지 않는다.
+     */
+    private suspend fun runTickStages(context: TickContext, loopState: TickLoopState) {
+        with(context) {
+            scheduleSuppressionReleaseForTick(context)
+            filterTickCallSignals(context)
+            validateRenewalToken(context, loopState)
+            if (!transitionTickSession(context)) return
+            issueTickRenewalToken(context, loopState)
+            evaluateTickSession(context)
+            if (!canPresentTick(context)) return
+            if (!syncTickTriggers(context)) return
+            val cooldownFiredThisTick = processTickCooldown(context) ?: return
+
+            // ── epoch 재검증 (c): notification/event push/popup 직전 ────
+            if (userResetIntervened(epochAtTickStart, "escalation effects")) {
+                return
+            }
+            val popupShownThisTick = processTickEscalation(context, cooldownFiredThisTick) ?: return
+
+            // ── epoch 재검증 (d): 새 trigger 재알림 효과 직전 ───────────
+            // (c)와의 사이에 suspend가 없으면 실질적으로 도달 불가한 창이지만,
+            // escalation 블록이 suspend를 포함하므로 defense-in-depth로 유지한다.
+            if (userResetIntervened(epochAtTickStart, "new-trigger effects")) {
+                return
+            }
+            if (!processTickNewTriggers(context, cooldownFiredThisTick, popupShownThisTick)) return
+
+        }
+    }
+
+    private fun prepareTickSignals(signals: CombinedSignals, loopState: TickLoopState): TickContext {
+        // ── per-source reset 위생검사 (다른 모든 처리보다 먼저) ─────
+        // source별 생산 시점 epoch가 현재 reset 세대보다 오래됐으면 그 source의 값은
+        // 빈 값으로 취급한다 — 신선한 source 하나(예: banking flip)가 stale 구성원
+        // 전체를 승인해 세션·쿨다운을 되살리는 혼합 epoch 우회를 차단한다.
+        // 캐시(maintenance 재사용 tick)도 동일 규칙으로 자동 flush된다.
+        // 배제는 해당 source가 reset 이후 재방출할 때까지 지속된다.
+        val epochAtTickStart = sessionTracker.userResetEpoch
+        val freshBySource = mapOf(
+            SourceId.CALL to signalsIfFresh(signals.call, epochAtTickStart),
+            SourceId.APP_USAGE to signalsIfFresh(signals.app, epochAtTickStart),
+            SourceId.APP_INSTALL to signalsIfFresh(signals.install, epochAtTickStart),
+            SourceId.DEVICE_ENV to signalsIfFresh(signals.deviceEnv, epochAtTickStart),
+        )
+        val callSignals = freshBySource.getValue(SourceId.CALL)
+        val appSignals = freshBySource.getValue(SourceId.APP_USAGE)
+        val installSignals = freshBySource.getValue(SourceId.APP_INSTALL)
+        val deviceEnvSignals = freshBySource.getValue(SourceId.DEVICE_ENV)
+        // BANKING도 동일 규칙: reset 이전 생산 값은 edge를 만들지도, previous를
+        // 오염시키지도 못한다 (effective=previous → tick 말 대입도 불변).
+        val bankingForeground =
+            if (signals.banking.producedAtEpoch < epochAtTickStart) previousBankingForeground
+            else signals.banking.value
+        // 이번 tick에서 실제로 전진한(재방출된) source — 즉시-confirmed 판정용.
+        val advancedSources = SourceId.values()
+            .filter { signals.sequenceOf(it) > (loopState.lastSeenSeq[it] ?: 0L) }
+            .toSet()
+        SourceId.values().forEach { loopState.lastSeenSeq[it] = signals.sequenceOf(it) }
+        Log.d(TAG, "signal tick — rawCall=$callSignals, app=$appSignals, banking=$bankingForeground, install=$installSignals, deviceEnv=$deviceEnvSignals, advanced=$advancedSources")
+        return TickContext(
+            epochAtTickStart = epochAtTickStart,
+            freshBySource = freshBySource,
+            callSignals = callSignals,
+            appSignals = appSignals,
+            installSignals = installSignals,
+            deviceEnvSignals = deviceEnvSignals,
+            bankingForeground = bankingForeground,
+            advancedSources = advancedSources,
+        )
+    }
+
+    /**
+     * tick 중단 없는 Unit 단계로 suppression 해제를 예약한다. 단계 간 결과 저장소는 TickContext/TickLoopState다.
+     */
+    private fun scheduleSuppressionReleaseForTick(context: TickContext): Unit {
+        with(context) {
+            // ── end-call suppression: IDLE 감지 시 안정화 타이머 시작 ──
+            // raw callSignals 기준 — snooze filter와 무관한 실제 통화 상태 반영.
+            if (overlayManager.isEndCallSuppressed() && callSignals.isEmpty()) {
+                overlayManager.scheduleSuppressionRelease()
+                Log.d(TAG, "call became IDLE during suppression, stabilization scheduled")
+            }
+
+        }
+    }
+
+    /**
+     * tick 중단 없는 Unit 단계로 필터링 결과를 TickContext에 기록한다.
+     */
+    private fun filterTickCallSignals(context: TickContext): Unit {
+        with(context) {
+            // ── 1단계: pre-update snooze stage ───────────────────────
+            // sessionTracker.update() 전에 snooze를 평가하고 call-derived signal을 필터링한다.
+            // 목적: same call respawn 차단. 같은 통화에서 반복 수신되는 PASSIVE 신호가
+            //       세션에 누적되어 score/alertState가 상승하거나 재알림이 발생하는 것을 막는다.
+            val liveCallId = callMonitor.currentCallId()
+            val nonCallSignals = appSignals + installSignals + deviceEnvSignals
+            val upgradeTriggerPresent =
+                callSignals.any { it in UPGRADE_TRIGGERS } ||
+                    nonCallSignals.any { it in UPGRADE_TRIGGERS }
+
+            if (sessionTracker.isSnoozeActive()) {
+                val snoozedId = sessionTracker.snoozedCallIdOrNull()
+                val snoozedAt = sessionTracker.snoozedAtOrNull() ?: 0L
+                val now = clock()
+                when {
+                    liveCallId == null ->
+                        sessionTracker.clearSnooze("IDLE (wasCallId=$snoozedId)")
+                    liveCallId != snoozedId ->
+                        sessionTracker.clearSnooze("new call: live=$liveCallId snoozed=$snoozedId")
+                    now - snoozedAt > SNOOZE_TTL_MS ->
+                        sessionTracker.clearSnooze("TTL 15min elapsed (wasCallId=$snoozedId)")
+                    upgradeTriggerPresent ->
+                        sessionTracker.clearSnooze("upgrade trigger present in raw signals")
+                    else -> { /* 유지 */ }
+                }
+            }
+
+            // snooze가 여전히 활성이고 liveCallId와 일치하면 call-derived signal 필터링.
+            val filteredCallSignals: List<RiskSignal> =
+                if (liveCallId != null && sessionTracker.isSnoozedForCall(liveCallId)) {
+                    val filtered = callSignals.filterNot { it in CALL_DERIVED_SIGNALS }
+                    Log.d(TAG, "snooze filter applied (callId=$liveCallId): rawCall=$callSignals → filteredCall=$filtered")
+                    filtered
+                } else {
+                    callSignals
+                }
+            context.liveCallId = liveCallId
+            context.nonCallSignals = nonCallSignals
+            context.filteredCallSignals = filteredCallSignals
+        }
+    }
+
+    /**
+     * tick 중단 없는 Unit 단계로 검증 결과를 TickContext와 TickLoopState에 기록한다.
+     */
+    private fun validateRenewalToken(context: TickContext, loopState: TickLoopState): Unit {
+        with(context) {
+            // ── renewal 검증 토큰: 해당 source의 실측 재방출만 몫을 판정한다 ──
+            // 무관한 방출(banking flip, 캐시 재사용)은 몫을 소비하지 않는다.
+            // 부분 소멸 → 원자 rebase(같은 ID). 근거 전멸 → 세션 종료 + **정제된 현재
+            // live 신호**만으로 fresh episode 분리(old→fresh 단일 대입, 과거 누적값 부활
+            // 금지) — 낡은 정체성·통보 메타데이터를 승계하지 않는다.
+            var forceExpiredThisTick = false
+            var rebasedThisTick = false
+            var splitThisTick = false
+            loopState.renewalToken?.let { token ->
+                val windowExpired = clock() - token.renewedAtMs > RENEWAL_VALIDATION_WINDOW_MS
+                val sessionGone = sessionTracker.sessionState.value?.id != token.sessionId
+                if (windowExpired || sessionGone) {
+                    loopState.renewalToken = null
+                } else {
+                    var confirmed = token.confirmedBasis
+                    val remaining = token.remaining.toMutableMap()
+                    val lost = mutableSetOf<RiskSignal>()
+                    for ((source, portion) in token.remaining) {
+                        if (source !in advancedSources) continue
+                        // 판정은 transition과 동일 입력 기준 — CALL은 snooze 필터 적용값.
+                        val freshValue =
+                            if (source == SourceId.CALL) filteredCallSignals.toSet()
+                            else freshBySource.getValue(source).toSet()
+                        confirmed = confirmed + (portion intersect freshValue)
+                        lost += portion - freshValue
+                        remaining.remove(source) // 이 source 몫은 실측으로 판정 완료
+                    }
+                    loopState.renewalToken = when {
+                        lost.isEmpty() ->
+                            if (remaining.isEmpty()) null
+                            else token.copy(confirmedBasis = confirmed, remaining = remaining)
+
+                        confirmed.isNotEmpty() || remaining.isNotEmpty() -> {
+                            // 근거 일부 생존 — 소멸 몫만 걷어내고 같은 ID 유지
+                            val rebased = sessionTracker.rebaseRenewedSession(token.sessionId, lost)
+                            if (rebased == null) {
+                                forceExpiredThisTick = true
+                                null
+                            } else {
+                                rebasedThisTick = true
+                                if (remaining.isEmpty()) null
+                                else token.copy(confirmedBasis = confirmed, remaining = remaining)
                             }
                         }
-                    }
 
-                    // ── per-source reset 위생검사 (다른 모든 처리보다 먼저) ─────
-                    // source별 생산 시점 epoch가 현재 reset 세대보다 오래됐으면 그 source의 값은
-                    // 빈 값으로 취급한다 — 신선한 source 하나(예: banking flip)가 stale 구성원
-                    // 전체를 승인해 세션·쿨다운을 되살리는 혼합 epoch 우회를 차단한다.
-                    // 캐시(maintenance 재사용 tick)도 동일 규칙으로 자동 flush된다.
-                    // 배제는 해당 source가 reset 이후 재방출할 때까지 지속된다.
-                    val epochAtTickStart = sessionTracker.userResetEpoch
-                    val freshBySource = mapOf(
-                        SourceId.CALL to signalsIfFresh(signals.call, epochAtTickStart),
-                        SourceId.APP_USAGE to signalsIfFresh(signals.app, epochAtTickStart),
-                        SourceId.APP_INSTALL to signalsIfFresh(signals.install, epochAtTickStart),
-                        SourceId.DEVICE_ENV to signalsIfFresh(signals.deviceEnv, epochAtTickStart),
-                    )
-                    val callSignals = freshBySource.getValue(SourceId.CALL)
-                    val appSignals = freshBySource.getValue(SourceId.APP_USAGE)
-                    val installSignals = freshBySource.getValue(SourceId.APP_INSTALL)
-                    val deviceEnvSignals = freshBySource.getValue(SourceId.DEVICE_ENV)
-                    // BANKING도 동일 규칙: reset 이전 생산 값은 edge를 만들지도, previous를
-                    // 오염시키지도 못한다 (effective=previous → tick 말 대입도 불변).
-                    val bankingForeground =
-                        if (signals.banking.producedAtEpoch < epochAtTickStart) previousBankingForeground
-                        else signals.banking.value
-                    // 이번 tick에서 실제로 전진한(재방출된) source — 즉시-confirmed 판정용.
-                    val advancedSources = SourceId.values()
-                        .filter { signals.sequenceOf(it) > (lastSeenSeq[it] ?: 0L) }
-                        .toSet()
-                    SourceId.values().forEach { lastSeenSeq[it] = signals.sequenceOf(it) }
-                    Log.d(TAG, "signal tick — rawCall=$callSignals, app=$appSignals, banking=$bankingForeground, install=$installSignals, deviceEnv=$deviceEnvSignals, advanced=$advancedSources")
-
-                    // ── end-call suppression: IDLE 감지 시 안정화 타이머 시작 ──
-                    // raw callSignals 기준 — snooze filter와 무관한 실제 통화 상태 반영.
-                    if (overlayManager.isEndCallSuppressed() && callSignals.isEmpty()) {
-                        overlayManager.scheduleSuppressionRelease()
-                        Log.d(TAG, "call became IDLE during suppression, stabilization scheduled")
-                    }
-
-                    // ── 1단계: pre-update snooze stage ───────────────────────
-                    // sessionTracker.update() 전에 snooze를 평가하고 call-derived signal을 필터링한다.
-                    // 목적: same call respawn 차단. 같은 통화에서 반복 수신되는 PASSIVE 신호가
-                    //       세션에 누적되어 score/alertState가 상승하거나 재알림이 발생하는 것을 막는다.
-                    val liveCallId = callMonitor.currentCallId()
-                    val nonCallSignals = appSignals + installSignals + deviceEnvSignals
-                    val upgradeTriggerPresent =
-                        callSignals.any { it in UPGRADE_TRIGGERS } ||
-                            nonCallSignals.any { it in UPGRADE_TRIGGERS }
-
-                    if (sessionTracker.isSnoozeActive()) {
-                        val snoozedId = sessionTracker.snoozedCallIdOrNull()
-                        val snoozedAt = sessionTracker.snoozedAtOrNull() ?: 0L
-                        val now = clock()
-                        when {
-                            liveCallId == null ->
-                                sessionTracker.clearSnooze("IDLE (wasCallId=$snoozedId)")
-                            liveCallId != snoozedId ->
-                                sessionTracker.clearSnooze("new call: live=$liveCallId snoozed=$snoozedId")
-                            now - snoozedAt > SNOOZE_TTL_MS ->
-                                sessionTracker.clearSnooze("TTL 15min elapsed (wasCallId=$snoozedId)")
-                            upgradeTriggerPresent ->
-                                sessionTracker.clearSnooze("upgrade trigger present in raw signals")
-                            else -> { /* 유지 */ }
-                        }
-                    }
-
-                    // snooze가 여전히 활성이고 liveCallId와 일치하면 call-derived signal 필터링.
-                    val filteredCallSignals: List<RiskSignal> =
-                        if (liveCallId != null && sessionTracker.isSnoozedForCall(liveCallId)) {
-                            val filtered = callSignals.filterNot { it in CALL_DERIVED_SIGNALS }
-                            Log.d(TAG, "snooze filter applied (callId=$liveCallId): rawCall=$callSignals → filteredCall=$filtered")
-                            filtered
-                        } else {
-                            callSignals
-                        }
-
-                    // ── renewal 검증 토큰: 해당 source의 실측 재방출만 몫을 판정한다 ──
-                    // 무관한 방출(banking flip, 캐시 재사용)은 몫을 소비하지 않는다.
-                    // 부분 소멸 → 원자 rebase(같은 ID). 근거 전멸 → 세션 종료 + **정제된 현재
-                    // live 신호**만으로 fresh episode 분리(old→fresh 단일 대입, 과거 누적값 부활
-                    // 금지) — 낡은 정체성·통보 메타데이터를 승계하지 않는다.
-                    var forceExpiredThisTick = false
-                    var rebasedThisTick = false
-                    var splitThisTick = false
-                    renewalToken?.let { token ->
-                        val windowExpired = clock() - token.renewedAtMs > RENEWAL_VALIDATION_WINDOW_MS
-                        val sessionGone = sessionTracker.sessionState.value?.id != token.sessionId
-                        if (windowExpired || sessionGone) {
-                            renewalToken = null
-                        } else {
-                            var confirmed = token.confirmedBasis
-                            val remaining = token.remaining.toMutableMap()
-                            val lost = mutableSetOf<RiskSignal>()
-                            for ((source, portion) in token.remaining) {
-                                if (source !in advancedSources) continue
-                                // 판정은 transition과 동일 입력 기준 — CALL은 snooze 필터 적용값.
-                                val freshValue =
-                                    if (source == SourceId.CALL) filteredCallSignals.toSet()
-                                    else freshBySource.getValue(source).toSet()
-                                confirmed = confirmed + (portion intersect freshValue)
-                                lost += portion - freshValue
-                                remaining.remove(source) // 이 source 몫은 실측으로 판정 완료
-                            }
-                            renewalToken = when {
-                                lost.isEmpty() ->
-                                    if (remaining.isEmpty()) null
-                                    else token.copy(confirmedBasis = confirmed, remaining = remaining)
-
-                                confirmed.isNotEmpty() || remaining.isNotEmpty() -> {
-                                    // 근거 일부 생존 — 소멸 몫만 걷어내고 같은 ID 유지
-                                    val rebased = sessionTracker.rebaseRenewedSession(token.sessionId, lost)
-                                    if (rebased == null) {
-                                        forceExpiredThisTick = true
-                                        null
-                                    } else {
-                                        rebasedThisTick = true
-                                        if (remaining.isEmpty()) null
-                                        else token.copy(confirmedBasis = confirmed, remaining = remaining)
-                                    }
-                                }
-
-                                else -> {
-                                    // renewal 근거 전멸 — transition과 동일한 입력(snooze 필터 적용,
-                                    // 정제 완료)의 live 신호만으로 새 episode를 원자 결정한다.
-                                    val liveSignals = (filteredCallSignals + nonCallSignals).toSet()
-                                    val split =
-                                        sessionTracker.splitAfterRenewalBasisDied(token.sessionId, liveSignals)
-                                    if (split == null) forceExpiredThisTick = true else splitThisTick = true
-                                    null
-                                }
-                            }
-                        }
-                    }
-
-                    // ── transition: 만료/renewal/갱신을 단일 시각으로 결정 ─────
-                    // expectedEpoch를 tracker 락 안에서 원자 비교 — 사용자 안전 확인(reset)과
-                    // 완전 직렬화되며, reset 이전에 생산된(queued) tick도 여기서 거부된다.
-                    val outcome = sessionTracker.transition(
-                        filteredCallSignals,
-                        nonCallSignals,
-                        expectedEpoch = epochAtTickStart,
-                    )
-                    if (outcome.aborted) {
-                        Log.d(TAG, "tick predates user reset — session transition skipped")
-                        previousBankingForeground = bankingForeground
-                        return@collect
-                    }
-                    val session = outcome.session ?: run {
-                        clearInactiveSessionPresentation(
-                            when {
-                                outcome.expiredPrevious -> "session TTL expired"
-                                forceExpiredThisTick -> "renewal invalidated by fresh signals"
-                                else -> "no active session"
-                            },
-                        )
-                        previousBankingForeground = bankingForeground
-                        return@collect
-                    }
-
-                    // fresh episode(만료 후 새 ID) 또는 renewal 무효화/분리 직후 새 세션:
-                    // 구 세션 presentation을 새 세션 효과(push/notify)보다 먼저 정리한다.
-                    if (outcome.expiredPrevious || forceExpiredThisTick || splitThisTick) {
-                        clearInactiveSessionPresentation("previous session ended — fresh episode")
-                    }
-                    // 모든 TTL renewal(스냅샷·신호 경로 공통)에 검증 토큰을 발급한다.
-                    // 이번 tick에서 sequence가 전진한 source의 몫은 즉시 confirmed(실측 확인) —
-                    // 직접 재방출로 renewal을 정당화한 source를 뒤늦게 stale로 오판하지 않는다.
-                    // 전진하지 않은(cached/latched) source의 몫만 pending으로 남긴다.
-                    if (outcome.renewed) {
-                        val basis = outcome.renewalBasis.orEmpty()
-                        var confirmed = emptySet<RiskSignal>()
-                        val remaining = buildMap<SourceId, Set<RiskSignal>> {
-                            for (source in listOf(
-                                SourceId.CALL, SourceId.APP_USAGE, SourceId.APP_INSTALL, SourceId.DEVICE_ENV,
-                            )) {
-                                val portion = basis intersect freshBySource.getValue(source).toSet()
-                                if (portion.isEmpty()) continue
-                                if (source in advancedSources) {
-                                    confirmed = confirmed + portion
-                                } else {
-                                    put(source, portion)
-                                }
-                            }
-                        }
-                        renewalToken = if (remaining.isEmpty()) {
-                            null // 근거 전부가 이번 tick 실측 — 검증할 pending 없음
-                        } else {
-                            RenewalToken(
-                                sessionId = session.id,
-                                confirmedBasis = confirmed,
-                                remaining = remaining,
-                                renewedAtMs = clock(),
-                            )
-                        }
-                    }
-
-                    // ── 2단계: 세션 변경 감지 → cooldownConsumedSessionId 자동 clear ──
-                    if (cooldownConsumedSessionId != null && cooldownConsumedSessionId != session.id) {
-                        Log.d(TAG, "cooldownConsumedSessionId cleared: session changed (was=$cooldownConsumedSessionId, now=${session.id})")
-                        cooldownConsumedSessionId = null
-                    }
-
-                    val score = evaluator.evaluate(session.accumulatedSignals.toList())
-                    val alertState = alertStateResolver.resolve(session)
-                    Log.d(TAG, "session score: total=${score.total}, level=${score.level}, alertState=$alertState, sessionId=${session.id}")
-
-                    // ── renewal/rebase downgrade 정리 + 통보 상한 재무장 ────────
-                    // renewal은 notified*를 승계하므로(재발동 금지), 이전에 INTERRUPT+ 표시가
-                    // 있었는데 새 상태가 그 미만이면 팝업/currentEvent만 걷어낸다.
-                    // 뱅킹 쿨다운은 세션 지속의 friction이므로 renewal에서 끊지 않는다.
-                    // 검증 토큰의 부분 소멸 rebase로 내려간 경우도 동일하게 처리한다.
-                    if (outcome.renewed || rebasedThisTick) {
-                        val inheritedAlertOrdinal = session.notifiedAlertState?.ordinal ?: -1
-                        val inheritedLevelOrdinal = session.notifiedLevel?.ordinal ?: -1
-                        if (alertState.ordinal < AlertState.INTERRUPT.ordinal &&
-                            inheritedAlertOrdinal >= AlertState.INTERRUPT.ordinal
-                        ) {
-                            val cleanupCutoff = synchronized(this@DefaultRiskDetectionCoordinator) {
-                                captureNonSafeCleanupCutoff()
-                            }
-                            beforeRenewalDowngradeCleanup()
-                            clearRenewalDowngradedPresentation(
-                                alertState,
-                                epochAtTickStart,
-                                cleanupCutoff,
-                            )
-                        }
-                        // 승계된 통보 상한이 현 상태보다 높으면 현 상태로 클램프 — 이번 tick에는
-                        // 아무것도 발화하지 않지만(동치), 이후의 진짜 재상승이 다시 알림/이력을
-                        // 낼 수 있게 escalation 감지를 재무장한다.
-                        if (inheritedAlertOrdinal > alertState.ordinal) {
-                            sessionTracker.markAlertStateNotified(alertState)
-                        }
-                        if (inheritedLevelOrdinal > score.level.ordinal) {
-                            sessionTracker.markNotified(score.level)
-                        }
-                    }
-
-                    if (alertState == AlertState.OBSERVE) {
-                        previousBankingForeground = bankingForeground
-                        return@collect
-                    }
-
-                    // ── end-call suppression 중 UI 액션 전체 스킵 ──────────
-                    if (overlayManager.isEndCallSuppressed()) {
-                        Log.d(TAG, "suppression active, skip popup/notification/cooldown")
-                        previousBankingForeground = bankingForeground
-                        return@collect
-                    }
-
-                    // ── trigger 라이프사이클 동기화 ────────────────────────────
-                    // rawTickSignals는 필터링된 call signal을 사용한다 — snooze로 걸러진 PASSIVE 신호는
-                    // 세션에도 반영되지 않았으므로 sync 입력에서도 빠져야 일관된다.
-                    // (CALL_DERIVED_SIGNALS는 모두 PASSIVE라 notifiedActiveThreats에 들어갈 일이 없어
-                    //  실무상 영향은 없지만 의미상 raw 대신 filtered를 사용한다.)
-                    val rawTickSignals: Set<RiskSignal> =
-                        (filteredCallSignals + nonCallSignals).toSet()
-                    var syncedSession = sessionTracker.syncActiveThreats(rawTickSignals) ?: session
-
-                    val triggers = syncedSession.accumulatedSignals.filter { it.category == SignalCategory.TRIGGER }.toSet()
-                    val activeTriggers = rawTickSignals.filter { it.category == SignalCategory.TRIGGER }.toSet()
-
-                    // snooze가 살아남았다면 (same call + no upgrade) 이번 tick에서 popup/notification/cooldown을 모두 스킵.
-                    val snoozeActive = sessionTracker.isSnoozeActive()
-                    if (snoozeActive) {
-                        Log.d(TAG, "snooze still active — skip popup/notification/cooldown this tick (callId=$liveCallId)")
-                        previousBankingForeground = bankingForeground
-                        return@collect
-                    }
-
-                    // 쿨다운 표시 중일 때만 활성 trigger를 자동 통보 처리한다.
-                    // (뱅킹 포그라운드 단독은 쿨다운이 닫힌 상태일 수 있어 여기서 미리 마킹하면
-                    //  이후 CRITICAL 에스컬레이션 시 새 trigger 팝업이 누락된다 — 은행 ARS 발신 감지 누락 방지.)
-                    if (cooldownManager.isShowing() && activeTriggers.isNotEmpty()) {
-                        val merged = syncedSession.notifiedActiveThreats + activeTriggers
-                        if (merged != syncedSession.notifiedActiveThreats) {
-                            sessionTracker.markActiveThreatsNotified(merged)
-                            syncedSession = syncedSession.copy(notifiedActiveThreats = merged)
-                        }
-                    }
-
-                    // ── epoch 재검증 (b): 쿨다운 발동 직전 ─────────────────────
-                    if (userResetIntervened(epochAtTickStart, "cooldown stage")) {
-                        previousBankingForeground = bankingForeground
-                        return@collect
-                    }
-
-                    // ── 4단계: 쿨다운 발동 여부를 팝업보다 먼저 판정 ──────────
-                    // 같은 tick에서 쿨다운이 발동하면 팝업은 생략한다(modal surface 1개 원칙).
-                    var cooldownFiredThisTick = false
-                    val isCallActive = liveCallId != null
-
-                    val bankingJustOpened = bankingForeground && !previousBankingForeground
-                    if (bankingJustOpened && alertState.ordinal >= AlertState.GUARDED.ordinal
-                        && !isCooldownGhostTransition()
-                    ) {
-                        // 동기 ghost 조회(latestBankingForegroundEventTimestamp)가 도는 동안
-                        // 사용자 확인이 끼어들 수 있다 — 재검증 (b)는 조회보다 앞서 실행되므로
-                        // 이 창을 못 본다. 외부 효과(쿨다운) 직전 재확인 (라운드 8 지적 7).
-                        if (userResetIntervened(epochAtTickStart, "post ghost query")) {
-                            previousBankingForeground = bankingForeground
-                            return@collect
-                        }
-                        val isCallBased = session.accumulatedSignals.any { it in AlertStateResolver.CALL_SIGNALS }
-                        if (!isCallBased) {
-                            Log.d(TAG, "뱅킹 쿨다운 생략: call-based 세션 아님")
-                        } else if (cooldownConsumedSessionId == session.id) {
-                            Log.d(TAG, "뱅킹 쿨다운 생략: 세션당 1회 정책 (sessionId=${session.id}, alertState=$alertState)")
-                        } else {
-                            val reason = buildCooldownReason(session.accumulatedSignals)
-                            cooldownManager.triggerIfNotActive(
-                                score.level,
-                                reason,
-                                isCallActive,
-                                expectedResetEpoch = epochAtTickStart,
-                            )
-                            overlayManager.ensureCriticalOnTop()
-                            cooldownConsumedSessionId = session.id
-                            Log.d(TAG, "cooldownConsumedSessionId set=${session.id}: banking cooldown fired (level=${score.level}, isCallActive=$isCallActive)")
-                            sessionTracker.markActiveThreatsNotified(triggers)
-                            cooldownFiredThisTick = true
-                            Log.d(TAG, "뱅킹 쿨다운 발동: level=${score.level}, alertState=$alertState, reason=$reason")
-                        }
-                    }
-
-                    // ── telebanking cooldown: CRITICAL 세션에서 텔레뱅킹 발신 시 쿨다운 ──
-                    if (!cooldownFiredThisTick &&
-                        alertState == AlertState.CRITICAL &&
-                        RiskSignal.TELEBANKING_AFTER_SUSPICIOUS in filteredCallSignals &&
-                        !cooldownManager.isShowing()
-                    ) {
-                        if (cooldownConsumedSessionId == session.id) {
-                            Log.d(TAG, "텔레뱅킹 쿨다운 생략: 세션당 1회 정책 (sessionId=${session.id})")
-                        } else {
-                            cooldownManager.triggerIfNotActive(
-                                score.level,
-                                "은행 ARS 전화가 감지되었습니다.\n잠시 멈추고 다시 생각해 보세요.",
-                                isCallActive,
-                                expectedResetEpoch = epochAtTickStart,
-                            )
-                            overlayManager.ensureCriticalOnTop()
-                            cooldownConsumedSessionId = session.id
-                            Log.d(TAG, "cooldownConsumedSessionId set=${session.id}: telebanking cooldown fired (level=${score.level})")
-                            sessionTracker.markActiveThreatsNotified(triggers)
-                            cooldownFiredThisTick = true
-                            Log.d(TAG, "텔레뱅킹 쿨다운 발동: level=${score.level}")
-                        }
-                    }
-
-                    // ── epoch 재검증 (c): notification/event push/popup 직전 ────
-                    if (userResetIntervened(epochAtTickStart, "escalation effects")) {
-                        previousBankingForeground = bankingForeground
-                        return@collect
-                    }
-
-                    // ── notification: AlertState 전이 또는 RiskLevel 상승 시 ────
-                    // 팝업은 쿨다운이 같은 tick에 발동했으면 생략(4단계). notification은 유지.
-                    var popupShownThisTick = false
-                    val prevAlertOrdinal = session.notifiedAlertState?.ordinal ?: -1
-                    val prevLevelOrdinal = session.notifiedLevel?.ordinal ?: -1
-                    val alertEscalated = alertState.ordinal > prevAlertOrdinal
-                    val levelEscalated = score.level.ordinal > prevLevelOrdinal
-                    if (alertEscalated || levelEscalated) {
-                        val event = eventFactory.create(score)
-                        // currentEvent 승격은 INTERRUPT+ 전용 — GUARDED 세션은 이력·notification만.
-                        // (승격하면 홈이 WARNING으로 표시되고 Warning 화면 중립 헤더가 죽는다.)
-                        val publication = if (alertState.ordinal >= AlertState.INTERRUPT.ordinal) {
-                            publishCurrentRiskEvent(event, epochAtTickStart) ?: run {
-                                Log.d(TAG, "event publication superseded — abort escalation effects")
-                                previousBankingForeground = bankingForeground
-                                return@collect
-                            }
-                        } else {
-                            eventSink.recordRiskEvent(event)
+                        else -> {
+                            // renewal 근거 전멸 — transition과 동일한 입력(snooze 필터 적용,
+                            // 정제 완료)의 live 신호만으로 새 episode를 원자 결정한다.
+                            val liveSignals = (filteredCallSignals + nonCallSignals).toSet()
+                            val split =
+                                sessionTracker.splitAfterRenewalBasisDied(token.sessionId, liveSignals)
+                            if (split == null) forceExpiredThisTick = true else splitThisTick = true
                             null
                         }
-                        // suspend(Room 쓰기) 재개 후 재검증 — 사용자 clear "이후"에 push가
-                        // currentEvent를 되살렸을 수 있으므로 회수하고 잔여 효과를 중단한다.
-                        if (userResetIntervened(epochAtTickStart, "escalation post-push")) {
-                            clearCurrentRiskEventStateIfExact(publication)
-                            previousBankingForeground = bankingForeground
-                            return@collect
+                    }
+                }
+            }
+            context.forceExpiredThisTick = forceExpiredThisTick
+            context.rebasedThisTick = rebasedThisTick
+            context.splitThisTick = splitThisTick
+        }
+    }
+
+    /**
+     * true면 계속하고, false면 호출부가 즉시 반환하여 이 tick을 중단한다.
+     */
+    private suspend fun transitionTickSession(context: TickContext): Boolean {
+        with(context) {
+            // ── transition: 만료/renewal/갱신을 단일 시각으로 결정 ─────
+            // expectedEpoch를 tracker 락 안에서 원자 비교 — 사용자 안전 확인(reset)과
+            // 완전 직렬화되며, reset 이전에 생산된(queued) tick도 여기서 거부된다.
+            val outcome = sessionTracker.transition(
+                filteredCallSignals,
+                nonCallSignals,
+                expectedEpoch = epochAtTickStart,
+            )
+            if (outcome.aborted) {
+                Log.d(TAG, "tick predates user reset — session transition skipped")
+                return false
+            }
+            val session = outcome.session ?: run {
+                clearInactiveSessionPresentation(
+                    when {
+                        outcome.expiredPrevious -> "session TTL expired"
+                        forceExpiredThisTick -> "renewal invalidated by fresh signals"
+                        else -> "no active session"
+                    },
+                )
+                return false
+            }
+
+            // fresh episode(만료 후 새 ID) 또는 renewal 무효화/분리 직후 새 세션:
+            // 구 세션 presentation을 새 세션 효과(push/notify)보다 먼저 정리한다.
+            if (outcome.expiredPrevious || forceExpiredThisTick || splitThisTick) {
+                clearInactiveSessionPresentation("previous session ended — fresh episode")
+            }
+            context.outcome = outcome
+            context.session = session
+            return true
+        }
+    }
+
+    /**
+     * tick 중단 없는 Unit 단계로 발급한 갱신 토큰을 TickLoopState에 기록한다.
+     */
+    private fun issueTickRenewalToken(context: TickContext, loopState: TickLoopState): Unit {
+        with(context) {
+            // 모든 TTL renewal(스냅샷·신호 경로 공통)에 검증 토큰을 발급한다.
+            // 이번 tick에서 sequence가 전진한 source의 몫은 즉시 confirmed(실측 확인) —
+            // 직접 재방출로 renewal을 정당화한 source를 뒤늦게 stale로 오판하지 않는다.
+            // 전진하지 않은(cached/latched) source의 몫만 pending으로 남긴다.
+            if (outcome.renewed) {
+                val basis = outcome.renewalBasis.orEmpty()
+                var confirmed = emptySet<RiskSignal>()
+                val remaining = buildMap<SourceId, Set<RiskSignal>> {
+                    for (source in listOf(
+                        SourceId.CALL, SourceId.APP_USAGE, SourceId.APP_INSTALL, SourceId.DEVICE_ENV,
+                    )) {
+                        val portion = basis intersect freshBySource.getValue(source).toSet()
+                        if (portion.isEmpty()) continue
+                        if (source in advancedSources) {
+                            confirmed = confirmed + portion
+                        } else {
+                            put(source, portion)
                         }
-                        if (publication != null &&
-                            !emitWarningNavigationIfCurrent(event, publication)
-                        ) {
-                            Log.d(TAG, "publication replaced — abort notification escalation")
-                            previousBankingForeground = bankingForeground
-                            return@collect
-                        }
-                        if (publication != null &&
-                            userResetIntervened(epochAtTickStart, "escalation post-navigation gate")
-                        ) {
+                    }
+                }
+                loopState.renewalToken = if (remaining.isEmpty()) {
+                    null // 근거 전부가 이번 tick 실측 — 검증할 pending 없음
+                } else {
+                    RenewalToken(
+                        sessionId = session.id,
+                        confirmedBasis = confirmed,
+                        remaining = remaining,
+                        renewedAtMs = clock(),
+                    )
+                }
+            }
+
+        }
+    }
+
+    /**
+     * tick 중단 없는 Unit 단계로 평가 결과를 TickContext에 기록한다.
+     */
+    private suspend fun evaluateTickSession(context: TickContext): Unit {
+        with(context) {
+            // ── 2단계: 세션 변경 감지 → cooldownConsumedSessionId 자동 clear ──
+            if (cooldownConsumedSessionId != null && cooldownConsumedSessionId != session.id) {
+                Log.d(TAG, "cooldownConsumedSessionId cleared: session changed (was=$cooldownConsumedSessionId, now=${session.id})")
+                cooldownConsumedSessionId = null
+            }
+
+            val score = evaluator.evaluate(session.accumulatedSignals.toList())
+            val alertState = alertStateResolver.resolve(session)
+            Log.d(TAG, "session score: total=${score.total}, level=${score.level}, alertState=$alertState, sessionId=${session.id}")
+
+            // ── renewal/rebase downgrade 정리 + 통보 상한 재무장 ────────
+            // renewal은 notified*를 승계하므로(재발동 금지), 이전에 INTERRUPT+ 표시가
+            // 있었는데 새 상태가 그 미만이면 팝업/currentEvent만 걷어낸다.
+            // 뱅킹 쿨다운은 세션 지속의 friction이므로 renewal에서 끊지 않는다.
+            // 검증 토큰의 부분 소멸 rebase로 내려간 경우도 동일하게 처리한다.
+            if (outcome.renewed || rebasedThisTick) {
+                val inheritedAlertOrdinal = session.notifiedAlertState?.ordinal ?: -1
+                val inheritedLevelOrdinal = session.notifiedLevel?.ordinal ?: -1
+                if (alertState.ordinal < AlertState.INTERRUPT.ordinal &&
+                    inheritedAlertOrdinal >= AlertState.INTERRUPT.ordinal
+                ) {
+                    val cleanupCutoff = synchronized(this@DefaultRiskDetectionCoordinator) {
+                        captureNonSafeCleanupCutoff()
+                    }
+                    beforeRenewalDowngradeCleanup()
+                    clearRenewalDowngradedPresentation(
+                        alertState,
+                        epochAtTickStart,
+                        cleanupCutoff,
+                    )
+                }
+                // 승계된 통보 상한이 현 상태보다 높으면 현 상태로 클램프 — 이번 tick에는
+                // 아무것도 발화하지 않지만(동치), 이후의 진짜 재상승이 다시 알림/이력을
+                // 낼 수 있게 escalation 감지를 재무장한다.
+                if (inheritedAlertOrdinal > alertState.ordinal) {
+                    sessionTracker.markAlertStateNotified(alertState)
+                }
+                if (inheritedLevelOrdinal > score.level.ordinal) {
+                    sessionTracker.markNotified(score.level)
+                }
+            }
+            context.score = score
+            context.alertState = alertState
+        }
+    }
+
+    /**
+     * true면 계속하고, false면 호출부가 즉시 반환하여 이 tick을 중단한다.
+     */
+    private fun canPresentTick(context: TickContext): Boolean {
+        with(context) {
+            if (alertState == AlertState.OBSERVE) {
+                return false
+            }
+
+            // ── end-call suppression 중 UI 액션 전체 스킵 ──────────
+            if (overlayManager.isEndCallSuppressed()) {
+                Log.d(TAG, "suppression active, skip popup/notification/cooldown")
+                return false
+            }
+            return true
+        }
+    }
+
+    /**
+     * true면 계속하고, false면 호출부가 즉시 반환하여 이 tick을 중단한다.
+     */
+    private fun syncTickTriggers(context: TickContext): Boolean {
+        with(context) {
+            // ── trigger 라이프사이클 동기화 ────────────────────────────
+            // rawTickSignals는 필터링된 call signal을 사용한다 — snooze로 걸러진 PASSIVE 신호는
+            // 세션에도 반영되지 않았으므로 sync 입력에서도 빠져야 일관된다.
+            // (CALL_DERIVED_SIGNALS는 모두 PASSIVE라 notifiedActiveThreats에 들어갈 일이 없어
+            //  실무상 영향은 없지만 의미상 raw 대신 filtered를 사용한다.)
+            val rawTickSignals: Set<RiskSignal> =
+                (filteredCallSignals + nonCallSignals).toSet()
+            var syncedSession = sessionTracker.syncActiveThreats(rawTickSignals) ?: session
+
+            val triggers = syncedSession.accumulatedSignals.filter { it.category == SignalCategory.TRIGGER }.toSet()
+            val activeTriggers = rawTickSignals.filter { it.category == SignalCategory.TRIGGER }.toSet()
+
+            // snooze가 살아남았다면 (same call + no upgrade) 이번 tick에서 popup/notification/cooldown을 모두 스킵.
+            val snoozeActive = sessionTracker.isSnoozeActive()
+            if (snoozeActive) {
+                Log.d(TAG, "snooze still active — skip popup/notification/cooldown this tick (callId=$liveCallId)")
+                return false
+            }
+
+            // 쿨다운 표시 중일 때만 활성 trigger를 자동 통보 처리한다.
+            // (뱅킹 포그라운드 단독은 쿨다운이 닫힌 상태일 수 있어 여기서 미리 마킹하면
+            //  이후 CRITICAL 에스컬레이션 시 새 trigger 팝업이 누락된다 — 은행 ARS 발신 감지 누락 방지.)
+            if (cooldownManager.isShowing() && activeTriggers.isNotEmpty()) {
+                val merged = syncedSession.notifiedActiveThreats + activeTriggers
+                if (merged != syncedSession.notifiedActiveThreats) {
+                    sessionTracker.markActiveThreatsNotified(merged)
+                    syncedSession = syncedSession.copy(notifiedActiveThreats = merged)
+                }
+            }
+            context.rawTickSignals = rawTickSignals
+            context.syncedSession = syncedSession
+            context.triggers = triggers
+            context.activeTriggers = activeTriggers
+            return true
+        }
+    }
+
+    /**
+     * null이면 이 tick을 중단한다. 값이 있으면 cooldownFiredThisTick으로 전달하고 계속한다.
+     */
+    private fun processTickCooldown(context: TickContext): Boolean? {
+        with(context) {
+            // ── epoch 재검증 (b): 쿨다운 발동 직전 ─────────────────────
+            if (userResetIntervened(epochAtTickStart, "cooldown stage")) {
+                return null
+            }
+
+            // ── 4단계: 쿨다운 발동 여부를 팝업보다 먼저 판정 ──────────
+            // 같은 tick에서 쿨다운이 발동하면 팝업은 생략한다(modal surface 1개 원칙).
+            var cooldownFiredThisTick = false
+            val isCallActive = liveCallId != null
+
+            val bankingJustOpened = bankingForeground && !previousBankingForeground
+            if (bankingJustOpened && alertState.ordinal >= AlertState.GUARDED.ordinal
+                && !isCooldownGhostTransition()
+            ) {
+                // 동기 ghost 조회(latestBankingForegroundEventTimestamp)가 도는 동안
+                // 사용자 확인이 끼어들 수 있다 — 재검증 (b)는 조회보다 앞서 실행되므로
+                // 이 창을 못 본다. 외부 효과(쿨다운) 직전 재확인 (라운드 8 지적 7).
+                if (userResetIntervened(epochAtTickStart, "post ghost query")) {
+                    return null
+                }
+                val isCallBased = session.accumulatedSignals.any { it in AlertStateResolver.CALL_SIGNALS }
+                if (!isCallBased) {
+                    Log.d(TAG, "뱅킹 쿨다운 생략: call-based 세션 아님")
+                } else if (cooldownConsumedSessionId == session.id) {
+                    Log.d(TAG, "뱅킹 쿨다운 생략: 세션당 1회 정책 (sessionId=${session.id}, alertState=$alertState)")
+                } else {
+                    val reason = buildCooldownReason(session.accumulatedSignals)
+                    cooldownManager.triggerIfNotActive(
+                        score.level,
+                        reason,
+                        isCallActive,
+                        expectedResetEpoch = epochAtTickStart,
+                    )
+                    overlayManager.ensureCriticalOnTop()
+                    cooldownConsumedSessionId = session.id
+                    Log.d(TAG, "cooldownConsumedSessionId set=${session.id}: banking cooldown fired (level=${score.level}, isCallActive=$isCallActive)")
+                    sessionTracker.markActiveThreatsNotified(triggers)
+                    cooldownFiredThisTick = true
+                    Log.d(TAG, "뱅킹 쿨다운 발동: level=${score.level}, alertState=$alertState, reason=$reason")
+                }
+            }
+
+            // ── telebanking cooldown: CRITICAL 세션에서 텔레뱅킹 발신 시 쿨다운 ──
+            if (!cooldownFiredThisTick &&
+                alertState == AlertState.CRITICAL &&
+                RiskSignal.TELEBANKING_AFTER_SUSPICIOUS in filteredCallSignals &&
+                !cooldownManager.isShowing()
+            ) {
+                if (cooldownConsumedSessionId == session.id) {
+                    Log.d(TAG, "텔레뱅킹 쿨다운 생략: 세션당 1회 정책 (sessionId=${session.id})")
+                } else {
+                    cooldownManager.triggerIfNotActive(
+                        score.level,
+                        "은행 ARS 전화가 감지되었습니다.\n잠시 멈추고 다시 생각해 보세요.",
+                        isCallActive,
+                        expectedResetEpoch = epochAtTickStart,
+                    )
+                    overlayManager.ensureCriticalOnTop()
+                    cooldownConsumedSessionId = session.id
+                    Log.d(TAG, "cooldownConsumedSessionId set=${session.id}: telebanking cooldown fired (level=${score.level})")
+                    sessionTracker.markActiveThreatsNotified(triggers)
+                    cooldownFiredThisTick = true
+                    Log.d(TAG, "텔레뱅킹 쿨다운 발동: level=${score.level}")
+                }
+            }
+            return cooldownFiredThisTick
+        }
+    }
+
+    /**
+     * null이면 이 tick을 중단한다. 값이 있으면 popupShownThisTick으로 전달하고 계속하며, false는 중단이 아니다.
+     */
+    private suspend fun processTickEscalation(context: TickContext, cooldownFiredThisTick: Boolean): Boolean? {
+        with(context) {
+            // ── notification: AlertState 전이 또는 RiskLevel 상승 시 ────
+            // 팝업은 쿨다운이 같은 tick에 발동했으면 생략(4단계). notification은 유지.
+            var popupShownThisTick = false
+            val prevAlertOrdinal = session.notifiedAlertState?.ordinal ?: -1
+            val prevLevelOrdinal = session.notifiedLevel?.ordinal ?: -1
+            val alertEscalated = alertState.ordinal > prevAlertOrdinal
+            val levelEscalated = score.level.ordinal > prevLevelOrdinal
+            if (alertEscalated || levelEscalated) {
+                val event = eventFactory.create(score)
+                // currentEvent 승격은 INTERRUPT+ 전용 — GUARDED 세션은 이력·notification만.
+                // (승격하면 홈이 WARNING으로 표시되고 Warning 화면 중립 헤더가 죽는다.)
+                val publication = if (alertState.ordinal >= AlertState.INTERRUPT.ordinal) {
+                    publishCurrentRiskEvent(event, epochAtTickStart) ?: run {
+                        Log.d(TAG, "event publication superseded — abort escalation effects")
+                        return null
+                    }
+                } else {
+                    eventSink.recordRiskEvent(event)
+                    null
+                }
+                // suspend(Room 쓰기) 재개 후 재검증 — 사용자 clear "이후"에 push가
+                // currentEvent를 되살렸을 수 있으므로 회수하고 잔여 효과를 중단한다.
+                if (userResetIntervened(epochAtTickStart, "escalation post-push")) {
+                    clearCurrentRiskEventStateIfExact(publication)
+                    return null
+                }
+                if (publication != null &&
+                    !emitWarningNavigationIfCurrent(event, publication)
+                ) {
+                    Log.d(TAG, "publication replaced — abort notification escalation")
+                    return null
+                }
+                if (publication != null &&
+                    userResetIntervened(epochAtTickStart, "escalation post-navigation gate")
+                ) {
+                    clearCurrentRiskEventStateIfExact(publication)
+                    return null
+                }
+                beforePublicationNotificationCommit(event)
+                if (!commitNotificationIfCurrent(event, publication) {
+                        if (alertEscalated) sessionTracker.markAlertStateNotified(alertState)
+                        sessionTracker.markNotified(score.level)
+                        Log.d(TAG, "notification escalation: alertState=${session.notifiedAlertState}→$alertState, level=${session.notifiedLevel}→${score.level}")
+                        notificationManager.notify(event)
+                    }
+                ) {
+                    Log.d(TAG, "publication replaced — abort notification commit")
+                    return null
+                }
+
+                if (alertState.ordinal >= AlertState.INTERRUPT.ordinal &&
+                    !cooldownManager.isShowing() && !cooldownFiredThisTick
+                ) {
+                    val nowMs = clock()
+                    if (shouldSuppressS2RecRefire(s2RecRefireState, rawTickSignals, nowMs)) {
+                        Log.d(TAG, "popup suppressed by S2 REC-REFIRE debounce (escalation path) — rawTick=$rawTickSignals, snapshot=${s2RecRefireState.snapshot}")
+                    } else {
+                        val guardian = firstGuardian()
+                        // suspend(DataStore 첫 읽기) 재개 후 재검증 — 사용자 확인 이후
+                        // 팝업이 다시 떠서는 안 된다.
+                        if (userResetIntervened(epochAtTickStart, "escalation popup show")) {
                             clearCurrentRiskEventStateIfExact(publication)
-                            previousBankingForeground = bankingForeground
-                            return@collect
+                            return null
+                        }
+                        val interruptPublication = publication ?: run {
+                            return null
+                        }
+                        beforePublicationPopupAccountingCommit(event)
+                        if (!showPublishedEventOverlay(
+                                event,
+                                guardian,
+                                interruptPublication,
+                            ) {
+                                s2RecRefireState = s2RecRefireStateAfterFiring(rawTickSignals, nowMs)
+                                sessionTracker.markActiveThreatsNotified(triggers)
+                                popupShownThisTick = true
+                                Log.d(TAG, "popup shown on state transition → $alertState (s2Snapshot=${s2RecRefireState.snapshot})")
+                            }
+                        ) {
+                            return null
+                        }
+                    }
+                } else if (cooldownFiredThisTick && alertState.ordinal >= AlertState.INTERRUPT.ordinal) {
+                    Log.d(TAG, "popup suppressed: cooldown fired this tick")
+                }
+            }
+            return popupShownThisTick
+        }
+    }
+
+    /**
+     * 마지막 단계로 false면 중단, true면 정상 종료한다. 어느 쪽이든 이후 단계 효과는 없다.
+     */
+    private suspend fun processTickNewTriggers(context: TickContext, cooldownFiredThisTick: Boolean, popupShownThisTick: Boolean): Boolean {
+        with(context) {
+            // ── 새 trigger 재알림: 에스컬레이션 없이도 새 trigger 감지 시 팝업 ──
+            if (!popupShownThisTick && !cooldownFiredThisTick &&
+                alertState.ordinal >= AlertState.INTERRUPT.ordinal && activeTriggers.isNotEmpty()
+            ) {
+                val newTriggers = activeTriggers - syncedSession.notifiedActiveThreats
+                if (newTriggers.isNotEmpty() && !cooldownManager.isShowing()) {
+                    val nowMs = clock()
+                    if (shouldSuppressS2RecRefire(s2RecRefireState, rawTickSignals, nowMs)) {
+                        Log.d(TAG, "popup suppressed by S2 REC-REFIRE debounce (new-trigger path) — new=$newTriggers, snapshot=${s2RecRefireState.snapshot}")
+                    } else {
+                        val event = eventFactory.create(score, triggerSignals = newTriggers)
+                        val publication = publishCurrentRiskEvent(event, epochAtTickStart) ?: run {
+                            Log.d(TAG, "event publication superseded — abort new-trigger effects")
+                            return false
+                        }
+                        // suspend(Room 쓰기) 재개 후 재검증 — push가 사용자 clear 이후
+                        // currentEvent를 되살렸으면 회수하고 중단.
+                        if (userResetIntervened(epochAtTickStart, "new-trigger post-push")) {
+                            clearCurrentRiskEventStateIfExact(publication)
+                            return false
+                        }
+                        if (!emitWarningNavigationIfCurrent(event, publication)) {
+                            Log.d(TAG, "publication replaced — abort new-trigger effects")
+                            return false
+                        }
+                        if (userResetIntervened(epochAtTickStart, "new-trigger post-navigation gate")) {
+                            clearCurrentRiskEventStateIfExact(publication)
+                            return false
                         }
                         beforePublicationNotificationCommit(event)
                         if (!commitNotificationIfCurrent(event, publication) {
-                                if (alertEscalated) sessionTracker.markAlertStateNotified(alertState)
-                                sessionTracker.markNotified(score.level)
-                                Log.d(TAG, "notification escalation: alertState=${session.notifiedAlertState}→$alertState, level=${session.notifiedLevel}→${score.level}")
                                 notificationManager.notify(event)
                             }
                         ) {
-                            Log.d(TAG, "publication replaced — abort notification commit")
-                            previousBankingForeground = bankingForeground
-                            return@collect
+                            Log.d(TAG, "publication replaced — abort new-trigger notification")
+                            return false
                         }
-
-                        if (alertState.ordinal >= AlertState.INTERRUPT.ordinal &&
-                            !cooldownManager.isShowing() && !cooldownFiredThisTick
+                        val guardian = firstGuardian()
+                        // suspend(DataStore) 재개 후 재검증 — 사용자 확인 이후 팝업 금지.
+                        if (userResetIntervened(epochAtTickStart, "new-trigger popup show")) {
+                            clearCurrentRiskEventStateIfExact(publication)
+                            return false
+                        }
+                        beforePublicationPopupAccountingCommit(event)
+                        if (!showPublishedEventOverlay(
+                                event,
+                                guardian,
+                                publication,
+                            ) {
+                                s2RecRefireState = s2RecRefireStateAfterFiring(rawTickSignals, nowMs)
+                                sessionTracker.markActiveThreatsNotified(
+                                    syncedSession.notifiedActiveThreats + newTriggers,
+                                )
+                                Log.d(TAG, "새 trigger 팝업: new=$newTriggers (s2Snapshot=${s2RecRefireState.snapshot})")
+                            }
                         ) {
-                            val nowMs = clock()
-                            if (shouldSuppressS2RecRefire(s2RecRefireState, rawTickSignals, nowMs)) {
-                                Log.d(TAG, "popup suppressed by S2 REC-REFIRE debounce (escalation path) — rawTick=$rawTickSignals, snapshot=${s2RecRefireState.snapshot}")
-                            } else {
-                                val guardian = firstGuardian()
-                                // suspend(DataStore 첫 읽기) 재개 후 재검증 — 사용자 확인 이후
-                                // 팝업이 다시 떠서는 안 된다.
-                                if (userResetIntervened(epochAtTickStart, "escalation popup show")) {
-                                    clearCurrentRiskEventStateIfExact(publication)
-                                    previousBankingForeground = bankingForeground
-                                    return@collect
-                                }
-                                val interruptPublication = publication ?: run {
-                                    previousBankingForeground = bankingForeground
-                                    return@collect
-                                }
-                                beforePublicationPopupAccountingCommit(event)
-                                if (!showPublishedEventOverlay(
-                                        event,
-                                        guardian,
-                                        interruptPublication,
-                                    ) {
-                                        s2RecRefireState = s2RecRefireStateAfterFiring(rawTickSignals, nowMs)
-                                        sessionTracker.markActiveThreatsNotified(triggers)
-                                        popupShownThisTick = true
-                                        Log.d(TAG, "popup shown on state transition → $alertState (s2Snapshot=${s2RecRefireState.snapshot})")
-                                    }
-                                ) {
-                                    previousBankingForeground = bankingForeground
-                                    return@collect
-                                }
-                            }
-                        } else if (cooldownFiredThisTick && alertState.ordinal >= AlertState.INTERRUPT.ordinal) {
-                            Log.d(TAG, "popup suppressed: cooldown fired this tick")
+                            return false
                         }
                     }
-
-                    // ── epoch 재검증 (d): 새 trigger 재알림 효과 직전 ───────────
-                    // (c)와의 사이에 suspend가 없으면 실질적으로 도달 불가한 창이지만,
-                    // escalation 블록이 suspend를 포함하므로 defense-in-depth로 유지한다.
-                    if (userResetIntervened(epochAtTickStart, "new-trigger effects")) {
-                        previousBankingForeground = bankingForeground
-                        return@collect
-                    }
-
-                    // ── 새 trigger 재알림: 에스컬레이션 없이도 새 trigger 감지 시 팝업 ──
-                    if (!popupShownThisTick && !cooldownFiredThisTick &&
-                        alertState.ordinal >= AlertState.INTERRUPT.ordinal && activeTriggers.isNotEmpty()
-                    ) {
-                        val newTriggers = activeTriggers - syncedSession.notifiedActiveThreats
-                        if (newTriggers.isNotEmpty() && !cooldownManager.isShowing()) {
-                            val nowMs = clock()
-                            if (shouldSuppressS2RecRefire(s2RecRefireState, rawTickSignals, nowMs)) {
-                                Log.d(TAG, "popup suppressed by S2 REC-REFIRE debounce (new-trigger path) — new=$newTriggers, snapshot=${s2RecRefireState.snapshot}")
-                            } else {
-                                val event = eventFactory.create(score, triggerSignals = newTriggers)
-                                val publication = publishCurrentRiskEvent(event, epochAtTickStart) ?: run {
-                                    Log.d(TAG, "event publication superseded — abort new-trigger effects")
-                                    previousBankingForeground = bankingForeground
-                                    return@collect
-                                }
-                                // suspend(Room 쓰기) 재개 후 재검증 — push가 사용자 clear 이후
-                                // currentEvent를 되살렸으면 회수하고 중단.
-                                if (userResetIntervened(epochAtTickStart, "new-trigger post-push")) {
-                                    clearCurrentRiskEventStateIfExact(publication)
-                                    previousBankingForeground = bankingForeground
-                                    return@collect
-                                }
-                                if (!emitWarningNavigationIfCurrent(event, publication)) {
-                                    Log.d(TAG, "publication replaced — abort new-trigger effects")
-                                    previousBankingForeground = bankingForeground
-                                    return@collect
-                                }
-                                if (userResetIntervened(epochAtTickStart, "new-trigger post-navigation gate")) {
-                                    clearCurrentRiskEventStateIfExact(publication)
-                                    previousBankingForeground = bankingForeground
-                                    return@collect
-                                }
-                                beforePublicationNotificationCommit(event)
-                                if (!commitNotificationIfCurrent(event, publication) {
-                                        notificationManager.notify(event)
-                                    }
-                                ) {
-                                    Log.d(TAG, "publication replaced — abort new-trigger notification")
-                                    previousBankingForeground = bankingForeground
-                                    return@collect
-                                }
-                                val guardian = firstGuardian()
-                                // suspend(DataStore) 재개 후 재검증 — 사용자 확인 이후 팝업 금지.
-                                if (userResetIntervened(epochAtTickStart, "new-trigger popup show")) {
-                                    clearCurrentRiskEventStateIfExact(publication)
-                                    previousBankingForeground = bankingForeground
-                                    return@collect
-                                }
-                                beforePublicationPopupAccountingCommit(event)
-                                if (!showPublishedEventOverlay(
-                                        event,
-                                        guardian,
-                                        publication,
-                                    ) {
-                                        s2RecRefireState = s2RecRefireStateAfterFiring(rawTickSignals, nowMs)
-                                        sessionTracker.markActiveThreatsNotified(
-                                            syncedSession.notifiedActiveThreats + newTriggers,
-                                        )
-                                        Log.d(TAG, "새 trigger 팝업: new=$newTriggers (s2Snapshot=${s2RecRefireState.snapshot})")
-                                    }
-                                ) {
-                                    previousBankingForeground = bankingForeground
-                                    return@collect
-                                }
-                            }
-                        }
-                    }
-
-                    previousBankingForeground = bankingForeground
                 }
+            }
+            return true
         }
     }
+
 
     override fun stop() {
         job?.cancel()
@@ -1745,3 +1856,41 @@ internal fun shouldApplyOverlayCallSafeEffects(
     signals: Set<RiskSignal>,
 ): Boolean =
     inCall && signals.isNotEmpty() && signals.all { it in AlertStateResolver.CALL_SIGNALS }
+
+/** Mutable state owned by one start() launch, confined to its serial collect lane. */
+private class TickLoopState {
+    // maintenance 만료 직후 재평가용 마지막 신호 스냅샷. collect lane에서만 접근(직렬).
+    var latestSignals: CombinedSignals? = null
+    // 직전 TTL renewal(스냅샷·신호 경로 공통)의 검증 토큰.
+    var renewalToken: RenewalToken? = null
+    // version vector: 직전에 처리한 tick의 source별 sequence — "이번 tick에서 실제로
+    // 전진한(재방출된) source"를 식별한다.
+    val lastSeenSeq = mutableMapOf<SourceId, Long>()
+}
+
+/** Per-tick values, populated in processTick stage order; never a lock owner. */
+private class TickContext(
+    val epochAtTickStart: Long,
+    val freshBySource: Map<SourceId, List<RiskSignal>>,
+    val callSignals: List<RiskSignal>,
+    val appSignals: List<RiskSignal>,
+    val installSignals: List<RiskSignal>,
+    val deviceEnvSignals: List<RiskSignal>,
+    val bankingForeground: Boolean,
+    val advancedSources: Set<SourceId>,
+) {
+    var liveCallId: Long? = null
+    lateinit var nonCallSignals: List<RiskSignal>
+    lateinit var filteredCallSignals: List<RiskSignal>
+    var forceExpiredThisTick = false
+    var rebasedThisTick = false
+    var splitThisTick = false
+    lateinit var outcome: RiskSessionTracker.UpdateOutcome
+    lateinit var session: com.example.seniorshield.monitoring.session.RiskSession
+    lateinit var score: com.example.seniorshield.domain.model.RiskScore
+    lateinit var alertState: AlertState
+    lateinit var rawTickSignals: Set<RiskSignal>
+    lateinit var syncedSession: com.example.seniorshield.monitoring.session.RiskSession
+    lateinit var triggers: Set<RiskSignal>
+    lateinit var activeTriggers: Set<RiskSignal>
+}
