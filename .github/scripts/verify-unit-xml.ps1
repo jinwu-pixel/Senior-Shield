@@ -4,6 +4,7 @@
 # failures/errors/skipped 0. Raising a floor is a deliberate follow-up edit, never automatic.
 # Raised 2026-10-10: app 544->564 (popup guardian SMS toggle: +7 R1 characterization, +13 toggle tests).
 # Raised 2026-10-10: app 564->571 (home SMS toggle +5, cancellation-preserving I1 +2).
+# Raised 2026-10-10: app 571->577 (guardian read failure +6).
 [CmdletBinding()]
 param(
     [string]$RepositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..')),
@@ -12,7 +13,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $modules = @(
-    @{ Name = 'app';              Dir = 'app/build/test-results/testDebugUnitTest'; MinTests = 571 },
+    @{ Name = 'app';              Dir = 'app/build/test-results/testDebugUnitTest'; MinTests = 577 },
     @{ Name = 'domain:risk';      Dir = 'domain/risk/build/test-results/test';      MinTests = 7 },
     @{ Name = 'domain:contracts'; Dir = 'domain/contracts/build/test-results/test'; MinTests = 4 }
 )

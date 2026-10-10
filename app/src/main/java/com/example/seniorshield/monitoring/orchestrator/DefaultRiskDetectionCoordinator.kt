@@ -601,7 +601,15 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
             false
         }
         if (!smsMenuEnabled) return null
-        return guardianRepository.observeGuardians().first().firstOrNull()
+        return try {
+            guardianRepository.observeGuardians().first().firstOrNull()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            currentCoroutineContext().ensureActive()
+            Log.w(TAG, "guardian read failed — guardian SMS button hidden", e)
+            null
+        }
     }
 
     /**
