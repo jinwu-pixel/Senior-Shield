@@ -109,6 +109,16 @@ class PopupGuardianSmsToggleTest {
     }
 
     @Test
+    fun escalationStopThenSettingIOExceptionAbortsPopupAndTickAssignment() = runTest {
+        assertStopDuringSettingRead(newTrigger = false, stopThenIOException = true)
+    }
+
+    @Test
+    fun newTriggerStopThenSettingIOExceptionAbortsPopupAndTickAssignment() = runTest {
+        assertStopDuringSettingRead(newTrigger = true, stopThenIOException = true)
+    }
+
+    @Test
     fun escalationResetDuringSettingReadAbortsAtPopupRevalidation() = runTest {
         assertResetDuringSettingRead(newTrigger = false)
     }
@@ -166,16 +176,28 @@ class PopupGuardianSmsToggleTest {
         }
     }
 
-    private suspend fun TestScope.assertStopDuringSettingRead(newTrigger: Boolean) {
+    private suspend fun TestScope.assertStopDuringSettingRead(
+        newTrigger: Boolean,
+        stopThenIOException: Boolean = false,
+    ) {
         val harness = CoordinatorTestHarness()
         val clock = FakeClock(now = 1_000_000L)
         harness.sessionTracker.clock = clock.provider
         harness.guardianRepository.guardians = listOf(guardian)
         val entered = CompletableDeferred<Job>()
         val hookExited = CompletableDeferred<Unit>()
+        val releaseSetting = CompletableDeferred<Unit>()
+        lateinit var coordinator: DefaultRiskDetectionCoordinator
         harness.settingsRepository.beforeSmsMenuEmission = {
             entered.complete(requireNotNull(currentCoroutineContext()[Job]))
             try {
+                if (stopThenIOException) {
+                    // Wait only to install the accounting probe and observe the pre-stop state.
+                    releaseSetting.await()
+                    // No suspension between cancellation and the non-cancellation exception.
+                    coordinator.stop()
+                    throw java.io.IOException("settings read failed after synchronous stop")
+                }
                 awaitCancellation()
             } finally {
                 hookExited.complete(Unit)
@@ -187,7 +209,7 @@ class PopupGuardianSmsToggleTest {
         // from previousBankingForeground; swallowing cancellation would assign true.
         harness.appUsageMonitor.bankingForeground.value = true
         prepareRemoteTrigger(harness, newTrigger)
-        val coordinator = with(harness) { start(clock) }
+        coordinator = with(harness) { start(clock) }
         var popupAccountingCalls = 0
         coordinator.beforePublicationPopupAccountingCommit = { popupAccountingCalls += 1 }
         try {
@@ -197,7 +219,11 @@ class PopupGuardianSmsToggleTest {
             assertEquals(1, harness.eventSink.pushed.size)
             verify(exactly = 1) { harness.notificationManager.notify(any()) }
 
-            coordinator.stop()
+            if (stopThenIOException) {
+                releaseSetting.complete(Unit)
+            } else {
+                coordinator.stop()
+            }
             runCurrent()
             tickJob.join()
 
