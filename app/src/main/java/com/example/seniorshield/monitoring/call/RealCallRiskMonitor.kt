@@ -25,14 +25,18 @@ import com.example.seniorshield.monitoring.model.CallMonitorState
 import com.example.seniorshield.monitoring.model.CallState
 import com.example.seniorshield.monitoring.model.Produced
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
@@ -396,6 +400,12 @@ class RealCallRiskMonitor @Inject constructor(
                                 // immediate 신호 snapshot은 같은 통화 회차에서 유지된다.
                                 emitAll(
                                     settingsRepository.observeTestModeEnabled()
+                                        .catch { e ->
+                                            currentCoroutineContext().ensureActive()
+                                            Log.w(TAG, "test mode setting read failed — production long-call threshold used", e)
+                                            // true 수신 후 상류 실패 시 운영 임계값으로 LONG 타이머를 재시작한다.
+                                            emit(false)
+                                        }
                                         .distinctUntilChanged()
                                         .flatMapLatest { testMode ->
                                             val thresholdMs = if (testMode) {
@@ -480,7 +490,15 @@ class RealCallRiskMonitor @Inject constructor(
                                 if (!ctx.isOutgoing) {
                                     // FINAL mapper만 현재 testMode를 1회 sample한다. 대기 중 reset이
                                     // 끼면 stale IDLE의 신호/RESET 방출을 재개하지 않는다.
-                                    val testMode = settingsRepository.observeTestModeEnabled().first()
+                                    val testMode = try {
+                                        settingsRepository.observeTestModeEnabled().first()
+                                    } catch (e: CancellationException) {
+                                        throw e
+                                    } catch (e: Exception) {
+                                        currentCoroutineContext().ensureActive()
+                                        Log.w(TAG, "test mode setting read failed — production long-call threshold used", e)
+                                        false
+                                    }
                                     if (sessionTracker.userResetEpoch != producedAtEpoch) return@flow
                                     val thresholdMs = if (testMode) {
                                         CallSignalMapper.TEST_LONG_CALL_THRESHOLD_MS
