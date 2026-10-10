@@ -12,6 +12,7 @@ import com.example.seniorshield.domain.model.RiskLevel
 import com.example.seniorshield.domain.model.RiskSignal
 import com.example.seniorshield.domain.repository.GuardianRepository
 import com.example.seniorshield.domain.repository.RiskRepository
+import com.example.seniorshield.domain.repository.SettingsRepository
 import com.example.seniorshield.monitoring.orchestrator.AlertStateResolver
 import com.example.seniorshield.monitoring.orchestrator.RiskDetectionCoordinator
 import com.example.seniorshield.monitoring.orchestrator.SafeConfirmationOrigin
@@ -28,8 +29,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -39,6 +42,7 @@ class HomeViewModel @Inject constructor(
     private val sessionTracker: RiskSessionTracker,
     private val alertStateResolver: AlertStateResolver,
     private val guardianRepository: GuardianRepository,
+    private val settingsRepository: SettingsRepository,
     private val coordinator: RiskDetectionCoordinator,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
@@ -60,6 +64,7 @@ class HomeViewModel @Inject constructor(
         val shownId: String?,
         val guardians: List<Guardian>,
         val anchorHot: Boolean,
+        val smsMenuEnabled: Boolean,
     )
 
     val uiState: StateFlow<HomeUiState> = combine(
@@ -72,7 +77,10 @@ class HomeViewModel @Inject constructor(
             _guardedCardShownSessionId,
             guardianRepository.observeGuardians(),
             coordinator.anchorHotState,
-        ) { s, id, guardians, hot -> SessionCombined(s, id, guardians, hot) },
+            settingsRepository.observeSmsMenuEnabled().onStart { emit(false) }.catch { emit(false) },
+        ) { s, id, guardians, hot, smsMenuEnabled ->
+            SessionCombined(s, id, guardians, hot, smsMenuEnabled)
+        },
     ) { current, recent, hasPermissions, weekly, sc ->
         val summary = "최근 24시간: ${recent.size}건 · 이번 주: ${weekly.eventCount}건"
         val presentation = decideHomePresentation(
@@ -107,6 +115,7 @@ class HomeViewModel @Inject constructor(
             hasGuardian = guardian != null,
             guardianName = guardian?.name ?: "",
             guardianPhone = guardian?.phoneNumber ?: "",
+            smsMenuEnabled = sc.smsMenuEnabled,
         )
     }.stateIn(
         scope = viewModelScope,

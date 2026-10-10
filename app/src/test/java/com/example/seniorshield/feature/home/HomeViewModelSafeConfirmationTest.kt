@@ -214,6 +214,7 @@ class HomeViewModelSafeConfirmationTest {
         sessionTracker = tracker,
         alertStateResolver = AlertStateResolver(),
         guardianRepository = EmptyGuardianRepository(),
+        settingsRepository = com.example.seniorshield.testutil.FakeSettingsRepository(),
         coordinator = coordinator,
         context = context,
     )
