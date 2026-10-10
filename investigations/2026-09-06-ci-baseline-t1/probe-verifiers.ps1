@@ -142,9 +142,23 @@ $f = Get-ChildItem (Join-Path $p 'app/build/test-results/testDebugUnitTest') -Fi
 Edit-Text $f.FullName { param($c) $c -replace 'skipped="0"', 'skipped="1"' }
 Test-Pwsh 'unit: one app suite skipped=1' $unitScript $p $false
 $p = New-Probe 'unit-removed'
-$f = Get-ChildItem (Join-Path $p 'app/build/test-results/testDebugUnitTest') -Filter 'TEST-*.xml' | Select-Object -First 1
-Remove-Item -LiteralPath $f.FullName
-Test-Pwsh 'unit: one app suite file removed (below floor 544)' $unitScript $p $false
+$floorMatch = [regex]::Match((Get-Content -LiteralPath $unitScript -Raw), "Name\s*=\s*'app'\s*;[^}]*\bMinTests\s*=\s*(\d+)")
+if (-not $floorMatch.Success) { throw 'Cannot read app MinTests from the unit XML verifier.' }
+$appFloor = [int]$floorMatch.Groups[1].Value
+$appDir = Join-Path $p 'app/build/test-results/testDebugUnitTest'
+$appFiles = @(Get-ChildItem -LiteralPath $appDir -Filter 'TEST-*.xml' -File | Sort-Object Name)
+$remainingTests = $appFloor
+foreach ($f in $appFiles) {
+    Remove-Item -LiteralPath $f.FullName
+    $remainingTests = 0
+    foreach ($remainingFile in Get-ChildItem -LiteralPath $appDir -Filter 'TEST-*.xml' -File) {
+        [xml]$document = Get-Content -LiteralPath $remainingFile.FullName -Raw
+        $remainingTests += [int]$document.testsuite.tests
+    }
+    if ($remainingTests -lt $appFloor) { break }
+}
+if ($remainingTests -ge $appFloor) { throw 'Removing app suites did not bring the test count below the floor.' }
+Test-Pwsh 'unit: app suites removed until below floor' $unitScript $p $false
 $p = New-Probe 'unit-failure'
 $f = Get-ChildItem (Join-Path $p 'domain/risk/build/test-results/test') -Filter 'TEST-*.xml' | Select-Object -First 1
 Edit-Text $f.FullName { param($c) $c -replace 'failures="0"', 'failures="1"' }

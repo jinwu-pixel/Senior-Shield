@@ -63,7 +63,7 @@ jobs:
             :app:assembleDebugAndroidTest \
             :data:lintDebug :app:lintDebug
 
-      - name: Verify unit test XML (floor 544/7/4, skipped 0)
+      - name: Verify unit test XML (floor 564/7/4, skipped 0)
         shell: pwsh
         run: ./.github/scripts/verify-unit-xml.ps1 -EvidenceOut build-evidence/unit-tests.json
 
