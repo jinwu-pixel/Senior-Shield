@@ -128,6 +128,144 @@ class PopupGuardianSmsToggleTest {
         assertResetDuringSettingRead(newTrigger = true)
     }
 
+    @Test
+    fun escalationGuardianReadFailureHidesGuardianAndNextTickShowsGuardian() = runTest {
+        assertGuardianReadFailure(newTrigger = false, emptyFlow = false)
+    }
+
+    @Test
+    fun newTriggerGuardianReadFailureHidesGuardianAndNextTickShowsGuardian() = runTest {
+        assertGuardianReadFailure(newTrigger = true, emptyFlow = false)
+    }
+
+    @Test
+    fun escalationEmptyGuardianFlowShowsNullGuardian() = runTest {
+        assertGuardianReadFailure(newTrigger = false, emptyFlow = true)
+    }
+
+    @Test
+    fun newTriggerEmptyGuardianFlowShowsNullGuardian() = runTest {
+        assertGuardianReadFailure(newTrigger = true, emptyFlow = true)
+    }
+
+    @Test
+    fun escalationStopThenGuardianIOExceptionAbortsPopupAndTickAssignment() = runTest {
+        assertStopThenGuardianIOException(newTrigger = false)
+    }
+
+    @Test
+    fun newTriggerStopThenGuardianIOExceptionAbortsPopupAndTickAssignment() = runTest {
+        assertStopThenGuardianIOException(newTrigger = true)
+    }
+
+    private fun TestScope.assertGuardianReadFailure(newTrigger: Boolean, emptyFlow: Boolean) {
+        val harness = CoordinatorTestHarness()
+        harness.settingsRepository.smsMenuEnabled = true
+        harness.guardianRepository.guardians = listOf(guardian)
+        harness.guardianRepository.emptyGuardianFlow = emptyFlow
+        if (!emptyFlow) {
+            harness.guardianRepository.guardianFailure = java.io.IOException("guardian datastore read failed")
+        }
+        var settingReads = 0
+        var guardianReads = 0
+        harness.settingsRepository.beforeSmsMenuEmission = { settingReads += 1 }
+        harness.guardianRepository.beforeFirstEmission = { guardianReads += 1 }
+        val shownGuardians = mutableListOf<Guardian?>()
+        every { harness.overlayManager.show(any(), any(), any()) } answers {
+            shownGuardians.add(secondArg<Guardian?>())
+            Unit
+        }
+        val coordinator = with(harness) { start(FakeClock(now = 1_000_000L)) }
+        try {
+            prepareRemoteTrigger(harness, newTrigger)
+            runCurrent()
+
+            assertEquals(1, settingReads)
+            assertEquals(1, guardianReads)
+            verify(exactly = 1) { harness.overlayManager.show(any(), any(), any()) }
+            assertEquals(listOf<Guardian?>(null), shownGuardians)
+            assertEquals(1, harness.eventSink.pushed.size)
+
+            harness.guardianRepository.guardianFailure = null
+            harness.guardianRepository.emptyGuardianFlow = false
+            // A new upgrade trigger escapes S2 without advancing maintenance time.
+            harness.appUsageMonitor.appSignals.value = listOf(
+                RiskSignal.REMOTE_CONTROL_APP_OPENED,
+                RiskSignal.BANKING_APP_OPENED_AFTER_REMOTE_APP,
+            )
+            runCurrent()
+
+            assertEquals(2, settingReads)
+            assertEquals(2, guardianReads)
+            verify(exactly = 2) { harness.overlayManager.show(any(), any(), any()) }
+            assertEquals(listOf(null, guardian), shownGuardians)
+            assertEquals(2, harness.eventSink.pushed.size)
+        } finally {
+            coordinator.stop()
+            runCurrent()
+        }
+    }
+
+    private suspend fun TestScope.assertStopThenGuardianIOException(newTrigger: Boolean) {
+        val harness = CoordinatorTestHarness()
+        val clock = FakeClock(now = 1_000_000L)
+        harness.sessionTracker.clock = clock.provider
+        harness.settingsRepository.smsMenuEnabled = true
+        harness.guardianRepository.guardians = listOf(guardian)
+        val entered = CompletableDeferred<Job>()
+        val hookExited = CompletableDeferred<Unit>()
+        val releaseGuardian = CompletableDeferred<Unit>()
+        lateinit var coordinator: DefaultRiskDetectionCoordinator
+        var guardianReads = 0
+        harness.guardianRepository.beforeFirstEmission = {
+            guardianReads += 1
+            entered.complete(requireNotNull(currentCoroutineContext()[Job]))
+            try {
+                // Wait only to install the accounting probe and observe the pre-stop state.
+                releaseGuardian.await()
+                // No suspension between cancellation and the non-cancellation exception.
+                coordinator.stop()
+                throw java.io.IOException("guardian read failed after synchronous stop")
+            } finally {
+                hookExited.complete(Unit)
+            }
+        }
+        // Suspend the initial signal tick while its effective banking value differs
+        // from previousBankingForeground; swallowing cancellation would assign true.
+        harness.appUsageMonitor.bankingForeground.value = true
+        prepareRemoteTrigger(harness, newTrigger)
+        coordinator = with(harness) { start(clock) }
+        var popupAccountingCalls = 0
+        coordinator.beforePublicationPopupAccountingCommit = { popupAccountingCalls += 1 }
+        try {
+            assertTrue("guardian read must suspend before stop", entered.isCompleted)
+            val tickJob = entered.await()
+            assertFalse(previousBanking(coordinator))
+            assertEquals(1, guardianReads)
+            assertEquals(1, harness.eventSink.pushed.size)
+            verify(exactly = 1) { harness.notificationManager.notify(any()) }
+
+            releaseGuardian.complete(Unit)
+            runCurrent()
+            tickJob.join()
+
+            assertTrue(hookExited.isCompleted)
+            assertTrue(tickJob.isCancelled)
+            assertTrue(tickJob.isCompleted)
+            assertFalse(previousBanking(coordinator))
+            assertEquals(1, guardianReads)
+            assertEquals(0, popupAccountingCalls)
+            assertEquals(1, harness.eventSink.pushed.size)
+            assertTrue(requireNotNull(harness.sessionTracker.sessionState.value).notifiedActiveThreats.isEmpty())
+            verify(exactly = 1) { harness.notificationManager.notify(any()) }
+            verify(exactly = 0) { harness.overlayManager.show(any(), any(), any()) }
+            verify(exactly = 0) { harness.cooldownManager.triggerIfNotActive(any(), any(), any(), any()) }
+        } finally {
+            coordinator.stop()
+            runCurrent()
+        }
+    }
+
     private fun TestScope.assertSettingFailure(newTrigger: Boolean, emptyFlow: Boolean) {
         val harness = CoordinatorTestHarness()
         harness.guardianRepository.guardians = listOf(guardian)

@@ -284,10 +284,13 @@ class FakeRiskEventSink(
 class FakeGuardianRepository : GuardianRepository {
     var guardians: List<Guardian> = emptyList()
     var beforeFirstEmission: (suspend () -> Unit)? = null
+    var guardianFailure: Exception? = null
+    var emptyGuardianFlow: Boolean = false
 
     override fun observeGuardians(): Flow<List<Guardian>> = flow {
         beforeFirstEmission?.invoke()
-        emit(guardians)
+        guardianFailure?.let { throw it }
+        if (!emptyGuardianFlow) emit(guardians)
     }
     override suspend fun addGuardian(guardian: Guardian): Boolean = true
     override suspend fun removeGuardian(id: String) {}
