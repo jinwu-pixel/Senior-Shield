@@ -263,6 +263,158 @@ class RealCallRiskMonitorProvenanceTest {
     }
 
     @Test
+    fun `test mode read failure at offhook keeps the call signal flow alive`() = runBlocking {
+        val collectionCount = AtomicInteger(0)
+        val offhookSettingsStarted = CompletableDeferred<Unit>()
+        val releaseOffhookFailure = CompletableDeferred<Unit>()
+        every { settingsRepository.observeTestModeEnabled() } returns flow {
+            if (collectionCount.incrementAndGet() == 1) {
+                offhookSettingsStarted.complete(Unit)
+                releaseOffhookFailure.await()
+                throw java.io.IOException("OFFHOOK test mode read failed")
+            }
+            emit(false)
+        }
+        every { mapper.map(any(), any()) } returns emptyList()
+
+        startCollector()
+        drive(TelephonyManager.CALL_STATE_IDLE)
+        assertTrue(awaitEmission().value.isEmpty())
+        drive(TelephonyManager.CALL_STATE_RINGING, "01011112222")
+        drive(TelephonyManager.CALL_STATE_OFFHOOK, "01011112222")
+        assertEquals(
+            listOf(RiskSignal.UNKNOWN_CALLER),
+            awaitEmissionWhere { RiskSignal.UNKNOWN_CALLER in it.value }.value,
+        )
+        // 실제 coordinator는 첫 UNKNOWN 방출로 세션을 연다. 활성 세션을 재현해야 재기록이
+        // recordUnknownCall clean-slate clear에 가려지지 않고 size 증가로 드러난다.
+        tracker.update(listOf(RiskSignal.UNKNOWN_CALLER), emptyList())
+        withTimeout(5_000) { offhookSettingsStarted.await() }
+        // 실패를 세션 개설 뒤로 미뤄 fallback의 일회성 경계 재실행이 size 2로 드러나게 한다.
+        releaseOffhookFailure.complete(Unit)
+        assertNoFurtherEmission()
+        assertEquals("fallback은 같은 통화를 다시 기록하지 않음", 1, monitor.recentUnknownCalls.size)
+
+        fakeClock.advanceMs(1_000L)
+        drive(TelephonyManager.CALL_STATE_IDLE, "01011112222")
+        assertTrue(awaitEmission().value.isEmpty()) // RESET
+
+        drive(TelephonyManager.CALL_STATE_RINGING, "01033334444")
+        drive(TelephonyManager.CALL_STATE_OFFHOOK, "01033334444")
+        assertTrue(RiskSignal.UNKNOWN_CALLER in awaitEmissionWhere { RiskSignal.UNKNOWN_CALLER in it.value }.value)
+    }
+
+    @Test
+    fun `test mode read failure at idle falls back to the production threshold`() = runBlocking {
+        val collectionCount = AtomicInteger(0)
+        val offhookSettingsRead = CompletableDeferred<Unit>()
+        every { settingsRepository.observeTestModeEnabled() } returns flow {
+            when (collectionCount.incrementAndGet()) {
+                1 -> {
+                    emit(false)
+                    offhookSettingsRead.complete(Unit)
+                }
+                2 -> throw java.io.IOException("IDLE test mode read failed")
+                else -> emit(false)
+            }
+        }
+        every { mapper.map(any(), any()) } returns emptyList()
+
+        startCollector()
+        drive(TelephonyManager.CALL_STATE_IDLE)
+        assertTrue(awaitEmission().value.isEmpty())
+        drive(TelephonyManager.CALL_STATE_RINGING, "01011112222")
+        drive(TelephonyManager.CALL_STATE_OFFHOOK, "01011112222")
+        awaitEmissionWhere { RiskSignal.UNKNOWN_CALLER in it.value }
+        withTimeout(5_000) { offhookSettingsRead.await() }
+
+        fakeClock.advanceMs(1_000L)
+        drive(TelephonyManager.CALL_STATE_IDLE, "01011112222")
+        assertTrue(awaitEmission().value.isEmpty()) // RESET
+        verify(exactly = 1) { mapper.map(any(), CallSignalMapper.LONG_CALL_THRESHOLD_MS) }
+        assertEquals(1_001_000L, monitor.lastSuspiciousCallEndedElapsedMs)
+
+        drive(TelephonyManager.CALL_STATE_RINGING, "01033334444")
+        drive(TelephonyManager.CALL_STATE_OFFHOOK, "01033334444")
+        assertTrue(RiskSignal.UNKNOWN_CALLER in awaitEmissionWhere { RiskSignal.UNKNOWN_CALLER in it.value }.value)
+    }
+
+    @Test
+    fun `empty test mode flow at idle falls back to the production threshold`() = runBlocking {
+        val collectionCount = AtomicInteger(0)
+        val offhookSettingsRead = CompletableDeferred<Unit>()
+        every { settingsRepository.observeTestModeEnabled() } returns flow {
+            when (collectionCount.incrementAndGet()) {
+                1 -> {
+                    emit(false)
+                    offhookSettingsRead.complete(Unit)
+                }
+                2 -> Unit // IDLE first()에 값 없이 완료하여 NoSuchElementException을 유발한다.
+                else -> emit(false)
+            }
+        }
+        every { mapper.map(any(), any()) } returns emptyList()
+
+        startCollector()
+        drive(TelephonyManager.CALL_STATE_IDLE)
+        assertTrue(awaitEmission().value.isEmpty())
+        drive(TelephonyManager.CALL_STATE_RINGING, "01011112222")
+        drive(TelephonyManager.CALL_STATE_OFFHOOK, "01011112222")
+        awaitEmissionWhere { RiskSignal.UNKNOWN_CALLER in it.value }
+        withTimeout(5_000) { offhookSettingsRead.await() }
+
+        fakeClock.advanceMs(1_000L)
+        drive(TelephonyManager.CALL_STATE_IDLE, "01011112222")
+        assertTrue(awaitEmission().value.isEmpty()) // RESET
+        verify(exactly = 1) { mapper.map(any(), CallSignalMapper.LONG_CALL_THRESHOLD_MS) }
+        assertEquals(1_001_000L, monitor.lastSuspiciousCallEndedElapsedMs)
+
+        drive(TelephonyManager.CALL_STATE_RINGING, "01033334444")
+        drive(TelephonyManager.CALL_STATE_OFFHOOK, "01033334444")
+        assertTrue(RiskSignal.UNKNOWN_CALLER in awaitEmissionWhere { RiskSignal.UNKNOWN_CALLER in it.value }.value)
+    }
+
+    @Test
+    fun `cancellation during idle test mode read prevents mapper and further emissions`() = runBlocking {
+        val collectionCount = AtomicInteger(0)
+        val offhookSettingsRead = CompletableDeferred<Unit>()
+        every { settingsRepository.observeTestModeEnabled() } returns flow {
+            when (collectionCount.incrementAndGet()) {
+                1 -> {
+                    emit(false)
+                    offhookSettingsRead.complete(Unit)
+                }
+                2 -> {
+                    collectorJob!!.cancel()
+                    throw java.io.IOException("IDLE test mode read failed after cancellation")
+                }
+                else -> emit(false)
+            }
+        }
+
+        startCollector()
+        drive(TelephonyManager.CALL_STATE_IDLE)
+        assertTrue(awaitEmission().value.isEmpty())
+        drive(TelephonyManager.CALL_STATE_RINGING, "01011112222")
+        drive(TelephonyManager.CALL_STATE_OFFHOOK, "01011112222")
+        awaitEmissionWhere { RiskSignal.UNKNOWN_CALLER in it.value }
+        // 실제 coordinator는 첫 UNKNOWN 방출로 세션을 연다. 활성 세션을 재현해야 재기록이
+        // recordUnknownCall clean-slate clear에 가려지지 않고 size 증가로 드러난다.
+        tracker.update(listOf(RiskSignal.UNKNOWN_CALLER), emptyList())
+        withTimeout(5_000) { offhookSettingsRead.await() }
+
+        fakeClock.advanceMs(1_000L)
+        drive(TelephonyManager.CALL_STATE_IDLE, "01011112222")
+        withTimeout(5_000) { collectorJob!!.join() }
+
+        assertEquals("IDLE 읽기까지 실제 도달", 2, collectionCount.get())
+        verify(exactly = 0) { mapper.map(any(), any()) }
+        assertNoFurtherEmission()
+        assertEquals("설정 조회 전의 기존 IDLE anchor 기록은 유지", 1_001_000L, monitor.lastSuspiciousCallEndedElapsedMs)
+        assertEquals("취소가 호출을 재기록하지 않음", 1, monitor.recentUnknownCalls.size)
+    }
+
+    @Test
     fun `reset while idle waits for test mode prevents stale resume side effects`() = runBlocking {
         val collectionCount = AtomicInteger(0)
         val idleSettingsStarted = CompletableDeferred<Unit>()
