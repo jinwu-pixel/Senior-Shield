@@ -8,6 +8,7 @@ import com.example.seniorshield.domain.model.RiskEvent
 import com.example.seniorshield.domain.model.RiskSignal
 import com.example.seniorshield.domain.repository.GuardianRepository
 import com.example.seniorshield.domain.repository.RiskEventSink
+import com.example.seniorshield.domain.repository.SettingsRepository
 import com.example.seniorshield.monitoring.appinstall.AppInstallRiskMonitor
 import com.example.seniorshield.monitoring.appusage.AppUsageRiskMonitor
 import com.example.seniorshield.monitoring.call.CallRiskMonitor
@@ -81,6 +82,7 @@ class CoordinatorTestHarness {
     val deviceEnvMonitor = FakeDeviceEnvironmentRiskMonitor { sessionTracker.userResetEpoch }
     val eventSink = FakeRiskEventSink(safeConfirmationOperations)
     val guardianRepository = FakeGuardianRepository()
+    val settingsRepository = FakeSettingsRepository()
 
     val evaluator = RiskEvaluatorImpl()
     val eventFactory = RiskEventFactory()
@@ -108,6 +110,7 @@ class CoordinatorTestHarness {
             sessionTracker = sessionTracker,
             alertStateResolver = alertStateResolver,
             guardianRepository = guardianRepository,
+            settingsRepository = settingsRepository,
             ioDispatcher = UnconfinedTestDispatcher(testScheduler),
         )
         // TTL 만료 테스트: 시간축을 동기화하기 위해 세 협력자에 동일 provider를 공유 주입.
@@ -279,13 +282,39 @@ class FakeRiskEventSink(
 }
 
 class FakeGuardianRepository : GuardianRepository {
+    var guardians: List<Guardian> = emptyList()
     var beforeFirstEmission: (suspend () -> Unit)? = null
 
     override fun observeGuardians(): Flow<List<Guardian>> = flow {
         beforeFirstEmission?.invoke()
-        emit(emptyList())
+        emit(guardians)
     }
     override suspend fun addGuardian(guardian: Guardian): Boolean = true
     override suspend fun removeGuardian(id: String) {}
-    override suspend fun getGuardians(): List<Guardian> = emptyList()
+    override suspend fun getGuardians(): List<Guardian> = guardians
+}
+
+/** Default ON preserves existing guardian lookup hooks; the product default remains OFF. */
+class FakeSettingsRepository : SettingsRepository {
+    var smsMenuEnabled: Boolean = true
+    var smsMenuFailure: Exception? = null
+    var emptySmsMenuFlow: Boolean = false
+    var beforeSmsMenuEmission: (suspend () -> Unit)? = null
+
+    override fun observeSmsMenuEnabled(): Flow<Boolean> = flow {
+        beforeSmsMenuEmission?.invoke()
+        smsMenuFailure?.let { throw it }
+        if (!emptySmsMenuFlow) emit(smsMenuEnabled)
+    }
+
+    override suspend fun setSmsMenuEnabled(enabled: Boolean) {
+        smsMenuEnabled = enabled
+    }
+
+    override fun observeOnboardingCompleted(): Flow<Boolean> = flowOf(false)
+    override suspend fun setOnboardingCompleted(completed: Boolean) {}
+    override fun observeSmsAlertEnabled(): Flow<Boolean> = flowOf(false)
+    override suspend fun setSmsAlertEnabled(enabled: Boolean) {}
+    override fun observeTestModeEnabled(): Flow<Boolean> = flowOf(false)
+    override suspend fun setTestModeEnabled(enabled: Boolean) {}
 }

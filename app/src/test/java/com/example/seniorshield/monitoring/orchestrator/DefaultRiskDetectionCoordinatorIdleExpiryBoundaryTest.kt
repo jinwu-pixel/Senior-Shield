@@ -1137,6 +1137,7 @@ class DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest {
             sessionTracker = tracker,
             alertStateResolver = AlertStateResolver(),
             guardianRepository = FakeGuardianRepository(),
+            settingsRepository = com.example.seniorshield.testutil.FakeSettingsRepository(),
             ioDispatcher = StandardTestDispatcher(testScheduler),
         ).also { it.clock = clock.provider }
         coordinator.start()
@@ -1213,6 +1214,7 @@ class DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest {
             sessionTracker = tracker,
             alertStateResolver = AlertStateResolver(),
             guardianRepository = FakeGuardianRepository(),
+            settingsRepository = com.example.seniorshield.testutil.FakeSettingsRepository(),
             ioDispatcher = StandardTestDispatcher(testScheduler),
         ).also { it.clock = clock.provider }
         coordinator.start()
@@ -1304,6 +1306,7 @@ class DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest {
             sessionTracker = tracker,
             alertStateResolver = AlertStateResolver(),
             guardianRepository = FakeGuardianRepository(),
+            settingsRepository = com.example.seniorshield.testutil.FakeSettingsRepository(),
             ioDispatcher = UnconfinedTestDispatcher(testScheduler),
         ).also { it.clock = clock.provider }
         coordinator.start()
@@ -1366,6 +1369,7 @@ class DefaultRiskDetectionCoordinatorIdleExpiryBoundaryTest {
             sessionTracker = tracker,
             alertStateResolver = AlertStateResolver(),
             guardianRepository = FakeGuardianRepository(),
+            settingsRepository = com.example.seniorshield.testutil.FakeSettingsRepository(),
             ioDispatcher = UnconfinedTestDispatcher(testScheduler),
         ).also { it.clock = clock.provider }
         coordinator.start()
