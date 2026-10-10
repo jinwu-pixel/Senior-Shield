@@ -155,7 +155,7 @@ Tech: Min SDK 26, Target SDK 34, Kotlin 1.9.24, JVM 17, Compose + Material3, Nav
 - **자동 SMS 관련** 설정 토글 UI 없음 (smsAlertEnabled는 설정 계약에 legacy API로만 잔존, 사용처 0)
 - 이 결정은 제품 원칙 "자동 메시지 발송 금지"와 일치한다
 - 단, 수동 문자 보내기 메뉴 토글(smsMenuEnabled, 기본 OFF)은 별도 — ACTION_SENDTO 방식으로 원칙 위반 아님
-  - Guardian·Warning 화면, 위험 팝업, Home 연락 대화상자의 보호자 문자 버튼은 모두 이 토글을 따른다(팝업은 설정을 실제로 읽은 시점의 스냅샷, 설정 조회 실패·미방출 시 버튼 숨김). Home 대화상자는 토글 OFF여도 유지되며 전화 버튼만 표시한다.
+  - Guardian·Warning 화면, 위험 팝업, Home 연락 대화상자의 보호자 문자 버튼은 모두 이 토글을 따른다(팝업은 설정을 실제로 읽은 시점의 스냅샷, 설정·보호자 조회 실패·미방출 시 버튼만 숨기고 팝업은 유지). Home 대화상자는 토글 OFF여도 유지되며 전화 버튼만 표시한다.
 
 ---
 
