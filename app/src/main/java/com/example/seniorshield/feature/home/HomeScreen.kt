@@ -236,6 +236,7 @@ private fun HomeContent(
             onNavigateGuardian()
         } else {
             GuardianContactDialog(
+                smsMenuEnabled = uiState.smsMenuEnabled,
                 onDismiss = { showContactDialog = false },
                 onCall = {
                     showContactDialog = false
@@ -262,6 +263,7 @@ private fun GuardianContactDialog(
     onDismiss: () -> Unit,
     onCall: () -> Unit,
     onSms: () -> Unit,
+    smsMenuEnabled: Boolean = false,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -269,7 +271,9 @@ private fun GuardianContactDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 PrimaryButton(text = "보호자에게 전화하기", onClick = onCall)
-                SecondaryButton(text = "보호자에게 문자 보내기", onClick = onSms)
+                if (smsMenuEnabled) {
+                    SecondaryButton(text = "보호자에게 문자 보내기", onClick = onSms)
+                }
             }
         },
         confirmButton = {},

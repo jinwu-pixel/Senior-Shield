@@ -72,4 +72,5 @@ data class HomeUiState(
     val guardianName: String = "",
     /** 보호자 전화번호 (전화/문자 intent 구성용). */
     val guardianPhone: String = "",
+    val smsMenuEnabled: Boolean = false,
 )

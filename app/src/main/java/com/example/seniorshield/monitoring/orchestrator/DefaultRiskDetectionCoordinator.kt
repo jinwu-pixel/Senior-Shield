@@ -29,7 +29,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -594,6 +596,7 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            currentCoroutineContext().ensureActive()
             Log.w(TAG, "sms menu setting read failed — guardian SMS button hidden", e)
             false
         }
