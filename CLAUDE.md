@@ -40,7 +40,17 @@ Kotlin / Jetpack Compose / Hilt / DataStore 기반이며,
 ## 아키텍처
 
 ```
-:app (single module, Clean Architecture)
+Gradle 모듈 구조
+  :app              → Android 애플리케이션 및 composition root
+  :data             → Android library 저장 구현 및 Hilt data 모듈
+  :domain           → Gradle 상위 container project (소스 컴파일 없음)
+  :domain:risk      → pure Kotlin/JVM 위험 도메인 모델
+  :domain:contracts → pure Kotlin/JVM 공유 domain contract
+
+의존 방향
+  :app → :domain:risk
+  :app → :domain:contracts → :domain:risk (단방향, 역의존 없음)
+  :app → :data → :domain:contracts / :domain:risk (단방향, app 역의존 없음)
 
 domain/
   model/        → RiskScore, RiskLevel, RiskSignal, RiskEvent, Guardian, PermissionStatus, PolicySummary
@@ -135,24 +145,23 @@ Tech: Min SDK 26, Target SDK 34, Kotlin 1.9.24, JVM 17, Compose + Material3, Nav
 ---
 # CLAUDE.md 추가 지침 v2 (2026-03-31 리뷰 반영)
 
-기존 CLAUDE.md의 "고위험 작업" 섹션 뒤에 삽입한다.
-
 ---
 
 ## SMS 방향 결정: 공개판에서 제거 (B안 확정)
 
-- GuardianSmsManager 비활성화 (코드 보존, 호출 차단)
+- GuardianSmsManager 삭제 완료 (코드 없음)
 - SEND_SMS 권한 AndroidManifest에서 제거
 - 보호자 연락 = ACTION_DIAL만 유지
-- **자동 SMS 관련** 설정 토글 UI에서 숨김 (smsAlertEnabled)
+- **자동 SMS 관련** 설정 토글 UI 없음 (smsAlertEnabled는 설정 계약에 legacy API로만 잔존, 사용처 0)
 - 이 결정은 제품 원칙 "자동 메시지 발송 금지"와 일치한다
 - 단, 수동 문자 보내기 메뉴 토글(smsMenuEnabled, 기본 OFF)은 별도 — ACTION_SENDTO 방식으로 원칙 위반 아님
+  - Guardian·Warning 화면, 위험 팝업, Home 연락 대화상자의 보호자 문자 버튼은 모두 이 토글을 따른다(팝업은 설정을 실제로 읽은 시점의 스냅샷, 설정 조회 실패·미방출 시 버튼 숨김). Home 대화상자는 토글 OFF여도 유지되며 전화 버튼만 표시한다.
 
 ---
 
 ## RiskSession / 시퀀스 규칙 (P1, P2의 기초)
 
-텔레뱅킹 감지, 반복 호출 감지는 모두 RiskSession 위에서 동작한다.
+반복 호출 감지는 RiskSession 시퀀스 위에서, 텔레뱅킹 감지는 의심 통화 종료 anchor 위에서 동작한다.
 아래 규칙을 먼저 고정하고, P1/P2는 이 기준을 따른다.
 
 ### 세션 시작 조건
@@ -171,7 +180,7 @@ Tech: Min SDK 26, Target SDK 34, Kotlin 1.9.24, JVM 17, Compose + Material3, Nav
 - 사기범은 발신번호를 바꿔가며 호출하므로, 같은 번호 2회로 축소 구현하지 않는다
 
 ### 텔레뱅킹 발신 판단 시간창
-- 위험 세션 활성 상태에서만 동작
+- 의심 통화(미확인/미검증 번호, 부재중 포함) 종료 anchor가 유효할 때만 동작 — 사용자 안전 확인 시 해제되며, 세션 상태는 직접 검사하지 않는다 (2026-10-08 확정)
 - 수상한 통화 종료 후 5분 이내에 은행 ARS 번호로 발신 시 경고
 - 단독 은행 발신은 경고하지 않음 (오탐 방지)
 
@@ -180,7 +189,7 @@ Tech: Min SDK 26, Target SDK 34, Kotlin 1.9.24, JVM 17, Compose + Material3, Nav
    ※ 팝업은 위험 '점수'가 아니라 AlertState로 발화한다. PASSIVE 신호만으로 점수 50(= RiskLevel.HIGH)에 도달해도 세션은 GUARDED라 팝업은 뜨지 않는다.
 2. 원격제어 앱 실행 감지 (단독)
 3. 위험 세션 중 금융 앱 실행 → 쿨다운 인터럽터 발동 (BankingCooldownManager)
-4. 위험 세션 중 은행 ARS 번호 발신
+4. 의심 통화 종료 후 5분 내(anchor 유효) 은행 ARS 번호 발신
 5. 원격제어 앱 직후 금융 앱 실행 (최고 위험)
 6. 반복 호출 패턴 후 원격제어 또는 금융행동
 
@@ -211,7 +220,7 @@ Tech: Min SDK 26, Target SDK 34, Kotlin 1.9.24, JVM 17, Compose + Material3, Nav
 |--------|------|:----:|
 | REPEATED_UNKNOWN_CALLER | 미확인 번호군 30분 내 2회+ 수신 | +15 |
 | REPEATED_CALL_THEN_LONG_TALK | 반복 호출 후 3분+ 통화 | +20 |
-| TELEBANKING_AFTER_SUSPICIOUS | 위험 세션 중 은행 ARS 발신 | +25 |
+| TELEBANKING_AFTER_SUSPICIOUS | 의심 통화 anchor 유효 중 은행 ARS 발신 | +25 |
 
 복합 패턴:
 - 반복 호출 + 원격제어 → 즉시 CRITICAL
