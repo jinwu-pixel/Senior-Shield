@@ -346,6 +346,7 @@ class CoordinatorTickCharacterizationTest {
             sessionTracker = harness.sessionTracker,
             alertStateResolver = harness.alertStateResolver,
             guardianRepository = harness.guardianRepository,
+            settingsRepository = harness.settingsRepository,
             ioDispatcher = UnconfinedTestDispatcher(testScheduler),
         ).also { it.clock = clock.provider }
     }

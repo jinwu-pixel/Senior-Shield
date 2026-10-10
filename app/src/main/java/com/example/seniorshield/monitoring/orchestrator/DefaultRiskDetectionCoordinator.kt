@@ -13,6 +13,7 @@ import com.example.seniorshield.domain.model.RiskSignal
 import com.example.seniorshield.domain.model.SignalCategory
 import com.example.seniorshield.domain.repository.GuardianRepository
 import com.example.seniorshield.domain.repository.RiskEventSink
+import com.example.seniorshield.domain.repository.SettingsRepository
 import com.example.seniorshield.monitoring.appinstall.AppInstallRiskMonitor
 import com.example.seniorshield.monitoring.appusage.AppUsageRiskMonitor
 import com.example.seniorshield.monitoring.call.CallRiskMonitor
@@ -150,6 +151,7 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
     private val sessionTracker: RiskSessionTracker,
     private val alertStateResolver: AlertStateResolver,
     private val guardianRepository: GuardianRepository,
+    private val settingsRepository: SettingsRepository,
     private val ioDispatcher: CoroutineDispatcher,
 ) : RiskDetectionCoordinator {
 
@@ -586,8 +588,18 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
     private fun hasActivePublicationIntentAtOrAfterEpoch(resetEpoch: Long): Boolean =
         activeEventPublicationIntents.values.any { it.publishedAtResetEpoch >= resetEpoch }
 
-    private suspend fun firstGuardian(): Guardian? =
-        guardianRepository.observeGuardians().first().firstOrNull()
+    private suspend fun firstGuardian(): Guardian? {
+        val smsMenuEnabled = try {
+            settingsRepository.observeSmsMenuEnabled().first()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "sms menu setting read failed — guardian SMS button hidden", e)
+            false
+        }
+        if (!smsMenuEnabled) return null
+        return guardianRepository.observeGuardians().first().firstOrNull()
+    }
 
     /**
      * 생산 경계에서 스탬프된 [Produced]를 coordinator-local sequence와 함께 [SourceEmission]으로
