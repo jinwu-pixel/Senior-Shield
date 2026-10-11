@@ -664,10 +664,27 @@ class RealCallRiskMonitor @Inject constructor(
         }
 
         val intentFilter = IntentFilter(TelephonyManager.ACTION_PHONE_STATE_CHANGED)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(numberReceiver, intentFilter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            context.registerReceiver(numberReceiver, intentFilter)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(numberReceiver, intentFilter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                context.registerReceiver(numberReceiver, intentFilter)
+            }
+        } catch (e: Exception) {
+            if (e is CancellationException) {
+                releaseOwnership(myOwnerGeneration)
+                executor.shutdownNow()
+                throw e
+            }
+            Log.e(TAG, "number receiver registration failed: ${e.message}")
+            trySend(SourcedCallState(CallMonitorState.Idle, sessionTracker.userResetEpoch, ContextOrigin.SEED))
+            awaitClose {
+                if (!releaseOwnership(myOwnerGeneration)) {
+                    Log.d(TAG, "collector release ignored — owner already superseded (API31 receiver registration failure)")
+                }
+                executor.shutdownNow()
+            }
+            return@callbackFlow
         }
 
         // framework → callback 전달 executor (라운드 16-①): 제출(execute) 진입 시점의 epoch를

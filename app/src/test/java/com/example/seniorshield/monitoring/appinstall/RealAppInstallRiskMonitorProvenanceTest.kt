@@ -12,6 +12,7 @@ import com.example.seniorshield.monitoring.session.ResetEpochProvider
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -74,6 +75,28 @@ class RealAppInstallRiskMonitorProvenanceTest {
         }
         runCurrent()
         return emissions to job
+    }
+
+    @Suppress("UnspecifiedRegisterReceiverFlag")
+    @Test
+    fun `receiver registration failure stays neutral until cancellation`() = runTest {
+        every { context.registerReceiver(any(), any<IntentFilter>()) } throws SecurityException("denied")
+        provider.current = 3L
+        val (emissions, job) = collectEmissions()
+        try {
+            assertEquals("실패 초기값 1회", 1, emissions.size)
+            assertTrue(emissions.single().value.isEmpty())
+            assertEquals(3L, emissions.single().producedAtEpoch)
+            advanceTimeBy(HOLD_MS * 2)
+            runCurrent()
+            assertTrue("등록 실패 후에도 Flow는 완료/실패하지 않음", job.isActive)
+            assertEquals("추가 방출 없음", 1, emissions.size)
+            verify(exactly = 0) { context.unregisterReceiver(any()) }
+        } finally {
+            job.cancel()
+            runCurrent()
+        }
+        verify(exactly = 0) { context.unregisterReceiver(any()) }
     }
 
     @Test
