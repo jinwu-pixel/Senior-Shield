@@ -26,6 +26,7 @@ import com.example.seniorshield.monitoring.model.CallState
 import com.example.seniorshield.monitoring.model.Produced
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -45,6 +46,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.withContext
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -128,6 +130,10 @@ class RealCallRiskMonitor @Inject constructor(
     /** 테스트용 callback executor 주입점 — 수동 드레인으로 enqueue↔reset 경합을 재현한다. */
     @VisibleForTesting
     internal var callbackExecutorFactory: () -> ExecutorService = { Executors.newSingleThreadExecutor() }
+
+    /** Legacy listener construction needs a Looper thread; the main Looper is chosen so callbacks are serialized on main. Resolved lazily for JVM tests. */
+    @VisibleForTesting
+    internal var legacyListenerDispatcher: () -> CoroutineDispatcher = { Dispatchers.Main.immediate }
 
     /**
      * distinctUntilChanged()가 OFFHOOK(LIVE)과 IDLE(FINAL)의 동일 신호 리스트를
@@ -918,7 +924,8 @@ class RealCallRiskMonitor @Inject constructor(
         var isOutgoing = false
         val initialClaimed = AtomicBoolean(false)
 
-        val listener = object : PhoneStateListener() {
+        val listener = try {
+            withContext(legacyListenerDispatcher()) { object : PhoneStateListener() {
             @Deprecated("Deprecated in Java")
             override fun onCallStateChanged(state: Int, phoneNumber: String?) {
                 // 종료/교체된 collector의 늦은 callback 무효화 (라운드 16-②).
@@ -1023,6 +1030,18 @@ class RealCallRiskMonitor @Inject constructor(
                     trySend(SourcedCallState(CallMonitorState.Idle, producedAtEpoch, ContextOrigin.SEED))
                 }
             }
+        } }
+        } catch (e: CancellationException) {
+            releaseOwnership(myOwnerGeneration)
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "PhoneStateListener creation failed: ${e.message}")
+            if (!releaseOwnership(myOwnerGeneration)) {
+                Log.d(TAG, "collector release ignored — owner already superseded (legacy creation failure)")
+            }
+            trySend(SourcedCallState(CallMonitorState.Idle, sessionTracker.userResetEpoch, ContextOrigin.SEED))
+            awaitClose { }
+            return@callbackFlow
         }
 
         @Suppress("DEPRECATION")

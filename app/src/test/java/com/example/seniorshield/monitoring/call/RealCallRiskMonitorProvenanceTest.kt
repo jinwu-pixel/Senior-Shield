@@ -89,6 +89,7 @@ class RealCallRiskMonitorProvenanceTest {
     ).apply {
         clock = fakeClock.provider
         monotonicClock = fakeClock.provider
+        legacyListenerDispatcher = { Dispatchers.Unconfined }
     }
 
     private val emissions = Channel<Produced<List<RiskSignal>>>(Channel.UNLIMITED)
@@ -128,6 +129,31 @@ class RealCallRiskMonitorProvenanceTest {
 
     private fun drive(state: Int, number: String? = null) {
         listenerSlot.captured.onCallStateChanged(state, number)
+    }
+
+    @Test
+    fun `legacy listener creation failure stays neutral without registering`() = runBlocking {
+        monitor.legacyListenerDispatcher = { throw IllegalStateException("main dispatcher missing") }
+        tracker.resetAfterUserConfirmedSafe()
+        val failedOwner = monitor.claimOwnership() + 1L
+        val job = CoroutineScope(Dispatchers.Default).launch {
+            monitor.observeCallSignals().collect { emissions.trySend(it) }
+        }
+        collectorJob = job
+        try {
+            val first = awaitEmission()
+            assertTrue("생성 실패는 중립 SEED 1회", first.value.isEmpty())
+            assertEquals("실패 시점 epoch", 1L, first.producedAtEpoch)
+            assertNoFurtherEmission()
+            assertTrue("수집은 실패하거나 완료되지 않음", job.isActive)
+            assertFalse("실패 owner는 즉시 해제됨", monitor.writeCallId(failedOwner, 123L))
+            assertNull(monitor.currentCallId())
+            assertTrue(monitor.recentUnknownCalls.isEmpty())
+            assertNull(monitor.lastSuspiciousCallEndedElapsedMs)
+            verify(exactly = 0) { telephonyManager.listen(any(), any()) }
+        } finally {
+            job.cancel()
+        }
     }
 
     /** 계약 1: 첫 콜백(암묵 seed)은 SEED — 상태만 복원하고 위험신호·부수효과를 파생하지 않는다. */
