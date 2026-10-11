@@ -7,6 +7,7 @@
 # Raised 2026-10-10: app 571->577 (guardian read failure +6).
 # Raised 2026-10-10: app 577->581 (call monitor test mode read failure +4).
 # Raised 2026-10-10: app 581->584 (GUARDED history record failure +3).
+# Raised 2026-10-11: app 584->587 (receiver registration failure +3).
 [CmdletBinding()]
 param(
     [string]$RepositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..')),
@@ -15,7 +16,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $modules = @(
-    @{ Name = 'app';              Dir = 'app/build/test-results/testDebugUnitTest'; MinTests = 584 },
+    @{ Name = 'app';              Dir = 'app/build/test-results/testDebugUnitTest'; MinTests = 587 },
     @{ Name = 'domain:risk';      Dir = 'domain/risk/build/test-results/test';      MinTests = 7 },
     @{ Name = 'domain:contracts'; Dir = 'domain/contracts/build/test-results/test'; MinTests = 4 }
 )
