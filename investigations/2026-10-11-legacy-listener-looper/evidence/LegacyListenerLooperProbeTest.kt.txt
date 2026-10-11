@@ -1,0 +1,92 @@
+package com.example.seniorshield.probe
+
+import android.Manifest
+import android.app.Application
+import android.telephony.PhoneStateListener
+import com.example.seniorshield.domain.repository.SettingsRepository
+import com.example.seniorshield.monitoring.call.BankArsRegistry
+import com.example.seniorshield.monitoring.call.CallSignalMapper
+import com.example.seniorshield.monitoring.call.CallerContactChecker
+import com.example.seniorshield.monitoring.call.RealCallRiskMonitor
+import com.example.seniorshield.monitoring.session.RiskSessionTracker
+import io.mockk.every
+import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
+import org.robolectric.annotation.Config
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
+
+/** Throwaway probe (never committed): does the legacy PhoneStateListener need a Looper thread? */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [26, 28, 30], application = Application::class)
+class LegacyListenerLooperProbeTest {
+
+    @Test
+    fun probe1_constructOnBackgroundThread() {
+        val err = AtomicReference<Throwable?>(null)
+        val t = Thread {
+            try {
+                @Suppress("DEPRECATION")
+                object : PhoneStateListener() {}
+            } catch (e: Throwable) {
+                err.set(e)
+            }
+        }
+        t.start(); t.join(5_000)
+        println("PROBE1 sdk=${android.os.Build.VERSION.SDK_INT} background-thread result=" +
+            (err.get()?.let { "${it.javaClass.name}: ${it.message}" } ?: "NO EXCEPTION"))
+    }
+
+    @Test
+    fun probe2_constructOnMainThread() {
+        val result = try {
+            @Suppress("DEPRECATION")
+            object : PhoneStateListener() {}
+            "NO EXCEPTION"
+        } catch (e: Throwable) {
+            "${e.javaClass.name}: ${e.message}"
+        }
+        println("PROBE2 sdk=${android.os.Build.VERSION.SDK_INT} main-thread result=$result")
+    }
+
+    @Test
+    fun probe3_realMonitorLegacyPath() = runBlocking {
+        val app = RuntimeEnvironment.getApplication()
+        shadowOf(app).grantPermissions(Manifest.permission.READ_PHONE_STATE)
+        val uncaught = AtomicReference<Throwable?>(null)
+        val latch = CountDownLatch(1)
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { _, e -> uncaught.set(e); latch.countDown() }
+        try {
+            val settings = mockk<SettingsRepository> { every { observeTestModeEnabled() } returns MutableStateFlow(false) }
+            val monitor = RealCallRiskMonitor(
+                app,
+                mockk<CallSignalMapper>(relaxed = true),
+                mockk<CallerContactChecker>(relaxed = true),
+                settings,
+                mockk<BankArsRegistry>(relaxed = true),
+                RiskSessionTracker(),
+            )
+            val emissions = mutableListOf<Any>()
+            val job = CoroutineScope(Dispatchers.Default).launch {
+                monitor.observeCallSignals().collect { emissions += it }
+            }
+            latch.await(5, TimeUnit.SECONDS)
+            job.cancel()
+            println("PROBE3 sdk=${android.os.Build.VERSION.SDK_INT} emissions=${emissions.size} uncaught=" +
+                (uncaught.get()?.let { "${it.javaClass.name}: ${it.message}" } ?: "NONE"))
+        } finally {
+            Thread.setDefaultUncaughtExceptionHandler(previous)
+        }
+    }
+}
