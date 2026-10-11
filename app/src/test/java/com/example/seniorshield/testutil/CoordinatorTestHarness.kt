@@ -247,6 +247,8 @@ class FakeRiskEventSink(
     var cancelNextPushBeforeCurrentEventSet: Boolean = false
     var beforeCurrentEventSet: (suspend (RiskEvent) -> Unit)? = null
     var afterCurrentEventSetBeforePushReturns: (suspend (RiskEvent) -> Unit)? = null
+    var recordFailure: Exception? = null
+    var beforeRecord: (suspend (RiskEvent) -> Unit)? = null
 
     override suspend fun pushRiskEvent(event: RiskEvent) {
         if (cancelNextPushBeforeCurrentEventSet) {
@@ -260,6 +262,8 @@ class FakeRiskEventSink(
     }
 
     override suspend fun recordRiskEvent(event: RiskEvent) {
+        beforeRecord?.invoke(event)
+        recordFailure?.let { throw it }
         recorded += event
     }
 

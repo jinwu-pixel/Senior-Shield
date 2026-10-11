@@ -1194,7 +1194,14 @@ class DefaultRiskDetectionCoordinator @Inject constructor(
                         return null
                     }
                 } else {
-                    eventSink.recordRiskEvent(event)
+                    try {
+                        eventSink.recordRiskEvent(event)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        currentCoroutineContext().ensureActive()
+                        Log.e(TAG, "risk history record failed — notification continues without history", e)
+                    }
                     null
                 }
                 // suspend(Room 쓰기) 재개 후 재검증 — 사용자 clear "이후"에 push가
