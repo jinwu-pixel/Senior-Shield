@@ -448,6 +448,99 @@ class RealCallRiskMonitorProvenanceTest {
         assertNull("reset 뒤 stale IDLE 재개가 anchor를 다시 장전하면 안 됨", monitor.lastSuspiciousCallEndedElapsedMs)
     }
 
+    @Suppress("UnspecifiedRegisterReceiverFlag")
+    @Test
+    fun `api31 number receiver registration failure stays neutral until cancellation`() = runBlocking {
+        val manualExecutor = ManualExecutorService()
+        monitor.sdkIntProvider = { Build.VERSION_CODES.S }
+        monitor.callbackExecutorFactory = { manualExecutor }
+        every { context.registerReceiver(any(), any<IntentFilter>()) } throws SecurityException("denied")
+        tracker.resetAfterUserConfirmedSafe()
+
+        val job = CoroutineScope(Dispatchers.Default).launch {
+            monitor.observeCallSignals().collect { emissions.trySend(it) }
+        }
+        collectorJob = job
+        try {
+            val first = awaitEmission()
+            assertTrue("등록 실패는 중립 SEED 1회", first.value.isEmpty())
+            assertEquals("실패 시점 epoch", 1L, first.producedAtEpoch)
+            assertNoFurtherEmission()
+            assertTrue("수집은 실패하거나 완료되지 않음", job.isActive)
+            assertFalse("취소 전까지 실패 source 유지", manualExecutor.isShutdown())
+            assertNull(monitor.currentCallId())
+            verify(exactly = 0) { telephonyManager.registerTelephonyCallback(any(), any()) }
+            verify(exactly = 0) { context.unregisterReceiver(any()) }
+        } finally {
+            job.cancel()
+        }
+        // 실제 shareIn WhileSubscribed(5초) 종료를 조건으로 대기한다. 고정 sleep은 사용하지 않는다.
+        withTimeout(15_000) {
+            while (!manualExecutor.isShutdown()) delay(10)
+        }
+        assertTrue("실패 경로 executor 정리", manualExecutor.isShutdown())
+        assertNull(monitor.currentCallId())
+        verify(exactly = 0) { context.unregisterReceiver(any()) }
+    }
+
+    @Suppress("UnspecifiedRegisterReceiverFlag")
+    @Test
+    fun `api31 number receiver registration recovers after cancellation and resubscription`() = runBlocking {
+        val failedExecutor = ManualExecutorService()
+        val recoveredExecutor = ManualExecutorService()
+        val executorCount = AtomicInteger(0)
+        monitor.sdkIntProvider = { Build.VERSION_CODES.S }
+        monitor.callbackExecutorFactory = {
+            if (executorCount.getAndIncrement() == 0) failedExecutor else recoveredExecutor
+        }
+        val previousOwner = monitor.claimOwnership()
+        val failedOwner = previousOwner + 1L
+        every { context.registerReceiver(any(), any<IntentFilter>()) } throws SecurityException("denied")
+        collectorJob = CoroutineScope(Dispatchers.Default).launch {
+            monitor.observeCallSignals().collect { emissions.trySend(it) }
+        }
+        assertTrue(awaitEmission().value.isEmpty())
+        collectorJob?.cancel()
+        withTimeout(15_000) {
+            while (!failedExecutor.isShutdown()) delay(10)
+        }
+        assertFalse("재획득 전에 실패 owner가 해제되어야 함", monitor.writeCallId(failedOwner, null))
+        verify(exactly = 0) { context.unregisterReceiver(any()) }
+
+        val broadcastSlot = slot<BroadcastReceiver>()
+        val callbackSlot = slot<TelephonyCallback>()
+        val executorSlot = slot<java.util.concurrent.Executor>()
+        every { context.registerReceiver(capture(broadcastSlot), any<IntentFilter>()) } returns null
+        every { telephonyManager.registerTelephonyCallback(capture(executorSlot), capture(callbackSlot)) } returns Unit
+        every { telephonyManager.callState } returns TelephonyManager.CALL_STATE_OFFHOOK
+        tracker.resetAfterUserConfirmedSafe() // 이전 shareIn replay(@0)와 새 seed(@1)를 구별한다.
+
+        collectorJob = CoroutineScope(Dispatchers.Default).launch {
+            monitor.observeCallSignals().collect { emissions.trySend(it) }
+        }
+        try {
+            withTimeout(5_000) {
+                while (!broadcastSlot.isCaptured || !callbackSlot.isCaptured ||
+                    recoveredExecutor.pendingCount() == 0
+                ) delay(10)
+            }
+            val replayed = awaitEmission()
+            assertEquals(0L, replayed.producedAtEpoch)
+            assertTrue(replayed.value.isEmpty())
+            recoveredExecutor.drain() // 새 owner의 명시 OFFHOOK seed: 상태 복원만, 위험 신호 없음.
+            // 새 SEED@1은 replay SEED@0과 같은 중립 RESET이라 dUC로 합쳐진다. 회복은 아래 currentCallId·owner 단언으로 증명한다.
+            assertNoFurtherEmission()
+            assertEquals("새 owner의 callId 쓰기 성공", fakeClock.provider(), monitor.currentCallId())
+            assertFalse("옛 owner의 늦은 쓰기는 거부", monitor.writeCallId(failedOwner, null))
+            assertEquals(2, executorCount.get())
+            verify(exactly = 1) { telephonyManager.registerTelephonyCallback(any(), any()) }
+            assertTrue(monitor.recentUnknownCalls.isEmpty())
+            assertNull(monitor.lastSuspiciousCallEndedElapsedMs)
+        } finally {
+            collectorJob?.cancel()
+        }
+    }
+
     /**
      * 라운드 12-①: API31 번호 receiver 작업은 **enqueue 시점** epoch로 판정되어야 한다 —
      * 작업이 executor 큐에 대기하는 동안 reset이 끼면, 실행 시점 epoch 읽기는 reset 전

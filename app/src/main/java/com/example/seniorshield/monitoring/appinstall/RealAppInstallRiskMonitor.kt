@@ -12,6 +12,7 @@ import com.example.seniorshield.monitoring.model.Produced
 import com.example.seniorshield.monitoring.registry.RemoteControlAppRegistry
 import com.example.seniorshield.monitoring.session.ResetEpochProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
@@ -97,10 +98,21 @@ class RealAppInstallRiskMonitor @Inject constructor(
             addDataScheme("package")
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
-        } else {
-            context.registerReceiver(receiver, filter)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                context.registerReceiver(receiver, filter)
+            }
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Log.e(TAG, "install receiver registration failed: ${e.message}")
+            trySend(Produced(emptyList(), resetEpochProvider.userResetEpoch))
+            awaitClose {
+                resetJob?.cancel()
+                resetJob = null
+            }
+            return@callbackFlow
         }
         Log.d(TAG, "앱 설치 모니터 시작")
 
