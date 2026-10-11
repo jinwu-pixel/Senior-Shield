@@ -56,6 +56,7 @@ class RealCallRiskMonitorAnchorTest {
         clock = wallClock.provider
         monotonicClock = elapsedClock.provider
         sdkIntProvider = { Build.VERSION_CODES.R }
+        legacyListenerDispatcher = { Dispatchers.Unconfined }
     }
 
     private val emissions = Channel<Produced<List<RiskSignal>>>(Channel.UNLIMITED)
