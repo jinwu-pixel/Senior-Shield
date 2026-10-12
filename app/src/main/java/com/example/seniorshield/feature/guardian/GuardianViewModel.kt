@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.IOException
 import javax.inject.Inject
 
 @HiltViewModel
@@ -48,8 +49,12 @@ class GuardianViewModel @Inject constructor(
 
     fun removeGuardian(id: String) {
         viewModelScope.launch {
-            guardianRepository.removeGuardian(id)
-            _message.value = "보호자가 삭제되었습니다."
+            try {
+                guardianRepository.removeGuardian(id)
+                _message.value = "보호자가 삭제되었습니다."
+            } catch (e: IOException) {
+                _message.value = "저장하지 못했습니다. 잠시 후 다시 시도해 주세요."
+            }
         }
     }
 }

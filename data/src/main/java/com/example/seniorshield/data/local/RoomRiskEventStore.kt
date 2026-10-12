@@ -10,10 +10,13 @@ import com.example.seniorshield.domain.repository.RiskEventSink
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
@@ -38,6 +41,11 @@ class RoomRiskEventStore @Inject constructor(
 
     override val recentEvents: StateFlow<List<RiskEvent>> = dao.observeRecent()
         .map { entities -> entities.map { it.toDomain() } }
+        .catch { e ->
+            currentCoroutineContext().ensureActive()
+            Log.e(TAG, "risk history read failed — empty history used", e)
+            emit(emptyList())
+        }
         .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     private val _currentEvent = MutableStateFlow<RiskEvent?>(null)
