@@ -1,9 +1,12 @@
 package com.example.seniorshield.data.repository
 
 import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import com.example.seniorshield.data.local.GuardianKeys
 import com.example.seniorshield.data.local.guardianDataStore
+import com.example.seniorshield.data.local.withReadFallback
 import com.example.seniorshield.domain.model.Guardian
 import com.example.seniorshield.domain.repository.GuardianRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -15,39 +18,48 @@ import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
+private const val TAG = "SeniorShield-Guardians"
+
+/**
+ * 기본 생성자는 테스트에서 DataStore를 주입하기 위한 것이다.
+ * 추가·삭제는 저장소 실패 시 IOException을 호출자에게 전파한다.
+ */
 @Singleton
-class GuardianRepositoryImpl @Inject constructor(
-    @ApplicationContext private val context: Context,
+class GuardianRepositoryImpl(
+    private val dataStore: DataStore<Preferences>,
 ) : GuardianRepository {
+    @Inject
+    constructor(@ApplicationContext context: Context) : this(context.guardianDataStore)
 
     override fun observeGuardians(): Flow<List<Guardian>> =
-        context.guardianDataStore.data.map { prefs ->
+        dataStore.data.withReadFallback(TAG, "guardians").map { prefs ->
             val json = prefs[GuardianKeys.GuardiansJson] ?: "[]"
             parseGuardians(json)
         }
 
     override suspend fun addGuardian(guardian: Guardian): Boolean {
-        val current = getGuardians()
-        if (current.size >= Guardian.MAX_COUNT) return false
-        saveGuardians(current + guardian)
-        return true
+        var added = false
+        dataStore.edit { prefs ->
+            val current = parseGuardians(prefs[GuardianKeys.GuardiansJson] ?: "[]")
+            added = current.size < Guardian.MAX_COUNT
+            if (added) {
+                prefs[GuardianKeys.GuardiansJson] = toJson(current + guardian)
+            }
+        }
+        return added
     }
 
     override suspend fun removeGuardian(id: String) {
-        val current = getGuardians()
-        saveGuardians(current.filter { it.id != id })
+        dataStore.edit { prefs ->
+            val current = parseGuardians(prefs[GuardianKeys.GuardiansJson] ?: "[]")
+            prefs[GuardianKeys.GuardiansJson] = toJson(current.filter { it.id != id })
+        }
     }
 
     override suspend fun getGuardians(): List<Guardian> {
-        val prefs = context.guardianDataStore.data.first()
+        val prefs = dataStore.data.withReadFallback(TAG, "guardians").first()
         val json = prefs[GuardianKeys.GuardiansJson] ?: "[]"
         return parseGuardians(json)
-    }
-
-    private suspend fun saveGuardians(list: List<Guardian>) {
-        context.guardianDataStore.edit { prefs ->
-            prefs[GuardianKeys.GuardiansJson] = toJson(list)
-        }
     }
 
     private fun parseGuardians(json: String): List<Guardian> {

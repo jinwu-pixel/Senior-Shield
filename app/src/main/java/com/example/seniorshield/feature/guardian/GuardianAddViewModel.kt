@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.IOException
 import java.util.UUID
 import javax.inject.Inject
 
@@ -81,7 +82,12 @@ class GuardianAddViewModel @Inject constructor(
                 phoneNumber = normalized,
                 relationship = relationship,
             )
-            val success = guardianRepository.addGuardian(guardian)
+            val success = try {
+                guardianRepository.addGuardian(guardian)
+            } catch (e: IOException) {
+                _error.value = "저장하지 못했습니다. 잠시 후 다시 시도해 주세요."
+                return@launch
+            }
             if (success) {
                 _savedEvent.send(Unit)
             } else {
