@@ -506,7 +506,7 @@ class RealAppUsageRiskMonitor @Inject constructor(
         return if (sawRawObservation) {
             UsageQuery.Observed(emptySet()) // raw 관측 존재 + 윈도우 내 사용 없음 = 성공한 부재 관측
         } else {
-            Log.w(TAG, "모든 UsageStats 조회에서 raw 관측 없음 — 권한 미부여 또는 기기 호환성 문제: Unknown")
+            Log.w(TAG, "모든 UsageStats 조회에서 raw 관측 없음 — 최근 사용 기록 부재·조회 실패 등 원인 미확정: Unknown")
             UsageQuery.Unknown
         }
     }

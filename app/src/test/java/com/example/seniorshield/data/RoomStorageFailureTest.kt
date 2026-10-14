@@ -8,12 +8,16 @@ import com.example.seniorshield.data.repository.RiskRepositoryImpl
 import com.example.seniorshield.domain.model.RiskEvent
 import io.mockk.mockk
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -24,19 +28,24 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class RoomStorageFailureTest : StorageFailureTestBase() {
     @Test
-    fun `recent events read failure completes empty without an uncaught exception`() = runTest(dispatcher) {
+    fun `subscribed recent events read failure yields empty without an uncaught exception`() = runTest(dispatcher) {
         val dao = FailingRiskEventDao()
+        val store = RoomRiskEventStore(dao, dispatcher)
         val uncaught = mutableListOf<Throwable>()
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { _, failure -> uncaught += failure }
         try {
-            val store = RoomRiskEventStore(dao, dispatcher)
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { store.recentEvents.collect() }
             runCurrent()
             assertEquals(1, dao.collections)
             assertEquals(emptyList<RiskEvent>(), store.recentEvents.value)
             assertEquals(emptyList<Throwable>(), uncaught)
             // runTest also reports exceptions captured by coroutines-test from the store's own scope.
         } finally {
+            val field = RoomRiskEventStore::class.java.getDeclaredField("scope")
+            field.isAccessible = true
+            (field.get(store) as CoroutineScope).cancel()
+            runCurrent()
             Thread.setDefaultUncaughtExceptionHandler(previous)
         }
     }

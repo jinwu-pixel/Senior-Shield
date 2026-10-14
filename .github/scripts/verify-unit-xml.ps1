@@ -10,6 +10,7 @@
 # Raised 2026-10-11: app 584->587 (receiver registration failure +3).
 # Raised 2026-10-11: app 587->592 (legacy listener main looper +5).
 # Raised 2026-10-12: app 592->612 (storage failure fallback +20).
+# Raised 2026-10-14: app 612->620 (subscribed history read recovery +8).
 [CmdletBinding()]
 param(
     [string]$RepositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..')),
@@ -18,7 +19,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $modules = @(
-    @{ Name = 'app';              Dir = 'app/build/test-results/testDebugUnitTest'; MinTests = 612 },
+    @{ Name = 'app';              Dir = 'app/build/test-results/testDebugUnitTest'; MinTests = 620 },
     @{ Name = 'domain:risk';      Dir = 'domain/risk/build/test-results/test';      MinTests = 7 },
     @{ Name = 'domain:contracts'; Dir = 'domain/contracts/build/test-results/test'; MinTests = 4 }
 )
