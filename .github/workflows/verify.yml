@@ -51,6 +51,17 @@ jobs:
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
+      # Robolectric resolves android-all-instrumented outside the Gradle cache.
+      # PRs only restore; save below runs after all gates succeed on main.
+      - name: Restore Robolectric runtimes
+        id: robolectric-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/repository/org/robolectric/android-all-instrumented
+          key: robolectric-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('gradle/libs.versions.toml', 'app/build.gradle.kts', 'app/src/test/**/*.kt', 'app/src/test/**/robolectric.properties') }}
+          restore-keys: |
+            robolectric-v1-${{ runner.os }}-${{ runner.arch }}-
+
       - name: Serial verification gate (identical to local)
         shell: bash
         run: |
@@ -63,7 +74,7 @@ jobs:
             :app:assembleDebugAndroidTest \
             :data:lintDebug :app:lintDebug
 
-      - name: Verify unit test XML (floor 612/7/4, skipped 0)
+      - name: Verify unit test XML (floor 620/7/4, skipped 0)
         shell: pwsh
         run: ./.github/scripts/verify-unit-xml.ps1 -EvidenceOut build-evidence/unit-tests.json
 
@@ -82,6 +93,13 @@ jobs:
       - name: Verifier self-check (mutation probes)
         shell: pwsh
         run: ./investigations/2026-09-06-ci-baseline-t1/probe-verifiers.ps1 -Scratch "${{ runner.temp }}/ci-probes" -EvidenceOut build-evidence/verifier-probes.txt
+
+      - name: Save Robolectric runtimes after successful main verification
+        if: success() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && steps.robolectric-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/repository/org/robolectric/android-all-instrumented
+          key: ${{ steps.robolectric-cache.outputs.cache-primary-key }}
 
       - name: Lint diff (diagnostic on failure)
         if: failure()
